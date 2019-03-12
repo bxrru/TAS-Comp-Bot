@@ -29,7 +29,7 @@ make bot lol
 		#bot <#554820730043367445>
 --
 
-Intended drive folder structure:
-	(root) -> Task Number -> Folder containing .m64 and .st files
-	OR
-	(root) -> Task Number -> Username -> Folder containing .m64 and .st files
+	Intended drive folder structure:
+			(root) -> Task Number -> Folder containing .m64 and .st files
+		OR
+			(root) -> Task Number -> Username -> Folder containing .m64 and .st files
