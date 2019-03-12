@@ -1,0 +1,1 @@
+cmd_Release/obj.target/zlib_sync.node := g++ -shared -pthread -rdynamic -m64  -Wl,-soname=zlib_sync.node -o Release/obj.target/zlib_sync.node -Wl,--start-group Release/obj.target/zlib_sync/src/zlib_sync.o Release/obj.target/deps/zlib.a -Wl,--end-group 
