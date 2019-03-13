@@ -1,5 +1,4 @@
 module.exports = {
-	/*
 	getDateTime:function() {
 		var now     = new Date(); 
 		var year    = now.getFullYear();
@@ -25,19 +24,12 @@ module.exports = {
 		}   
 		var dateTime = day+'/'+month+'/'+year+' '+hour+':'+minute+':'+second;   
 		return dateTime;
-	};
-	*/
-	test:function() {
-		console.log("test");
+	},
+	isDM:function (msg) {
+		if (msg.channel.type == 1) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 };
-
-/*
-function isDM(msg){
-	if(msg.channel.type == 1){
-		return true;
-	}else{
-		return false;
-	}
-}
-*/
