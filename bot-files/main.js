@@ -15,7 +15,7 @@ bot.on("ready", () => {
 });
 
 bot.on("messageCreate", (msg) => {
-    if(msg.content === "!ping") {
+    if(msg.content === "$ping") {
         bot.createMessage(msg.channel.id, "Pong!");
     }
 });
