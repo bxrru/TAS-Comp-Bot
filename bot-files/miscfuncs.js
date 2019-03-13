@@ -28,8 +28,8 @@ module.exports = {
 	};
 	*/
 	test:function() {
-		log("test");
-	};
+		console.log("test");
+	}
 };
 
 /*
