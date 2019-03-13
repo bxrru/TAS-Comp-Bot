@@ -1,0 +1,28 @@
+{
+  "name": "CompBOT",
+  "version": "1.0.0",
+  "description": "TAS Comp BOT made by Eddio0141 and Barry",
+  "main": ".\bot-files\main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": "9.8.0",
+    "npm": "5.6.0"
+  },
+  "keywords": [
+    "bot"
+  ],
+  "author": "Eddio0141 / Barry",
+  "license": "ISC",
+  "dependencies": {
+    "bufferutil": "^3.0.5",
+    "eris": "github:abalabahaha/eris#dev",
+    "erlpack": "github:abalabahaha/erlpack",
+    "eventemitter3": "^3.1.0",
+    "node-opus": "^0.2.9",
+    "pako": "^1.0.6",
+    "uws": "^9.148.0",
+    "zlib-sync": "^0.1.4"
+  }
+}
