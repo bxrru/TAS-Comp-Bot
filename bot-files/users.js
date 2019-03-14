@@ -6,8 +6,8 @@ module.exports = {
 		return content.includes(member.id) || content.includes(member.username + "#" + member.discriminator);
 	},
 	// TODO test
-	addCmdAccess:function(member) {
-		fs.appendFile("./bot-files/users/use_cmds.txt", member.username + "#" + member.discriminator, function (err) {
+	addCmdAccess:function(usernameAndTag) {
+		fs.appendFile("./bot-files/users/use_cmds.txt", usernameAndTag, function (err) {
 			if (err)
 				console.log(err);
   			console.log("added member " + member.username + "#" + member.discriminator);
