@@ -15,12 +15,16 @@ bot.on("ready", () => {
 });
 
 bot.on("messageCreate", (msg) => {
-    if(msg.content === "$ping") {
+    if (msg.content === "$ping" && users.hasCmdAccess(msg.member.id)) {
         bot.createMessage(msg.channel.id, "Pong!");
-    } else if (msg.content == "$restart") {
+    } else if (msg.content == "$restart" && users.hasCmdAccess(msg.member.id)) {
         bot.createMessage(msg.channel.id, "restarting");
 		console.log("restarting");
 		restart();
+	} else if (msg.content == "$test" && users.hasCmdAccess(msg.member.id)) {
+        bot.createMessage(msg.channel.id, msg.member.id);
+		console.log("test");
+		bot.createMessage(msg.channel.id, users.hasCmdAccess(msg.member.id));
 	}
 });
 
