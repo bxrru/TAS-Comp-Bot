@@ -16,7 +16,7 @@ bot.on("ready", () => {
 
 bot.on("messageCreate", (msg) => {
 	if (msg.content === "$ping" && users.hasCmdAccess(msg.member)) {
-		bot.createMessage(msg.channel.id, "Baited in " + new Date().getTime() - msg.timestamp + "ms");
+		bot.createMessage(msg.channel.id, "baited (" + new Date().getTime() - msg.timestamp + "ms)");
 	} else if (msg.content == "$restart" && users.hasCmdAccess(msg.member)) {
 		bot.createMessage(msg.channel.id, "restarting");
 		console.log("restarting");
