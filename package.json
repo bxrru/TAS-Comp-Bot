@@ -1,7 +1,7 @@
 {
   "name": "CompBOT",
-  "version": "1.0.0",
-  "description": "TAS Comp BOT made by Eddio0141 and Barry",
+  "version": "a0.030",
+  "description": "TAS Comp Bot made by Eddio0141 and Barry, hosted on https://github.com/Barryyyyyy/TAS-Comp-Bot",
   "main": ".\bot-files\main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
