@@ -14,20 +14,34 @@ bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
+// message handle
 bot.on("messageCreate", (msg) => {
-	if (msg.content === "$ping" && users.hasCmdAccess(msg.member)) {
-		bot.createMessage(msg.channel.id, "baited (" + new Date().getTime() - msg.timestamp + "ms)");
-	} else if (msg.content == "$restart" && users.hasCmdAccess(msg.member)) {
-		bot.createMessage(msg.channel.id, "restarting");
-		console.log("restarting");
-		restart();
-	} else if (msg.content == "$test" && users.hasCmdAccess(msg.member)) {
-		bot.createMessage(msg.channel.id, msg.member.id);
-		console.log("test");
-		bot.createMessage(msg.channel.id, users.hasCmdAccess(msg.member.id));
-	} else if (msg.content == "$uptime" && users.hasCmdAccess(msg.member)) {
-		bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
-	}
+	switch (msg.content) {
+		case "$ping":
+			if (users.hasCmdAccess(msg.member))
+				bot.createMessage(msg.channel.id, "baited (" + new Date().getTime() - msg.timestamp + "ms)");
+			break;
+		case "$restart":
+			if (users.hasCmdAccess(msg.member)) {
+				bot.createMessage(msg.channel.id, "restarting");
+				console.log("restarting");
+				restart();
+			}
+			break;
+		case "$test":
+			if (users.hasCmdAccess(msg.member)) {
+				bot.createMessage(msg.channel.id, msg.member.id);
+				console.log("test");
+			}
+			break;
+		case "$uptime":
+			if (users.hasCmdAccess(msg.member)) {
+				bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
+				console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
+			}
+			break;
+		default:
+			break;
 });
 
 bot.connect();
