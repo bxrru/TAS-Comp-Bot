@@ -19,19 +19,13 @@ bot.on("messageCreate", (msg) => {
 	switch (msg.content) {
 		case "$ping":
 			if (users.hasCmdAccess(msg.member))
-				bot.createMessage(msg.channel.id, "baited (" + new Date().getTime() - msg.timestamp + "ms)");
+				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) + "ms)");
 			break;
 		case "$restart":
 			if (users.hasCmdAccess(msg.member)) {
 				bot.createMessage(msg.channel.id, "restarting");
 				console.log("restarting");
 				restart();
-			}
-			break;
-		case "$test":
-			if (users.hasCmdAccess(msg.member)) {
-				bot.createMessage(msg.channel.id, msg.member.id);
-				console.log("test");
 			}
 			break;
 		case "$uptime":
@@ -46,8 +40,14 @@ bot.on("messageCreate", (msg) => {
 				users.addCmdAccess(user);
 				bot.createMessage(msg.channel.id, "successfully added user " + user + " to CmdAccess");
 				console.log("successfully added user " + user + " to CmdAccess");
+			} else if (msg.content.startsWith("$test") && users.hasCmdAccess(msg.member)) {
+				var temp = msg.content.split(" ", 2);
+				var user = temp[1];
+				bot.createMessage(msg.channel.id, "yes " + user);
+				console.log("test");
 			}
 			break;
+	}
 });
 
 bot.connect();

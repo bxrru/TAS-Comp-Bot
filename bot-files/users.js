@@ -11,7 +11,7 @@ module.exports = {
 	},
 	// TODO test
 	addCmdAccess:function(usernameAndTag) {
-		fs.appendFile("./bot-files/users/use_cmds.txt", usernameAndTag, function (err) {
+		fs.appendFile("./bot-files/users/use_cmds.txt", "\n" + usernameAndTag, function (err) {
 			if (err)
 				console.log(err);
   			console.log("added member " + usernameAndTag);
@@ -19,7 +19,7 @@ module.exports = {
 	},
 	// TODO test
 	addBan:function(usernameAndTag) {
-		fs.appendFile("./bot-files/users/comp_banned.txt", usernameAndTag, function (err) {
+		fs.appendFile("./bot-files/users/comp_banned.txt", "\n" + usernameAndTag, function (err) {
 			if (err)
 				console.log(err);
   			console.log("banned member " + usernameAndTag);
