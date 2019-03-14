@@ -42,8 +42,7 @@ bot.on("messageCreate", (msg) => {
 			break;
 		default:
 			if (msg.content.startsWith("$addCmdAccess ") && users.hasCmdAccess(msg.member)) {
-				var user = msg.content.split(" ", 2)[1];
-				user.substring(1, user.length);
+				var user = msg.content.split(" ", 2)[1].replace("@", "");
 				users.addCmdAccess(user);
 				bot.createMessage(msg.channel.id, "successfully added user " + user + " to CmdAccess");
 				console.log("successfully added user " + user + " to CmdAccess");
