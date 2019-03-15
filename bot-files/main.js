@@ -20,7 +20,6 @@ bot.on("ready", () => {
         },
         status: "dnd"
     })
-})
 });
 
 // message handle
