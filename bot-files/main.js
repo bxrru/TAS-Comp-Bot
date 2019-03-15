@@ -26,8 +26,7 @@ bot.on("ready", () => {
 bot.on("messageCreate", (msg) => {
 	switch (msg.content) {
 		case "$ping":
-			if (users.hasCmdAccess(msg.member))
-				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)");
+			bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)");
 			break;
 		case "$restart":
 			if (users.hasCmdAccess(msg.member)) {
