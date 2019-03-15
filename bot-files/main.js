@@ -12,6 +12,15 @@ var bot = new Eris("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w"
 
 bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
+    // bot's status)
+    bot.user.setPresence({
+        game: { 
+            name: "codes inside me",
+            type: 'WATCHING'
+        },
+        status: "dnd"
+    })
+})
 });
 
 // message handle
