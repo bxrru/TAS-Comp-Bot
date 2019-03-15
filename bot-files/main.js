@@ -27,7 +27,7 @@ bot.on("messageCreate", (msg) => {
 	switch (msg.content) {
 		case "$ping":
 			if (users.hasCmdAccess(msg.member))
-				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) + "ms)");
+				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)");
 			break;
 		case "$restart":
 			if (users.hasCmdAccess(msg.member)) {
@@ -48,10 +48,13 @@ bot.on("messageCreate", (msg) => {
 				users.addCmdAccess(user);
 				bot.createMessage(msg.channel.id, "successfully added user " + user + " to CmdAccess");
 				console.log("successfully added user " + user + " to CmdAccess");
+			} else if (msg.content.startsWith("$addBan ") && users.hasCmdAccess(msg.member)) {
+				var user = msg.content.split(" ", 2)[1].replace("@", "");
+				users.addBan(user);
+				bot.createMessage(msg.channel.id, "successfully banned user " + user);
+				console.log("successfully banned user " + user);
 			} else if (msg.content.startsWith("$test") && users.hasCmdAccess(msg.member)) {
-				var temp = msg.content.split(" ", 2);
-				var user = temp[1];
-				bot.createMessage(msg.channel.id, "yes " + user);
+				bot.createMessage(msg.channel.id, "got time : " + (new Date().getTime()) + " and msg time stamp " + msg.timestamp);
 				console.log("test");
 			}
 			break;
