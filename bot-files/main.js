@@ -24,38 +24,47 @@ bot.on("ready", () => {
 
 // message handle
 bot.on("messageCreate", (msg) => {
-	switch (msg.content) {
+	var str = msg.content.split(" ")[0];
+	switch (str) {
 		case "$ping":
-			bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)");
+			if (msg.content.split(" ").length < 2)
+				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)");
 			break;
 		case "$restart":
-			if (users.hasCmdAccess(msg.member)) {
+			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
 				bot.createMessage(msg.channel.id, "restarting");
 				console.log("restarting");
 				restart();
 			}
 			break;
 		case "$uptime":
-			if (users.hasCmdAccess(msg.member)) {
+			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
 				bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
 				console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
 			}
 			break;
-		default:
-			if (msg.content.startsWith("$addCmdAccess ") && users.hasCmdAccess(msg.member)) {
+		case "$addCmdAccess":
+			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
 				var user = msg.content.split(" ", 2)[1].replace("@", "");
 				users.addCmdAccess(user);
 				bot.createMessage(msg.channel.id, "successfully added user " + user + " to CmdAccess");
 				console.log("successfully added user " + user + " to CmdAccess");
-			} else if (msg.content.startsWith("$addBan ") && users.hasCmdAccess(msg.member)) {
+			}
+			break;
+		case "$addBan":
+			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
 				var user = msg.content.split(" ", 2)[1].replace("@", "");
 				users.addBan(user);
 				bot.createMessage(msg.channel.id, "successfully banned user " + user);
 				console.log("successfully banned user " + user);
-			} else if (msg.content.startsWith("$test") && users.hasCmdAccess(msg.member)) {
-				bot.createMessage(msg.channel.id, "got time : " + (new Date().getTime()) + " and msg time stamp " + msg.timestamp);
+			}
+			break;
+		case "$test":
+			if (users.hasCmdAccess(msg.member)) {
+				bot.createMessage(msg.channel.id, "$test");
 				console.log("test");
 			}
+		default:
 			break;
 	}
 });
