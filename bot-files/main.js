@@ -8,19 +8,25 @@ var miscfuncs = require("./miscfuncs.js");
 var users = require("./users.js");
 
 // token
-var bot = new Eris("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w");
+var bot = new Eris("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
+	desscription: "List of commands",
+	prefix: "$"
+});
 
 bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
-    // bot's status)
-    bot.user.setPresence({
-        game: { 
-            name: "codes inside me",
-            type: 'WATCHING'
-        },
-        status: "dnd"
-    })
 });
+
+
+/*
+var pingCommand = bot.registerCommand("ping", (msg) => { 
+	return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)";
+},
+{
+	description: "quick bait",
+	fullDescription: "To check if the bot is not dead. Tells you the time it took to bait you"
+});
+*/
 
 // message handle
 bot.on("messageCreate", (msg) => {
@@ -28,7 +34,7 @@ bot.on("messageCreate", (msg) => {
 	switch (str) {
 		case "$ping":
 			if (msg.content.split(" ").length < 2)
-				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)");
+				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) + "ms)");
 			break;
 		case "$restart":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
@@ -58,6 +64,8 @@ bot.on("messageCreate", (msg) => {
 				bot.createMessage(msg.channel.id, "successfully banned user " + user);
 				console.log("successfully banned user " + user);
 			}
+			break;
+		case "$allowSubmissions":
 			break;
 		case "$test":
 			if (users.hasCmdAccess(msg.member)) {
