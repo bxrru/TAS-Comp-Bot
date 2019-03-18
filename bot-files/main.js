@@ -28,6 +28,14 @@ var pingCommand = bot.registerCommand("ping", (msg) => {
 });
 */
 
+var pingCommand = bot.registerCommand("ping", (msg) => { 
+	return "ping (" + (new Date().getTime() - msg.timestamp) + "ms)";
+},
+{
+	description: "ping",
+	fullDescription: "To check if the bot is not dead. Tells you time it takes to ping you in ms"
+});
+
 // message handle
 bot.on("messageCreate", (msg) => {
 	var str = msg.content.split(" ")[0];
