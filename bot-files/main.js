@@ -17,12 +17,25 @@ bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
-var pingCommand = bot.registerCommand("ping", (msg, args) => {
-	return args.length < 2 ? "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)" : "";
+// public commands
+bot.registerCommand("ping", (msg, args) => {
+	if (args.length < 1)
+		return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)";
 },
 {
 	description: "ping",
 	fullDescription: "To check if the bot is not dead. Tells you time it takes to ping you in ms"
+});
+
+// specials
+bot.registerCommand("test", (msg, args) => {
+	if (users.hasCmdAccess(msg.member))
+		return args.length;
+},
+{
+	description: "test (don't use)",
+	fullDescription: "its a test command (don't use)",
+	hidden: true
 });
 
 // message handle
@@ -60,11 +73,6 @@ bot.on("messageCreate", (msg) => {
 			break;
 		case "$allowSubmissions":
 			break;
-		case "$test":
-			if (users.hasCmdAccess(msg.member)) {
-				bot.createMessage(msg.channel.id, "$test");
-				console.log("test");
-			}
 		default:
 			break;
 	}
