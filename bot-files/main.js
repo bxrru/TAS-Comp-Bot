@@ -9,7 +9,8 @@ var users = require("./users.js");
 
 // token
 var bot = new Eris("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
-	desscription: "List of commands",
+	description: "List of commands",
+	owner: "Eddio0141 / Barry",
 	prefix: "$"
 });
 
@@ -17,17 +18,15 @@ bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
+var yeetCommand = bot.registerCommand("yeet", (msg) => {
+    return "YEET!\nYour message timestamp: " + (msg.timestamp / 1000) + "\nCurrent timestamp: " + (timestamp / 1000);
+}, {
+    description: "Timestamp",
+    fullDescription: "Timestamp",
+    usage: "none lol"
+});
 
 /*
-var pingCommand = bot.registerCommand("ping", (msg) => { 
-	return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)";
-},
-{
-	description: "quick bait",
-	fullDescription: "To check if the bot is not dead. Tells you the time it took to bait you"
-});
-*/
-
 var pingCommand = bot.registerCommand("ping", (msg) => { 
 	return "ping (" + (new Date().getTime() - msg.timestamp) + "ms)";
 },
@@ -35,6 +34,7 @@ var pingCommand = bot.registerCommand("ping", (msg) => {
 	description: "ping",
 	fullDescription: "To check if the bot is not dead. Tells you time it takes to ping you in ms"
 });
+*/
 
 // message handle
 bot.on("messageCreate", (msg) => {
