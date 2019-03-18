@@ -8,9 +8,8 @@ var miscfuncs = require("./miscfuncs.js");
 var users = require("./users.js");
 
 // token
-var bot = new Eris("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
+var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
 	description: "List of commands",
-	owner: "Eddio0141 / Barry",
 	prefix: "$"
 });
 
@@ -18,32 +17,18 @@ bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
-var yeetCommand = bot.registerCommand("yeet", (msg) => {
-    return "YEET!\nYour message timestamp: " + (msg.timestamp / 1000) + "\nCurrent timestamp: " + (timestamp / 1000);
-}, {
-    description: "Timestamp",
-    fullDescription: "Timestamp",
-    usage: "none lol"
-});
-
-/*
-var pingCommand = bot.registerCommand("ping", (msg) => { 
-	return "ping (" + (new Date().getTime() - msg.timestamp) + "ms)";
+var pingCommand = bot.registerCommand("ping", (msg, args) => {
+	return args.length < 2 ? "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)" : "";
 },
 {
 	description: "ping",
 	fullDescription: "To check if the bot is not dead. Tells you time it takes to ping you in ms"
 });
-*/
 
 // message handle
 bot.on("messageCreate", (msg) => {
 	var str = msg.content.split(" ")[0];
 	switch (str) {
-		case "$ping":
-			if (msg.content.split(" ").length < 2)
-				bot.createMessage(msg.channel.id, "baited (" + (new Date().getTime() - msg.timestamp) + "ms)");
-			break;
 		case "$restart":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
 				bot.createMessage(msg.channel.id, "restarting");
