@@ -24,10 +24,21 @@ bot.registerCommand("ping", (msg, args) => {
 },
 {
 	description: "ping",
-	fullDescription: "To check if the bot is not dead. Tells you time it takes to ping you in ms"
+	fullDescription: "To check if the bot is not dead. Tells you time it takes to bait you in ms"
 });
 
 // specials
+bot.registerCommand("restart", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+		restart();
+	}
+},
+{
+	description: "restarts bot",
+	fullDescription: "This restarts bot.",
+	hidden: true
+});
+
 bot.registerCommand("test", (msg, args) => {
 	if (users.hasCmdAccess(msg.member))
 		return args.length;
@@ -42,13 +53,6 @@ bot.registerCommand("test", (msg, args) => {
 bot.on("messageCreate", (msg) => {
 	var str = msg.content.split(" ")[0];
 	switch (str) {
-		case "$restart":
-			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
-				bot.createMessage(msg.channel.id, "restarting");
-				console.log("restarting");
-				restart();
-			}
-			break;
 		case "$uptime":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
 				bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
