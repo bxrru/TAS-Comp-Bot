@@ -1,5 +1,5 @@
-you can add users here with either an user id or username + tag
+you can add users here with user id
 
-Yuu [Eddio0141]#0141
-barru#2175
-ERGC | Xander#6773
+<264136949940355072>
+<129045481387982848>
+<146958598801457152>
