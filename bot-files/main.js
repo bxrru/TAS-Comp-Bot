@@ -41,7 +41,7 @@ bot.registerCommand("restart", (msg, args) => {
 
 bot.registerCommand("test", (msg, args) => {
 	if (users.hasCmdAccess(msg.member))
-		return args.length;
+		return args;
 },
 {
 	description: "test (don't use)",
@@ -49,16 +49,22 @@ bot.registerCommand("test", (msg, args) => {
 	hidden: true
 });
 
+bot.registerCommand("uptime", (msg, args) => {
+	if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
+		bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
+		console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
+	}
+},
+{
+	description: "Prints uptime",
+	fullDescription: "Prints uptime",
+	hidden: true
+});
+
 // message handle
 bot.on("messageCreate", (msg) => {
 	var str = msg.content.split(" ")[0];
 	switch (str) {
-		case "$uptime":
-			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
-				bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
-				console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
-			}
-			break;
 		case "$addCmdAccess":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
 				var user = msg.content.split(" ", 2)[1].replace("@", "");
