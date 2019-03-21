@@ -1,3 +1,6 @@
+var request = require("request");
+var fs = require("fs");
+
 module.exports = {
 	getDateTime:function() {
 		var now     = new Date(); 
@@ -40,5 +43,10 @@ module.exports = {
 		var minutes = Math.floor(seconds % (60*60) / 60);
 	
 		return pad(hours) + ':' + pad(minutes) + ':' + pad(seconds);
+	},
+	downloadFromUrl:function(url, path) {
+		request.get(url)
+        .on('error', console.error)
+        .pipe(fs.createWriteStream(path));
 	}
 };

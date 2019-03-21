@@ -1,9 +1,10 @@
 process.title = "CompBOT";
 console.log("Starting main.js...");
 
+// other js files
+var fs = require("fs");
 const Eris = require("eris");
 
-// other js files
 var miscfuncs = require("./miscfuncs.js");
 var users = require("./users.js");
 
@@ -40,8 +41,11 @@ bot.registerCommand("restart", (msg, args) => {
 });
 
 bot.registerCommand("test", (msg, args) => {
-	if (users.hasCmdAccess(msg.member))
-		return args;
+	if (users.hasCmdAccess(msg.member)){
+		console.log("test command called");
+		miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
+		return "done saving " + msg.attachments[0].filename;
+	}
 },
 {
 	description: "test (don't use)",
