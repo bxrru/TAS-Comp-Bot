@@ -1,5 +1,6 @@
 var request = require("request");
 var fs = require("fs");
+const path = require("path");
 
 module.exports = {
 	getDateTime:function() {
@@ -49,9 +50,20 @@ module.exports = {
         .on('error', console.error)
         .pipe(fs.createWriteStream(path));
 	},
-	makeFolderIfHNotExist:function(path) {
+	makeFolderIfNotExist:function(path) {
 		if (!fs.existsSync(path)){
 			fs.mkdirSync(path);
 		}
+	},
+	deleteFilesInFolder:function(directory) {
+		fs.readdir(directory, (err, files) => {
+			if (err) throw err;
+
+			for (const file of files) {
+				fs.unlink(path.join(directory, file), err => {
+					if (err) throw err;
+				});
+			}
+		});
 	}
 };

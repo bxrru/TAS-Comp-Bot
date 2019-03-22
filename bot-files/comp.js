@@ -3,9 +3,12 @@ var allowSubmission = false;
 var task = 1;
 
 module.exports = {
-	allowSubmission:function(task){
+	allowSubmission:function(rawrxd){
 		allowSubmission = true;
-		task = task;
+		task = rawrxd;
+	},
+	getAllowSubmission:function(){
+		return allowSubmission;
 	},
 	stopSubmissions:function(){
 		allowSubmission = false;

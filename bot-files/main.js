@@ -7,10 +7,12 @@ const Eris = require("eris");
 
 var miscfuncs = require("./miscfuncs.js");
 var users = require("./users.js");
+var comp = require("./comp.js");
 
 // token
 var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
 	description: "List of commands",
+	owner: "Eddio0141 and Barry",
 	prefix: "$"
 });
 
@@ -43,8 +45,8 @@ bot.registerCommand("restart", (msg, args) => {
 bot.registerCommand("test", (msg, args) => {
 	if (users.hasCmdAccess(msg.member)){
 		console.log("test command called");
-		miscfuncs.makeFolderIfHNotExist("./taskuploads/");
-		miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
+		//miscfuncs.makeFolderIfHNotExist("./taskuploads/");
+		//miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
 		return "done saving " + msg.attachments[0].filename;
 	}
 },
@@ -55,7 +57,7 @@ bot.registerCommand("test", (msg, args) => {
 });
 
 bot.registerCommand("uptime", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length < 2) {
+	if (users.hasCmdAccess(msg.member) && args.length < 1) {
 		bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
 		console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
 	}
@@ -66,10 +68,28 @@ bot.registerCommand("uptime", (msg, args) => {
 	hidden: true
 });
 
-// message handle
-bot.on("messageCreate", (msg) => {
-	var str = msg.content.split(" ")[0];
-	switch (str) {
+bot.registerCommand("starttask", (msg, args) => {
+	if (users.hasCmdAccess(msg.member) && args.length == 1) {
+		var tasknum = Number(args[0]);
+		if (Number.isNaN(tasknum))
+			return "Invalid argument, needs task number instead";
+		
+		// empty out folder
+		miscfuncs.deleteFilesInFolder("./taskuploads/");
+		miscfuncs.makeFolderIfNotExist("./taskuploads/");
+		
+		comp.allowSubmission(tasknum);
+		return "starting task " + args[0];
+	}
+	return "Enter task number after the $starttask";
+},
+{
+	description: "Now accepts file uploads in dms for tas comp entry",
+	fullDescription: "Arguments : task number",
+	hidden: true
+});
+
+/*
 		case "$addCmdAccess":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
 				var user = msg.content.split(" ", 2)[1].replace("@", "");
@@ -86,10 +106,13 @@ bot.on("messageCreate", (msg) => {
 				console.log("successfully banned user " + user);
 			}
 			break;
-		case "$allowSubmissions":
-			break;
-		default:
-			break;
+*/
+
+// message handle
+bot.on("messageCreate", (msg) => {
+	// handle task submissions
+	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
+		bot.createMessage(msg.channel.id, "ye");
 	}
 });
 
