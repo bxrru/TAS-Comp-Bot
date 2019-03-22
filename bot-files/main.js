@@ -43,6 +43,7 @@ bot.registerCommand("restart", (msg, args) => {
 bot.registerCommand("test", (msg, args) => {
 	if (users.hasCmdAccess(msg.member)){
 		console.log("test command called");
+		miscfuncs.makeFolderIfHNotExist("./taskuploads/");
 		miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
 		return "done saving " + msg.attachments[0].filename;
 	}

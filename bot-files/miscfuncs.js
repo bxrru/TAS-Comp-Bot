@@ -48,5 +48,10 @@ module.exports = {
 		request.get(url)
         .on('error', console.error)
         .pipe(fs.createWriteStream(path));
+	},
+	makeFolderIfHNotExist:function(path) {
+		if (!fs.existsSync(path)){
+			fs.mkdirSync(path);
+		}
 	}
 };
