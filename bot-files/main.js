@@ -8,6 +8,14 @@ const Eris = require("eris");
 var miscfuncs = require("./miscfuncs.js");
 var users = require("./users.js");
 var comp = require("./comp.js");
+var score = require("./score.js");
+
+// channels of interest
+const SCORE = 529816535204888596;
+const RESULTS = 529816480016236554;
+const BOT_DMS = 555543392671760390;
+const BOT = 554820730043367445;
+const CURRENT_SUBMISSIONS = 397096356985962508;
 
 // token
 var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
@@ -89,6 +97,34 @@ bot.registerCommand("starttask", (msg, args) => {
 	hidden: true
 });
 
+bot.registerCommand("score", (msg, args) => {
+	if (msg.content.split(" ").length == 1){return}
+
+	if (users.hasCmdAccess(msg.member)){
+
+		var action = msg.content.split("\n")[0].split(" ")[1].toUpperCase();
+		var params = [];
+
+		if (action == "SET" || action == "CALCULATE"){
+			params = msg.content.split("\n");
+			params = params.splice(1, params.length - 1)
+		} else {
+			params = msg.content.split(" ");
+			params = params.splice(2, params.length - 1)
+		}
+
+		var message = score.processRequest(msg.member, action, params);
+		//console.log(message);
+		return message;
+
+	}
+},
+{
+	description: "Edits #score",
+	fullDescription: "Usage: $score <action> <params>",
+	hidden: true
+});
+
 /*
 		case "$addCmdAccess":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
@@ -113,6 +149,13 @@ bot.on("messageCreate", (msg) => {
 	// handle task submissions
 	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
 		bot.createMessage(msg.channel.id, "ye");
+	}
+	
+	// calculate score from results
+	if (msg.channel.id == RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+		var message = score.updateScore(msg.content);
+		bot.createMessage(BOT, message); // this will be changed to SCORE
+		console.log(message)
 	}
 });
 
