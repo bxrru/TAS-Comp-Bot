@@ -1,7 +1,7 @@
 {
   "name": "CompBOT",
-  "version": "a0.045",
-  "description": "TAS Comp Bot made by Eddio0141 and Barry, hosted on https://github.com/Barryyyyyy/TAS-Comp-Bot",
+  "version": "a0.066",
+  "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry, hosted on https://github.com/Barryyyyyy/TAS-Comp-Bot",
   "main": ".\bot-files\main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,7 +13,7 @@
   "keywords": [
     "bot"
   ],
-  "author": "Eddio0141 / Barry",
+  "author": "Eddio0141 / Barry / Xander",
   "license": "ISC",
   "dependencies": {
     "bufferutil": "^3.0.5",
