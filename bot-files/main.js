@@ -11,11 +11,11 @@ var comp = require("./comp.js");
 var score = require("./score.js");
 
 // channels of interest
-const SCORE = 529816535204888596;
-const RESULTS = 529816480016236554;
-const BOT_DMS = 555543392671760390;
-const BOT = 554820730043367445;
-const CURRENT_SUBMISSIONS = 397096356985962508;
+const SCORE = "529816535204888596";
+const RESULTS = "529816480016236554";
+const BOT_DMS = "555543392671760390";
+const BOT = "554820730043367445";
+const CURRENT_SUBMISSIONS = "397096356985962508";
 
 // token
 var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
@@ -151,11 +151,16 @@ bot.on("messageCreate", (msg) => {
 		bot.createMessage(msg.channel.id, "ye");
 	}
 	
-	// calculate score from results
-	if (msg.channel.id == RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+	// message in #results (non-DQ) => calculate score
+	if (msg.channel.id == BOT_DMS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+
 		var message = score.updateScore(msg.content);
-		bot.createMessage(BOT, message); // this will be changed to SCORE
-		console.log(message)
+		// will need to send to SCORE when final
+		bot.createMessage(BOT, message).then((msg)=>{
+			// store the message so it may be edited
+    			score.setScoreMsg(msg);
+		});
+
 	}
 });
 
