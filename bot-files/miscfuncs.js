@@ -65,5 +65,23 @@ module.exports = {
 				});
 			}
 		});
+	},
+	editFileLine:function(directory, line, newshit, callback){
+		var data = fs.readFileSync(directory, 'utf8');
+		var lines = data.split("\n");
+
+		if(+line > lines.length)
+			throw new Error("line number larger than file lines count");
+
+		lines[line] = newshit;
+		
+		var newlines = "";
+		
+		for (var i = 0; i < lines.length; i++)
+			newlines = lines[i] + "\n";
+		
+		fs.writeFile(directory, newlines, function(err, data) {
+			if (err) throw new err;
+		});
 	}
 };

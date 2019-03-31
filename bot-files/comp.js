@@ -10,6 +10,9 @@ module.exports = {
 	getAllowSubmission:function(){
 		return allowSubmission;
 	},
+	getTaskNum:function(){
+		return task;
+	},
 	stopSubmissions:function(){
 		allowSubmission = false;
 	},

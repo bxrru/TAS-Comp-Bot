@@ -9,6 +9,7 @@ var miscfuncs = require("./miscfuncs.js");
 var users = require("./users.js");
 var comp = require("./comp.js");
 var score = require("./score.js");
+var save = require("./save.js");
 
 // channels of interest
 const SCORE = "529816535204888596";
@@ -26,6 +27,8 @@ var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15
 
 bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
+	if (!fs.existsSync("save.cfg"))
+		save.makeNewSaveFile();
 });
 
 // public commands
@@ -55,7 +58,9 @@ bot.registerCommand("test", (msg, args) => {
 		console.log("test command called");
 		//miscfuncs.makeFolderIfHNotExist("./taskuploads/");
 		//miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
-		return "done saving " + msg.attachments[0].filename;
+		//return "done saving " + msg.attachments[0].filename;
+		
+		save.makeNewSaveFile();
 	}
 },
 {
@@ -87,6 +92,11 @@ bot.registerCommand("starttask", (msg, args) => {
 		miscfuncs.makeFolderIfNotExist("./taskuploads/");
 		
 		comp.allowSubmission(tasknum);
+		
+		console.log("1");
+		
+		save.saveAllowsubmissionAndTaskNum(comp.getAllowSubmission, getTaskNum);
+				
 		return "starting task " + args[0];
 	}
 	return "Enter task number after the $starttask";
