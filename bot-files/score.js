@@ -1,6 +1,6 @@
 var score = [];
 var setLength = 5;
-var scoreMsg;
+var scoreMsg = null;
 
 module.exports = {
 
@@ -19,14 +19,18 @@ module.exports = {
   resultsToScore:function(a) {
 
     var score = [];
-    var participants = a.length;
-    var name, place, points, coop;
+    var name, place, points, coop, participants;
 
-    for (i = 0; i < participants; i++){
+    // remove extra lines at the end
+    for (var i = a.length - 1; i>=0; i--){
+      if (a[i].length == 0 || a[i].toUpperCase().substr(2) == "DQ" || a[i].toUpperCase().substring(0,4) == "HTTP"){
+        a.pop();
+      } else {break;}
+    }
 
-      if (a[i].length == 0 || a[i].toUpperCase().substr(2) == "DQ" || a[i].toUpperCase().substr(4) == "HTTP"){
-        break;
-      }
+    participants = a.length;
+
+    for (var i = 0; i < participants; i++){
 
       // assumes there is a space between place and name
       name = a[i].split(" ")[1];
@@ -92,8 +96,8 @@ module.exports = {
   // scores = [int(place), "Name", float(points)]
   addScores:function(a, b){
 
-    if (a === undefined || a.length == 0){return b;}
-    if (b === undefined || b.length == 0){return a;}
+    if (a === undefined || a.length == 0 || a[0].length == 0){return b;}
+    if (b === undefined || b.length == 0 || b[0].length == 0){return a;}
 
     var NewScore = [];
     var name = "";
@@ -131,11 +135,11 @@ module.exports = {
   // returns score with proper placement
   sortScore:function(a){
 
-    if (a === undefined || a.length == 0){return [];}
-    if (a.length == 1){return [1, a[0][1], a[0][2]];}
+    if (a === undefined || a.length == 0 || a[0].length == 0){return [[]];}
+    if (a.length == 1){return [[1, a[0][1], a[0][2]]];}
 
     // sort by descending points
-    a = a.sort(function(a,b){b[2] - a[2]});
+    a = a.sort((a,b) => b[2] - a[2]);
 
     a[0][0] = 1;
 
@@ -150,6 +154,7 @@ module.exports = {
 
         a[i][0] = i+1;
       }
+
     }
 
     return a;
@@ -160,7 +165,7 @@ module.exports = {
 
   scoreToMessage:function(a, task, set, useHeader){
 
-    if (a === undefined || a.length == 0){return "No Results";}
+    if (a === undefined || a.length == 0  || a[0].length == 0){return "No Results";}
 
     var msg = "**";
 
@@ -169,7 +174,7 @@ module.exports = {
     if (useHeader){
 
       if (set === undefined){
-        set = ~~((parseInt(task) - 1)/5) + 1; // floor division
+        set = ~~((parseInt(task) - 1) / this.getSetLength() ) + 1; // floor division
       }
 
       msg += "__Set " + set.toString() + " Score ";
@@ -196,7 +201,7 @@ module.exports = {
       msg += place.toString();
 
       // Checks last character of place => 1st, 2nd, 3rd, 4th...
-      switch (place.toString().substr(place.length - 1, 1)) {
+      switch (place.toString().substr(place.length - 2)) {
         case "1":
           msg += "st";
           break;
@@ -233,7 +238,6 @@ module.exports = {
 
 
   updateScore:function(resultsMessage){
-
     var msg = "";
     try {
 
@@ -241,7 +245,7 @@ module.exports = {
       var task = resultsMessage.split("\n")[0].split(" ")[1];
 
       // reset scores at the start of a new set
-      if ((task-1) % this.getSetLength == 0){this.setScore([]);}
+      if ((task-1) % this.getSetLength() == 0){this.setScore([]);}
 
       var pastScore = this.getScore();
 
@@ -270,6 +274,153 @@ module.exports = {
 
 
 
+  changeName:function(oldName, newName){
+
+    var score = this.getScore();
+    if (score === undefined || score.length == 0  || score[0].length == 0){
+      return "No score found.";
+    }
+
+    for (var i=0; i<score.length; i++){
+
+      if (score[i][1].toUpperCase() == oldName.toUpperCase()){
+        score[i][1] = newName;
+        return "Changed ``"+oldName+"`` to ``"+newName+"``";
+      }
+
+    }
+
+    return "Name ``"+oldName+"`` not found in score.";
+
+  },
+
+
+
+  changePoints:function(name, points){
+
+    var score = this.getScore();
+    if (score === undefined || score.length == 0  || score[0].length == 0){
+      return "No score found.";
+    }
+
+    var num = parseFloat(points);
+    var oldpts;
+
+    if (num === points){
+      return "``<points>`` must be a float.";
+    }
+
+    for (var i=0; i<score.length; i++){
+
+      if (score[i][1].toUpperCase() == name.toUpperCase()){
+        oldpts = score[i][2];
+        score[i][2] = num;
+        return "Changed ``"+name+"``'s points from ``"+oldpts.toString()+"`` to ``"+num.toString()+"``.";
+      }
+
+    }
+
+    return "Name ``"+name+"`` not found in score.";
+
+  },
+
+
+
+  // a = ["1. Name: Points"]  // assumes proper input
+  // return = [[1, name, points]]
+  scoreMessageToScore:function(a){
+
+    var score = []
+    var place = 0;
+    var name = "";
+    var points = 0.0;
+
+    for (var i = 0; i<a.length; i++){
+
+      place = parseInt(a[i].split(" ")[0]);
+      name = a[i].split(" ")[1];
+      points = parseFloat(a[i].split(" ")[2]);
+
+      //remove colon "1st. Name: Score"
+      if (name.substring(name.length-1) == ":"){
+        name = name.substring(0, name.length-1);
+      }
+
+      score.push([place, name, points]);
+
+    }
+
+    return score;
+
+  },
+
+
+
+  remove:function(name){
+
+    var score = this.getScore();
+    if (score === undefined || score.length == 0  || score[0].length == 0){
+      return "No score found.";
+    }
+
+    for (var i=0; i<score.length; i++){
+
+      if (name.toUpperCase() == score[i][1].toUpperCase()){
+
+        var line = score.splice(i, 1);
+        score = this.sortScore(score);
+        this.setScore(score);
+
+        return "Removed: ``"+line[0][0].toString()+". "+line[0][1]+": "+line[0][2]+"``.";
+
+      }
+    }
+
+    return "Name ``"+name+"`` not found in score.";
+
+  },
+
+
+
+  combine:function(name1, name2){
+
+    name1 = name1.toUpperCase();
+    name2 = name2.toUpperCase();
+
+    if (name1 == name2){return "Cannot combine the same name.";}
+
+    var score = this.getScore();
+    if (score === undefined || score.length == 0  || score[0].length == 0){
+      return "No score found.";
+    }
+
+    for (var i=0; i<score.length; i++){
+
+      if (score[i][1].toUpperCase() == name1){
+
+        for (var j=0; j<score.length; j++){
+
+          if (score[j][1].toUpperCase() == name2){
+
+            score[i][2] += score.splice(j,1)[0][2];
+            score = this.sortScore(score);
+            this.setScore(score);
+            return "Combined ``"+name1+"`` & ``"+name2+"``.";
+
+          }
+        }
+
+        return "Name ``"+name2+"`` not found in score.";
+
+      }
+    }
+
+    return "Name ``"+name1+"`` not found in score.";
+
+  },
+
+
+
   processRequest:function(user, action, args){
 
     var msg = "";
@@ -279,58 +430,133 @@ module.exports = {
 
         // optional task
         var task = 0;
-        if (args.length > 0){parseInt(args.shift());}
+        if (args.length > 0){task = parseInt(args.shift());}
 
         // optional set
-        var set = ~~((parseInt(task) - 1)/5) + 1;
+        var set = ~~((task - 1)/ this.getSetLength() ) + 1;
         if (args.length > 0){set = parseInt(args.shift());}
 
-        msg = this.scoreToMessage(this.getScore(), task, set, false);
+        msg = this.scoreToMessage(this.getScore(), task, set, task!=0);
+        break;
 
+      case "FIND":
+        if (args.length == 0){
+          msg = "Not enough arguments: ``<name>``";
+        } else {
+
+          var score = this.getScore();
+          var found = false;
+          for (var i=0; i<score.length; i++){
+            if (score[i][1].toUpperCase() == args[0].toUpperCase()){
+              msg = this.scoreToMessage(score.splice(i,1),0,0,false);
+              msg = msg.substring(2, msg.length-2);
+              found = true;
+            }
+          }
+
+          if (!found){msg = "Name ``"+args[0].toUpperCase()+"`` not found in score.";}
+
+        }
         break;
 
       case "SET":
-
+        var results = this.scoreMessageToScore(args);
+        results = this.sortScore(results);
+        this.setScore(results);
+        msg = "Score set."
         break;
 
       case "CLEAR":
         this.setScore([]);
-        msg = "Score cleared";
+        msg = "Score cleared.";
         break;
 
       case "CHANGENAME":
+        if (args.length < 2){
+          msg = "Not enough arguments: ``<oldName>`` ``<newName>``.";
+
+        } else {
+          msg = this.changeName(args[0], args[1]);
+        }
         break;
 
       case "CHANGEPOINTS":
-        break;
+      if (args.length < 2){
+        msg = "Not enough arguments: ``<name>`` ``<points>``.";
+
+      } else {
+        msg = this.changePoints(args[0], args[1]);
+      }
+      break;
 
       case "COMBINE":
+        if (args.length < 2){
+          msg = "Not enough arguments: ``<name1>`` ``<name2>``.";
+
+        } else {
+          msg = this.combine(args[0], args[1]);
+        }
         break;
 
       case "ADD":
-        var newScore = this.addScores([0, args[0], parseFloat(args[1])], this.getScore());
+        var newScore = this.addScores([[0, args[0], parseFloat(args[1])]], this.getScore());
         newScore = this.sortScore(newScore);
         this.setScore(newScore);
-        msg = "Added ``"+args[0]+": "+args[1]+"``";
+        msg = "Added ``"+args[0]+": "+args[1]+"``.";
         break;
 
       case "REMOVE":
+        if (args.length == 0){
+          msg = "Not enough arguments: ``<name>``.";
+
+        } else {
+          msg = this.remove(args[0]);
+        }
         break;
 
       case "CHANGESETLENGTH":
-        this.setSetLength(parseInt(args[0]));
-        msg = "Score will reset every " + parseInt(args[0]).toString() + " tasks";
+        if (isNaN(parseInt(args[0]))){
+          msg = "Set length must be an integer.";
+        } else {
+          this.setSetLength(parseInt(args[0]));
+          msg = "Score will reset every " + parseInt(args[0]).toString() + " tasks.";
+        }
         break;
 
       case "CALCULATE":
+        if (isNaN(parseInt(args[0]))){
+          msg = "Score length must be an integer.";
+        } else {
+
+          // get the score portion
+          var score = [];
+          var scoreLength = args.shift();
+          for (var i=0; i<scoreLength; i++){
+            score.push(args.shift());
+          }
+          score = this.scoreMessageToScore(score);
+
+          // any remaining results
+          var results = [];
+          var remaining = args.length;
+          for (var i=0; i<remaining; i++){
+            results.push(args.shift());
+          }
+          results = this.resultsToScore(results);
+
+          var newScore = this.addScores(score, results);
+          newScore = this.sortScore(newScore)
+          msg = this.scoreToMessage(newScore,0,0,false);
+
+        }
         break;
 
       default:
         msg = "Failed request, action: ``"+action+"`` not recognized. Action must be ";
-        ["PRINT","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE"].forEach(function(a){
+        ["PRINT","FIND","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CHANGESETLENGTH"].forEach(function(a){
           msg += "``"+a+"``, ";
         });
-        msg+="``CALCULATE``";
+        msg+="``CALCULATE``.";
         break;
 
     }
