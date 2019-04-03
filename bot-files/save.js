@@ -25,4 +25,7 @@ module.exports = {
 				saves[i] = defaultVars[i];
 		}
 	}
+	
+	// TODO
+	// add cfg checker and fix if cfg is missing something / broken
 };
