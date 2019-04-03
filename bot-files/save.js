@@ -13,7 +13,11 @@ var defaultVars = [
 
 module.exports = {
 	saveoption:function(thingToSave, newVar){
-		// saves option TODO
+		for (i = 0; i < saves.length; i++){
+			if (saves[i] == thingToSave){
+				// TODO finish editing save option
+			}
+		}
 	},
 	// makes new cfg file with default vars
 	makeNewSaveFile:function(){
