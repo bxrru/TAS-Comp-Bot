@@ -1,8 +1,15 @@
 const fs = require("fs");
 
 // make sure the length of lists are the same
-var saves = ["allowsubmission", "tasknum"];
-var defaultVars = [false, 0];
+var saves = [
+	"allowsubmission",
+	"tasknum"
+];
+
+var defaultVars = [
+	false,
+	0
+];
 
 module.exports = {
 	saveoption:function(thingToSave, newVar){
