@@ -11,11 +11,14 @@ var defaultVars = [
 	0
 ];
 
+//function cfgchange(thingToChange 
+
 module.exports = {
 	saveoption:function(thingToSave, newVar){
 		for (i = 0; i < saves.length; i++){
 			if (saves[i] == thingToSave){
 				// TODO finish editing save option
+				// file.change
 			}
 		}
 	},
@@ -33,7 +36,7 @@ module.exports = {
 	setDefaultVar:function(thingToReset){
 		for (i = 0;i < saves.length;i++){
 			if (thingToReset == saves[i])
-				saves[i] = defaultVars[i];
+				//saves[i] = defaultVars[i];
 		}
 	}
 	
