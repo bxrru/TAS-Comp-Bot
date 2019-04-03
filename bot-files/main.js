@@ -11,6 +11,10 @@ var comp = require("./comp.js");
 var score = require("./score.js");
 var save = require("./save.js");
 
+// make new cfg file if it doesn't exist
+if (!fs.existsSync("save.cfg"))
+	save.makeNewSaveFile();
+
 // channels of interest
 const SCORE = "529816535204888596";
 const RESULTS = "529816480016236554";
@@ -27,8 +31,6 @@ var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15
 
 bot.on("ready", () => {
     console.log("Ready! (" + miscfuncs.getDateTime() + ")");
-	if (!fs.existsSync("save.cfg"))
-		save.makeNewSaveFile();
 });
 
 // public commands
@@ -60,7 +62,7 @@ bot.registerCommand("test", (msg, args) => {
 		//miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
 		//return "done saving " + msg.attachments[0].filename;
 		
-		save.makeNewSaveFile();
+		//save.makeNewSaveFile();
 	}
 },
 {
@@ -93,9 +95,7 @@ bot.registerCommand("starttask", (msg, args) => {
 		
 		comp.allowSubmission(tasknum);
 		
-		console.log("1");
-		
-		save.saveAllowsubmissionAndTaskNum(comp.getAllowSubmission, getTaskNum);
+		//save.saveAllowsubmissionAndTaskNum(comp.getAllowSubmission, getTaskNum);
 				
 		return "starting task " + args[0];
 	}
