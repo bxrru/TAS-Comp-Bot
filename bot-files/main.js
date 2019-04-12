@@ -135,6 +135,61 @@ bot.registerCommand("score", (msg, args) => {
 	hidden: true
 });
 
+// shortcut for channel IDs
+function chooseChannel(string){
+	string = string.toUpperCase()
+	if (string == "BOT"){
+		return BOT;
+	} else if (string == "GENERAL") {
+		return GENERAL;
+	} else {
+		return string
+	}
+}
+
+// Various mod commands:
+// people with command access
+// or anyone in #bot can use them
+
+bot.registerCommand("send", (msg, args) => {
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+		var message = msg.content.substr(5, msg.content.length-1);
+		message = message.substr(args[0].length+2, message.length-1)
+		bot.createMessage(chooseChannel(args[0]), message);
+	}
+});
+
+bot.registerCommand("react", (msg, args) => {
+	if (args[2].includes(":")){
+		args[2] = args[2].substr(2, args[2].length-3);
+	}
+	bot.addMessageReaction(chooseChannel(args[0]), args[1], args[2]);
+});
+
+bot.registerCommand("delete", (msg, args) => {
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
+			msg.delete();
+		});
+	}
+});
+
+bot.registerCommand("pin", (msg, args) => {
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
+			msg.pin();
+		});
+	}
+});
+
+bot.registerCommand("unpin", (msg, args) => {
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
+			msg.unpin();
+		});
+	}
+});
+
 /*
 		case "$addCmdAccess":
 			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
@@ -172,6 +227,15 @@ bot.on("messageCreate", (msg) => {
 		});
 
 	}
+});
+
+// add any reaction added to any message
+bot.on("messageReactionAdd", (msg, emoji) => {
+	reaction = emoji.name;
+	if (emoji.id != null){
+		reaction += ":" + emoji.id;
+	}
+	bot.addMessageReaction(msg.channel.id, msg.id, reaction)
 });
 
 bot.connect();
