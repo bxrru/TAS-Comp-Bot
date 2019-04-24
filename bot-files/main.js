@@ -22,15 +22,20 @@ const BOT_DMS = "555543392671760390";
 const BOT = "554820730043367445";
 const CURRENT_SUBMISSIONS = "397096356985962508";
 
+const COMP_ACCOUNT = "397096658476728331";
+const SCORE_POINTER = "569918196971208734";
+const BOT_ACCOUNT = "555489679475081227"; // better way to identify self?
+
 // token
 var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
 	description: "List of commands",
-	owner: "Eddio0141 and Barry",
+	owner: "Eddio0141, Barry & Xander",
 	prefix: "$"
 });
 
 bot.on("ready", () => {
-    console.log("Ready! (" + miscfuncs.getDateTime() + ")");
+	retrieveScore();
+    	console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
 // public commands
@@ -110,9 +115,11 @@ bot.registerCommand("starttask", (msg, args) => {
 bot.registerCommand("score", (msg, args) => {
 	if (msg.content.split(" ").length == 1){return}
 
-	if (users.hasCmdAccess(msg.member)){
+	var action = msg.content.split("\n")[0].split(" ")[1].toUpperCase();
 
-		var action = msg.content.split("\n")[0].split(" ")[1].toUpperCase();
+	// allow people to calculate scores and find themselves
+	if (["FIND","CALCULATE"].includes(action) || users.hasCmdAccess(msg.author) || msg.channel.id == BOT){
+
 		var params = [];
 
 		if (action == "SET" || action == "CALCULATE"){
@@ -123,17 +130,80 @@ bot.registerCommand("score", (msg, args) => {
 			params = params.splice(2, params.length - 1)
 		}
 
-		var message = score.processRequest(msg.member, action, params);
-		//console.log(message);
-		return message;
+		// check that the message is a valid message from the bot
+		if (action == "SETMESSAGE"){
+			if (params.length >= 2){
 
-	}
+				bot.getMessage(params[0], params[1]).then((msg) => {
+
+					if (msg.author != BOT_ACCOUNT){
+						return "Invalid user. Message must be sent by me."
+					}
+
+				}).catch((error) => {
+					return "Invalid channel or message. Could not find message."
+				});
+
+				bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
+					channel.editMessage(SCORE_POINTER, params[0] + " " + params[1])
+				})
+			}
+		}
+
+		var message = score.processRequest(msg.member, action, params);
+
+		// directly edit the message in #SCORE
+		if (["CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CLEAR","SET","CHANGETASK"].includes(action)){
+			if (score.getScoreMsg()[0] == ""){
+				message += " No message found to edit."
+			} else {
+
+				bot.getMessage(score.getScoreMsg()[0], score.getScoreMsg()[1]).then((msg) => {
+
+					var task = parseInt(msg.content.split("\n")[0].split(" ").pop());
+
+					if (action == "CHANGETASK"){task = parseInt(args[1]);}
+					if (isNaN(task)){task = 1}
+
+					bot.editMessage(score.getScoreMsg()[0],
+						score.getScoreMsg()[1],
+						score.scoreToMessage(score.getScore(), task));
+					});
+				}
+			}
+		}
+
+		console.log(message);
+		return message;
 },
 {
 	description: "Edits #score",
-	fullDescription: "Usage: $score <action> <params>",
+	fullDescription: "Usage: $score <action> <parameters>",
 	hidden: true
 });
+
+function retrieveScore(){
+
+	// retrieve pointer to message containing score
+	bot.getDMChannel(COMP_ACCOUNT).then((dm) => {
+		dm.getMessage(SCORE_POINTER).then((msg) => {
+
+			// store the channel and id
+			var channel = msg.content.split(" ")[0];
+			var id = msg.content.split(" ")[1];
+			score.setScoreMsg(channel, id);
+
+			// store the current score (string manipulation garbage)
+			bot.getMessage(channel, id).then((score_msg) => {
+				var results = score_msg.content.replace("**","").replace("**","").split('\n');
+				if (results[results.length-1]==''){results.splice(results.length-1,results.length-1)}
+				results = score.scoreMessageToScore(results.slice(2));
+				results = score.sortScore(results);
+				score.setScore(results);
+			});
+		});
+	});
+}
 
 // shortcut for channel IDs
 function chooseChannel(string){
@@ -217,15 +287,17 @@ bot.on("messageCreate", (msg) => {
 	}
 	
 	// message in #results (non-DQ) => calculate score
-	if (msg.channel.id == BOT_DMS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+	if (msg.channel.id == RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
 
 		var message = score.updateScore(msg.content);
-		// will need to send to SCORE when final
-		bot.createMessage(BOT, message).then((msg)=>{
-			// store the message so it may be edited
-    			score.setScoreMsg(msg);
-		});
 
+		bot.createMessage(SCORE, message).then((msg)=>{
+			// store the message so it may be edited
+    			score.setScoreMsg(msg.channel.id, msg.id);
+			bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
+				channel.editMessage(SCORE_POINTER, msg.channel.id + " " + msg.id);
+			});
+		});
 	}
 });
 
