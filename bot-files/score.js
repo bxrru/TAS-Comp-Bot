@@ -1,13 +1,13 @@
 var score = [];
 var setLength = 5;
-var scoreMsg = null;
+var scoreMsgID = ["",""]; // [channel_id, message_id]
 
 module.exports = {
 
   // k=place, n=participants
   // points = 15x^6 + 10x^4 + 5x^2 + 14x + 6
   alg:function(k,n) {
-    x = (1 - (k-1)/n);
+    x = (n-k+1) / n;
     points = 15*x*x*x*x*x*x + 10*x*x*x*x + 5*x*x + 14*x + 6;
     return parseFloat(points.toFixed(1));
   },
@@ -73,22 +73,25 @@ module.exports = {
 
   // Number of tasks in each set
   getSetLength:function(){
+    if (isNaN(this.setLength)){this.setLength = 5}
     return this.setLength;
   },
 
   setSetLength:function(x){
-    this.setLength = x;
+    if (!isNaN(parseInt(x))){
+      this.setLength = parseInt(x);
+    }
   },
 
 
 
   // The bot's stored score message
   getScoreMsg:function(){
-    return this.scoreMsg;
+    return this.scoreMsgID;
   },
 
-  setScoreMsg:function(msg){
-    this.scoreMsg = msg;
+  setScoreMsg:function(channel, msg){
+    this.scoreMsgID = [channel, msg];
   },
 
 
@@ -174,7 +177,10 @@ module.exports = {
     if (useHeader){
 
       if (set === undefined){
-        set = ~~((parseInt(task) - 1) / this.getSetLength() ) + 1; // floor division
+
+        if (task === undefined){task = 1;}
+
+        set = ~~((parseInt(task) - 1) / this.getSetLength()) + 1;
       }
 
       msg += "__Set " + set.toString() + " Score ";
@@ -449,7 +455,7 @@ module.exports = {
           for (var i=0; i<score.length; i++){
             if (score[i][1].toUpperCase() == args[0].toUpperCase()){
               msg = this.scoreToMessage(score.splice(i,1),0,0,false);
-              msg = msg.substring(2, msg.length-2);
+              while (msg.includes("*")){msg = msg.replace("*","");}
               found = true;
             }
           }
@@ -523,6 +529,27 @@ module.exports = {
         }
         break;
 
+      case "SETMESSAGE":
+        if (args.length < 2) {
+          msg = "Not enough arguments: ``<channel_ID> <message_ID>``.";
+        } else {
+          this.setScoreMsg(args[0], args[1]);
+          msg = "Message set.";
+        }
+        break;
+
+      case "CHANGETASK":
+        if (args.length == 0) {
+          msg = "Not enough arguments: ``<task#>``.";
+        } else {
+          if (isNaN(parseInt(args[0]))){
+            msg = "Task number default to 1."
+          } else {
+            msg = "Task number set to "+parseInt(args[0]).toString()+".";
+          }
+        }
+        break;
+
       case "CALCULATE":
         if (isNaN(parseInt(args[0]))){
           msg = "Score length must be an integer.";
@@ -553,7 +580,7 @@ module.exports = {
 
       default:
         msg = "Failed request, action: ``"+action+"`` not recognized. Action must be ";
-        ["PRINT","FIND","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CHANGESETLENGTH"].forEach(function(a){
+        ["PRINT","FIND","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CHANGESETLENGTH","CHANGETASK","SETMESSAGE"].forEach(function(a){
           msg += "``"+a+"``, ";
         });
         msg+="``CALCULATE``.";
