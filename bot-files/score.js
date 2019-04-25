@@ -207,18 +207,27 @@ module.exports = {
       msg += place.toString();
 
       // Checks last character of place => 1st, 2nd, 3rd, 4th...
-      switch (place.toString().substr(place.length - 2)) {
+      // Checks 2nd last character for 11th, 12th, 13th, 111th...
+      var last = place.toString().split('')[place.toString().length-1];
+      var secondLast = place.toString().split('')[place.toString().length-2];
+      switch (last) {
         case "1":
-          msg += "st";
-          break;
+          if (secondLast!="1"){
+            msg += "st";
+            break;
+          }
 
         case "2":
-          msg += "nd";
-          break;
+          if (secondLast!="1"){
+            msg += "nd";
+            break;
+          }
 
         case "3":
-          msg += "rd";
-          break;
+          if (secondLast!="1"){
+            msg += "rd";
+            break;
+          }
 
         default:
           msg += "th"
