@@ -35,7 +35,7 @@ module.exports = {
 	},
 	setDefaultVar:function(thingToReset){
 		for (i = 0;i < saves.length;i++){
-			if (thingToReset == saves[i])
+			//if (thingToReset == saves[i])
 				//saves[i] = defaultVars[i];
 		}
 	}
