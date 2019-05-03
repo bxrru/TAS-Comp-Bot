@@ -21,6 +21,7 @@ const RESULTS = "529816480016236554";
 const BOT_DMS = "555543392671760390";
 const BOT = "554820730043367445";
 const CURRENT_SUBMISSIONS = "397096356985962508";
+const GENERAL = "397488794531528704";
 
 const COMP_ACCOUNT = "397096658476728331";
 const SCORE_POINTER = "569918196971208734";
@@ -35,7 +36,7 @@ var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15
 
 bot.on("ready", () => {
 	retrieveScore();
-    	console.log("Ready! (" + miscfuncs.getDateTime() + ")");
+	console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
 // public commands
@@ -136,7 +137,7 @@ bot.registerCommand("score", (msg, args) => {
 
 				bot.getMessage(params[0], params[1]).then((msg) => {
 
-					if (msg.author != BOT_ACCOUNT){
+					if (msg.author.id != BOT_ACCOUNT){
 						return "Invalid user. Message must be sent by me."
 					}
 
@@ -168,10 +169,10 @@ bot.registerCommand("score", (msg, args) => {
 					bot.editMessage(score.getScoreMsg()[0],
 						score.getScoreMsg()[1],
 						score.scoreToMessage(score.getScore(), task));
-					});
-				}
+				});
 			}
 		}
+	}
 
 		console.log(message);
 		return message;
