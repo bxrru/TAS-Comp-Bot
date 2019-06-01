@@ -16,12 +16,12 @@ if (!fs.existsSync("save.cfg"))
 	save.makeNewSaveFile();
 
 // channels of interest
-const SCORE = "529816535204888596";
-const RESULTS = "529816480016236554";
-const BOT_DMS = "555543392671760390";
-const BOT = "554820730043367445";
-const CURRENT_SUBMISSIONS = "397096356985962508";
-const GENERAL = "397488794531528704";
+var CHANNELS = {"GENERAL": "397488794531528704",
+		"BOT": "554820730043367445",
+		"BOT_DMS": "555543392671760390",
+		"SCORE": "529816535204888596",
+		"RESULTS": "529816480016236554",
+		"CURRENT_SUBMISSIONS": "397096356985962508"}
 
 const COMP_ACCOUNT = "397096658476728331";
 const SCORE_POINTER = "569918196971208734";
@@ -119,7 +119,7 @@ bot.registerCommand("score", (msg, args) => {
 	var action = msg.content.split("\n")[0].split(" ")[1].toUpperCase();
 
 	// allow people to calculate scores and find themselves
-	if (["FIND","CALCULATE"].includes(action) || users.hasCmdAccess(msg.author) || msg.channel.id == BOT){
+	if (["FIND","CALCULATE"].includes(action) || users.hasCmdAccess(msg.author) || msg.channel.id == CHANNELS.BOT){
 
 		var params = [];
 
@@ -209,56 +209,118 @@ function retrieveScore(){
 // shortcut for channel IDs
 function chooseChannel(string){
 	string = string.toUpperCase()
-	if (string == "BOT"){
-		return BOT;
-	} else if (string == "GENERAL") {
-		return GENERAL;
+	if (CHANNELS[string] === undefined) {
+		return string;
 	} else {
-		return string
+		return CHANNELS[string];
 	}
 }
+
+bot.registerCommand("addChannel", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+		CHANNELS[args[0].toUpperCase()] = args[1];
+		return "``"+args[0].toUpperCase()+": "+args[1]+"`` Added.";
+	}
+},
+{
+	description: "Adds a shortcut for a ID.",
+	fullDescription: "Usage: $addChannel <alias> <channel_id>\nAllows <alais> to be specified in place of <channel_id> for other commands.",
+	hidden: true
+});
+
+bot.registerCommand("removeChannel", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+		delete CHANNELS[args[0].toUpperCase()];
+		return "``"+args[0]+"`` Removed."
+	}
+},
+{
+	description: "Removes a channel alias from the database",
+	fullDescription: "Usage: $removeChannel <alias>",
+	hidden: true
+});
+
+bot.registerCommand("getChannels", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+		var channels = "```";
+		for (var key in CHANNELS){
+			channels += key + ": " + CHANNELS[key] + "\n";
+		}
+		return channels+"```";
+	}
+},
+{
+	description: "Gets a list of channel aliases and thier IDs",
+	fullDescription: "Gets a list of channel aliases and thier IDs",
+	hidden: true
+});
+
 
 // Various mod commands:
 // people with command access
 // or anyone in #bot can use them
 
 bot.registerCommand("send", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
 		var message = msg.content.substr(5, msg.content.length-1);
 		message = message.substr(args[0].length+2, message.length-1)
-		bot.createMessage(chooseChannel(args[0]), message);
+		bot.createMessage(chooseChannel(args[0]), message).catch((err) => {return;});
 	}
+},
+{
+	description: "Sends a message to a specified channel",
+	fullDescription: "Usage: $send <channel_id or alias> <message>",
+	hidden: true
 });
 
 bot.registerCommand("react", (msg, args) => {
 	if (args[2].includes(":")){
 		args[2] = args[2].substr(2, args[2].length-3);
 	}
-	bot.addMessageReaction(chooseChannel(args[0]), args[1], args[2]);
+	bot.addMessageReaction(chooseChannel(args[0]), args[1], args[2]).catch((err) => {return;});
+},
+{
+	description: "React to a message (This is broken ?)",
+	hidden: true
 });
 
 bot.registerCommand("delete", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.delete();
 		});
 	}
+},
+{
+	description: "Deletes a message",
+	fullDescription: "Usage: $delete <channel_id or alias> <message_id>",
+	hidden: true
 });
 
 bot.registerCommand("pin", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.pin();
 		});
 	}
+},
+{
+	description: "Pins a message",
+	fullDescription: "Usage: $pin <channel_id or alias> <message_id>",
+	hidden: true
 });
 
 bot.registerCommand("unpin", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == BOT){
+	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.unpin();
 		});
 	}
+},
+{
+	description: "Unpins a message",
+	fullDescription: "Usage: $unpin <channel_id or alias> <message_id>",
+	hidden: true
 });
 
 /*
@@ -288,11 +350,11 @@ bot.on("messageCreate", (msg) => {
 	}
 	
 	// message in #results (non-DQ) => calculate score
-	if (msg.channel.id == RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+	if (msg.channel.id == CHANNELS.RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
 
 		var message = score.updateScore(msg.content);
 
-		bot.createMessage(SCORE, message).then((msg)=>{
+		bot.createMessage(CHANNELS.SCORE, message).then((msg)=>{
 			// store the message so it may be edited
     			score.setScoreMsg(msg.channel.id, msg.id);
 			bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
@@ -303,12 +365,29 @@ bot.on("messageCreate", (msg) => {
 });
 
 // add any reaction added to any message
+var echoReactions = true;
 bot.on("messageReactionAdd", (msg, emoji) => {
+	if (!echoReactions){return;}
 	reaction = emoji.name;
 	if (emoji.id != null){
 		reaction += ":" + emoji.id;
 	}
 	bot.addMessageReaction(msg.channel.id, msg.id, reaction)
+});
+
+bot.registerCommand("toggleReaction", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+		echoReactions = !echoReactions;
+		if (echoReactions){
+			return "Reactions enabled";
+		} else {
+			return "Reactions disabled";
+		}
+	}
+},
+{
+	description: "Toggle whether the bot echos reactions",
+	hidden: true
 });
 
 bot.connect();
