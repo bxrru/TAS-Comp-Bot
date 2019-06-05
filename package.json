@@ -1,6 +1,6 @@
 {
   "name": "CompBOT",
-  "version": "a0.066",
+  "version": "a0.081",
   "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry, hosted on https://github.com/Barryyyyyy/TAS-Comp-Bot",
   "main": ".\bot-files\main.js",
   "scripts": {
