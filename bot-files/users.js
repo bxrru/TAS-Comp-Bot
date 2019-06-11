@@ -1,13 +1,13 @@
 const fs = require("fs");
 
 module.exports = {
-	hasCmdAccess:function(member) {
+	hasCmdAccess:function(author) {
 		var content = fs.readFileSync("./bot-files/users/use_cmds.txt", "utf8");
-		return content.includes(member.id) || content.includes(member.username + "#" + member.discriminator);
+		return content.includes(author.id) || content.includes(author.username + "#" + author.discriminator);
 	},
-	isBanned:function(member) {
+	isBanned:function(author) {
 		var content = fs.readFileSync("./bot-files/users/comp_banned.txt", "utf8");
-		return content.includes(member.id) || content.includes(member.username + "#" + member.discriminator);
+		return content.includes(author.id) || content.includes(author.username + "#" + author.discriminator);
 	},
 	// TODO test
 	addCmdAccess:function(id) {

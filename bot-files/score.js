@@ -2,6 +2,11 @@ var score = [];
 var setLength = 5;
 var scoreMsgID = ["",""]; // [channel_id, message_id]
 
+var miscfuncs = require("./miscfuncs.js");
+const BOT_ACCOUNT = "555489679475081227"; // user ID
+const COMP_ACCOUNT = "397096658476728331"; // user ID
+const SCORE_POINTER = "569918196971208734"; // msg ID in DMs with the comp account
+
 module.exports = {
 
   // k=place, n=participants
@@ -21,11 +26,11 @@ module.exports = {
     var score = [];
     var name, place, points, coop, participants;
 
-    // remove extra lines at the end
+    // remove DQs and empty lines
     for (var i = a.length - 1; i>=0; i--){
-      if (a[i].length == 0 || a[i].toUpperCase().substr(2) == "DQ" || a[i].toUpperCase().substring(0,4) == "HTTP"){
-        a.pop();
-      } else {break;}
+      if (a[i] == '' || a[i].toUpperCase().substr(0,2) == "DQ" || a[i].toUpperCase().substr(0,4) == "HTTP"){
+        a.splice(i,1);
+      }
     }
 
     participants = a.length;
@@ -109,14 +114,15 @@ module.exports = {
     for (var i=0; i<a.length; i++){
 
       name = a[i][1];
-      points = a[i][2];
+      points = parseFloat(a[i][2]);
 
       // check if the player appears in both
       for (var j=0; j<b.length; j++){
 
         if (name.toUpperCase() == b[j][1].toUpperCase()){
           // remove the duplicate from b as to not check them again
-          points += b.splice(j,1)[0][2];
+          points += parseFloat(b.splice(j,1)[0][2]);
+          points = parseFloat(points.toFixed(1));
           break;
         }
       }
@@ -126,7 +132,7 @@ module.exports = {
 
     // any remaining players only in b
     for (var i=0; i<b.length; i++){
-      NewScore.push([0, b[i][1], b[i][2]]);
+      NewScore.push([0, b[i][1], parseFloat(b[i][2].toFixed(1))]);
     }
 
     return NewScore;
@@ -257,7 +263,8 @@ module.exports = {
     try {
 
       // "Task # Results"
-      var task = resultsMessage.split("\n")[0].split(" ")[1];
+      var task = parseInt(resultsMessage.split("\n")[0].split(" ")[1]);
+      if (isNaN(task)){task=1;} // default to task 1
 
       // reset scores at the start of a new set
       if ((task-1) % this.getSetLength() == 0){this.setScore([]);}
@@ -265,12 +272,11 @@ module.exports = {
       var pastScore = this.getScore();
 
       var results_s = resultsMessage.split("\n")
-      results_s.splice(0,2);
+      results_s.splice(0,2); // remove title and empty line
 
     	var results = this.resultsToScore(results_s);
 
     	var newScore = this.addScores(pastScore, results);
-
     	newScore = this.sortScore(newScore);
 
     	this.setScore(newScore);
@@ -279,7 +285,7 @@ module.exports = {
 
     } catch (e) {
 
-      msg = "Could not process results";
+      msg = "Could not process results```"+e.toString()+"```";
 
     } finally {
 
@@ -321,16 +327,16 @@ module.exports = {
     var num = parseFloat(points);
     var oldpts;
 
-    if (num === points){
+    if (isNaN(num)){
       return "``<points>`` must be a float.";
     }
 
     for (var i=0; i<score.length; i++){
 
       if (score[i][1].toUpperCase() == name.toUpperCase()){
-        oldpts = score[i][2];
-        score[i][2] = num;
-        return "Changed ``"+name+"``'s points from ``"+oldpts.toString()+"`` to ``"+num.toString()+"``.";
+        oldpts = score[i][2].toFixed(1);
+        score[i][2] = parseFloat(num.toFixed(1));
+        return "Changed ``"+name+"``'s points from ``"+oldpts.toString()+"`` to ``"+num.toFixed(1)+"``.";
       }
 
     }
@@ -417,7 +423,7 @@ module.exports = {
 
           if (score[j][1].toUpperCase() == name2){
 
-            score[i][2] += score.splice(j,1)[0][2];
+            score[i][2] = (parseFloat(score[i][2]) + parseFloat(score.splice(j,1)[0][2])).toFixed(1);
             score = this.sortScore(score);
             this.setScore(score);
             return "Combined ``"+name1+"`` & ``"+name2+"``.";
@@ -436,8 +442,10 @@ module.exports = {
 
 
 
+  // perform a request given an action and the arguments
   processRequest:function(user, action, args){
 
+    console.log(user.username + " " + action); // record who calls commands
     var msg = "";
 
     switch (action) {
@@ -459,11 +467,17 @@ module.exports = {
           msg = "Not enough arguments: ``<name>``";
         } else {
 
+          // shorthand for using their username
+          if (args[0].toUpperCase() == "ME"){
+            args[0] = user.username.replace(/ /g, '');
+          }
+
           var score = this.getScore();
           var found = false;
           for (var i=0; i<score.length; i++){
             if (score[i][1].toUpperCase() == args[0].toUpperCase()){
-              msg = this.scoreToMessage(score.splice(i,1),0,0,false);
+              var a = [score[i][0], score[i][1], score[i][2]];
+              msg = "``"+this.scoreToMessage([a],0,0,false)+"``";
               while (msg.includes("*")){msg = msg.replace("*","");}
               found = true;
             }
@@ -514,9 +528,14 @@ module.exports = {
         break;
 
       case "ADD":
-        var newScore = this.addScores([[0, args[0], parseFloat(args[1])]], this.getScore());
+        if (isNaN(parseFloat(args[1]))){args[1]=0.0;} // default points to 0
+
+        var newScore = [[0, args[0], parseFloat(args[1])]]
+        newScore = this.addScores(this.getScore(), newScore);
+
         newScore = this.sortScore(newScore);
         this.setScore(newScore);
+
         msg = "Added ``"+args[0]+": "+args[1]+"``.";
         break;
 
@@ -588,7 +607,8 @@ module.exports = {
         break;
 
       default:
-        msg = "Failed request, action: ``"+action+"`` not recognized. Action must be ";
+        if (action!="HELP"){msg = "Failed request, action: ``"+action+"`` not recognized. ";}
+        msg += "Action must be ";
         ["PRINT","FIND","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CHANGESETLENGTH","CHANGETASK","SETMESSAGE"].forEach(function(a){
           msg += "``"+a+"``, ";
         });
@@ -599,8 +619,111 @@ module.exports = {
 
     return msg;
 
+  },
+
+
+
+  // parses input from a user and responds accordingly
+  processCommand:function(bot, msg, args){
+
+
+    var action = "";
+    var message = "";
+
+    if (msg.content.split(" ").length == 1){
+      action = "HELP";
+    } else {
+      action = msg.content.split("\n")[0].split(" ")[1].toUpperCase();
+    }
+
+    // allow people to calculate scores and find themselves
+    if (["FIND","CALCULATE"].includes(action) || miscfuncs.hasCmdAccess(msg)){
+
+      var params = [];
+
+      if (action == "SET" || action == "CALCULATE"){
+        params = msg.content.split("\n");
+        params = params.splice(1, params.length - 1)
+      } else {
+        params = msg.content.split(" ");
+        params = params.splice(2, params.length - 1)
+      }
+
+      // check that the message is a valid message from the bot
+      if (action == "SETMESSAGE"){
+        if (params.length >= 2){
+
+          bot.getMessage(params[0], params[1]).then((msg) => {
+
+            if (msg.author.id != BOT_ACCOUNT){
+              return "Invalid user. Message must be sent by me.";
+            }
+
+          }).catch((error) => {
+            return "Invalid channel or message. Could not find message.";
+          });
+
+          bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
+            channel.editMessage(SCORE_POINTER, params[0] + " " + params[1]);
+          });
+        }
+      }
+
+      message = this.processRequest(msg.author, action, params);
+
+      // directly edit the message in #SCORE
+      if (["CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CLEAR","SET","CHANGETASK"].includes(action)){
+        if (this.getScoreMsg()[0] == ""){
+
+          message += " No message found to edit.";
+        } else {
+
+          bot.getMessage(this.getScoreMsg()[0], this.getScoreMsg()[1]).then((msg) => {
+
+            var task = parseInt(msg.content.split("\n")[0].split(" ").pop());
+
+            if (action == "CHANGETASK"){task = parseInt(args[1]);}
+            if (isNaN(task)){task = 1;}
+
+            bot.editMessage(this.getScoreMsg()[0],this.getScoreMsg()[1],this.scoreToMessage(this.getScore(), task));
+          });
+        }
+      }
+
+    // someone who doesn't have access, didnt use find or calculate
+    } else {
+      return "Missing permissions. Try ``$score find`` or ``$score calculate``"
+    }
+
+    return message;
+  },
+
+
+
+  // Gets the message containing score and stores it
+  // Currently this uses a DM with the bot account as a pointer
+  // TODO: switch to an offline file
+  retrieveScore:function(bot){
+
+  	// retrieve pointer to message containing score
+  	bot.getDMChannel(COMP_ACCOUNT).then((dm) => {
+  		dm.getMessage(SCORE_POINTER).then((msg) => {
+
+  			// store the channel and id
+  			var channel = msg.content.split(" ")[0];
+  			var id = msg.content.split(" ")[1];
+  			this.setScoreMsg(channel, id);
+
+  			// store the current score (string manipulation garbage)
+  			bot.getMessage(channel, id).then((score_msg) => {
+  				var results = score_msg.content.replace("**","").replace("**","").split('\n');
+  				if (results[results.length-1]==''){results.splice(results.length-1,results.length-1)}
+  				results = this.scoreMessageToScore(results.slice(2));
+  				results = this.sortScore(results);
+  				this.setScore(results);
+  			});
+  		});
+  	});
   }
-
-
 
 };

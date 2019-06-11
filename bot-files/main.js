@@ -21,7 +21,12 @@ var CHANNELS = {"GENERAL": "397488794531528704",
 		"BOT_DMS": "555543392671760390",
 		"SCORE": "529816535204888596",
 		"RESULTS": "529816480016236554",
-		"CURRENT_SUBMISSIONS": "397096356985962508"}
+		"CURRENT_SUBMISSIONS": "397096356985962508",
+		"OTHER": "267091686423789568",
+		"MARIO_GENERAL": "267091914027696129",
+		"TASBOTTESTS": "562818543494889491"}
+
+const GUILDS = {"COMP":"397082495423741953","ABC":"267091686423789568"}
 
 const COMP_ACCOUNT = "397096658476728331";
 const SCORE_POINTER = "569918196971208734";
@@ -35,19 +40,29 @@ var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15
 });
 
 bot.on("ready", () => {
-	retrieveScore();
+	score.retrieveScore(bot);
 	console.log("Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
-// public commands
-bot.registerCommand("ping", (msg, args) => {
+function addCommand(name, func, descrip, fullDescrip, hide){
+	bot.registerCommand(name, (msg, args) => {
+		return func(bot, msg, args); // pass arguments to the function
+	},
+	{
+		description: descrip,
+		fullDescription: fullDescrip,
+		hidden: hide,
+		caseInsensitive: false
+	});
+}
+
+function ping(bot, msg, args){
 	if (args.length < 1)
 		return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)";
-},
-{
-	description: "ping",
-	fullDescription: "To check if the bot is not dead. Tells you time it takes to bait you in ms"
-});
+}
+
+// public commands
+addCommand("ping", ping, "ping", "To check if the bot is not dead. Tells you time it takes to bait you in ms", false);
 
 // specials
 bot.registerCommand("restart", (msg, args) => {
@@ -67,7 +82,7 @@ bot.registerCommand("test", (msg, args) => {
 		//miscfuncs.makeFolderIfHNotExist("./taskuploads/");
 		//miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
 		//return "done saving " + msg.attachments[0].filename;
-		
+
 		//save.makeNewSaveFile();
 	}
 },
@@ -94,15 +109,15 @@ bot.registerCommand("starttask", (msg, args) => {
 		var tasknum = Number(args[0]);
 		if (Number.isNaN(tasknum))
 			return "Invalid argument, needs task number instead";
-		
+
 		// empty out folder
 		miscfuncs.deleteFilesInFolder("./taskuploads/");
 		miscfuncs.makeFolderIfNotExist("./taskuploads/");
-		
+
 		comp.allowSubmission(tasknum);
-		
+
 		//save.saveAllowsubmissionAndTaskNum(comp.getAllowSubmission, getTaskNum);
-				
+
 		return "starting task " + args[0];
 	}
 	return "Enter task number after the $starttask";
@@ -113,69 +128,10 @@ bot.registerCommand("starttask", (msg, args) => {
 	hidden: true
 });
 
+
+
 bot.registerCommand("score", (msg, args) => {
-	if (msg.content.split(" ").length == 1){return}
-
-	var action = msg.content.split("\n")[0].split(" ")[1].toUpperCase();
-
-	// allow people to calculate scores and find themselves
-	if (["FIND","CALCULATE"].includes(action) || users.hasCmdAccess(msg.author) || msg.channel.id == CHANNELS.BOT){
-
-		var params = [];
-
-		if (action == "SET" || action == "CALCULATE"){
-			params = msg.content.split("\n");
-			params = params.splice(1, params.length - 1)
-		} else {
-			params = msg.content.split(" ");
-			params = params.splice(2, params.length - 1)
-		}
-
-		// check that the message is a valid message from the bot
-		if (action == "SETMESSAGE"){
-			if (params.length >= 2){
-
-				bot.getMessage(params[0], params[1]).then((msg) => {
-
-					if (msg.author.id != BOT_ACCOUNT){
-						return "Invalid user. Message must be sent by me."
-					}
-
-				}).catch((error) => {
-					return "Invalid channel or message. Could not find message."
-				});
-
-				bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
-					channel.editMessage(SCORE_POINTER, params[0] + " " + params[1])
-				})
-			}
-		}
-
-		var message = score.processRequest(msg.member, action, params);
-
-		// directly edit the message in #SCORE
-		if (["CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CLEAR","SET","CHANGETASK"].includes(action)){
-			if (score.getScoreMsg()[0] == ""){
-				message += " No message found to edit."
-			} else {
-
-				bot.getMessage(score.getScoreMsg()[0], score.getScoreMsg()[1]).then((msg) => {
-
-					var task = parseInt(msg.content.split("\n")[0].split(" ").pop());
-
-					if (action == "CHANGETASK"){task = parseInt(args[1]);}
-					if (isNaN(task)){task = 1}
-
-					bot.editMessage(score.getScoreMsg()[0],
-						score.getScoreMsg()[1],
-						score.scoreToMessage(score.getScore(), task));
-				});
-			}
-		}
-	}
-
-		console.log(message);
-		return message;
+	return score.processCommand(bot, msg, args);
 },
 {
 	description: "Edits #score",
@@ -183,28 +139,38 @@ bot.registerCommand("score", (msg, args) => {
 	hidden: true
 });
 
-function retrieveScore(){
 
-	// retrieve pointer to message containing score
-	bot.getDMChannel(COMP_ACCOUNT).then((dm) => {
-		dm.getMessage(SCORE_POINTER).then((msg) => {
 
-			// store the channel and id
-			var channel = msg.content.split(" ")[0];
-			var id = msg.content.split(" ")[1];
-			score.setScoreMsg(channel, id);
+// message handle
+bot.on("messageCreate", (msg) => {
 
-			// store the current score (string manipulation garbage)
-			bot.getMessage(channel, id).then((score_msg) => {
-				var results = score_msg.content.replace("**","").replace("**","").split('\n');
-				if (results[results.length-1]==''){results.splice(results.length-1,results.length-1)}
-				results = score.scoreMessageToScore(results.slice(2));
-				results = score.sortScore(results);
-				score.setScore(results);
+	// auto add planes to smileys
+	if (msg.content.indexOf("😃") != -1){
+		bot.addMessageReaction(msg.channel.id, msg.id, "✈");
+	}
+
+	if (msg.author.id == BOT_ACCOUNT){return;} // ignore messages from self
+
+	// handle task submissions
+	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
+		bot.createMessage(msg.channel.id, "ye");
+	}
+
+	// message in #results (non-DQ) => calculate score
+	if (msg.channel.id == CHANNELS.RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+
+		var message = score.updateScore(msg.content);
+
+		bot.createMessage(CHANNELS.SCORE, message).then((msg)=>{
+			// store the message so it may be edited
+    	score.setScoreMsg(msg.channel.id, msg.id);
+			bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
+				channel.editMessage(SCORE_POINTER, msg.channel.id + " " + msg.id);
 			});
 		});
-	});
-}
+	}
+});
+
 
 // shortcut for channel IDs
 function chooseChannel(string){
@@ -217,7 +183,7 @@ function chooseChannel(string){
 }
 
 bot.registerCommand("addChannel", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)) {
+	if (miscfuncs.hasCmdAccess(msg)) {
 		CHANNELS[args[0].toUpperCase()] = args[1];
 		return "``"+args[0].toUpperCase()+": "+args[1]+"`` Added.";
 	}
@@ -229,7 +195,7 @@ bot.registerCommand("addChannel", (msg, args) => {
 });
 
 bot.registerCommand("removeChannel", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)) {
+	if (miscfuncs.hasCmdAccess(msg)) {
 		delete CHANNELS[args[0].toUpperCase()];
 		return "``"+args[0]+"`` Removed."
 	}
@@ -241,7 +207,7 @@ bot.registerCommand("removeChannel", (msg, args) => {
 });
 
 bot.registerCommand("getChannels", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)) {
+	if (miscfuncs.hasCmdAccess(msg)) {
 		var channels = "```";
 		for (var key in CHANNELS){
 			channels += key + ": " + CHANNELS[key] + "\n";
@@ -261,7 +227,7 @@ bot.registerCommand("getChannels", (msg, args) => {
 // or anyone in #bot can use them
 
 bot.registerCommand("send", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
+	if (miscfuncs.hasCmdAccess(msg)){
 		var message = msg.content.substr(5, msg.content.length-1);
 		message = message.substr(args[0].length+2, message.length-1)
 		bot.createMessage(chooseChannel(args[0]), message).catch((err) => {return;});
@@ -273,19 +239,8 @@ bot.registerCommand("send", (msg, args) => {
 	hidden: true
 });
 
-bot.registerCommand("react", (msg, args) => {
-	if (args[2].includes(":")){
-		args[2] = args[2].substr(2, args[2].length-3);
-	}
-	bot.addMessageReaction(chooseChannel(args[0]), args[1], args[2]).catch((err) => {return;});
-},
-{
-	description: "React to a message (This is broken ?)",
-	hidden: true
-});
-
 bot.registerCommand("delete", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
+	if (miscfuncs.hasCmdAccess(msg)){
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.delete();
 		});
@@ -298,7 +253,7 @@ bot.registerCommand("delete", (msg, args) => {
 });
 
 bot.registerCommand("pin", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
+	if (miscfuncs.hasCmdAccess(msg)){
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.pin();
 		});
@@ -311,7 +266,7 @@ bot.registerCommand("pin", (msg, args) => {
 });
 
 bot.registerCommand("unpin", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) || msg.channel.id == CHANNELS.BOT){
+	if (miscfuncs.hasCmdAccess(msg)){
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.unpin();
 		});
@@ -342,28 +297,6 @@ bot.registerCommand("unpin", (msg, args) => {
 			break;
 */
 
-// message handle
-bot.on("messageCreate", (msg) => {
-	// handle task submissions
-	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
-		bot.createMessage(msg.channel.id, "ye");
-	}
-	
-	// message in #results (non-DQ) => calculate score
-	if (msg.channel.id == CHANNELS.RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
-
-		var message = score.updateScore(msg.content);
-
-		bot.createMessage(CHANNELS.SCORE, message).then((msg)=>{
-			// store the message so it may be edited
-    			score.setScoreMsg(msg.channel.id, msg.id);
-			bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
-				channel.editMessage(SCORE_POINTER, msg.channel.id + " " + msg.id);
-			});
-		});
-	}
-});
-
 // add any reaction added to any message
 var echoReactions = true;
 bot.on("messageReactionAdd", (msg, emoji) => {
@@ -373,10 +306,13 @@ bot.on("messageReactionAdd", (msg, emoji) => {
 		reaction += ":" + emoji.id;
 	}
 	bot.addMessageReaction(msg.channel.id, msg.id, reaction)
+	if (emoji.name == "😃"){ // auto add planes to smileys
+		bot.addMessageReaction(msg.channel.id, msg.id, "✈");
+	}
 });
 
 bot.registerCommand("toggleReaction", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)) {
+	if (miscfuncs.hasCmdAccess(msg)) {
 		echoReactions = !echoReactions;
 		if (echoReactions){
 			return "Reactions enabled";
@@ -390,4 +326,82 @@ bot.registerCommand("toggleReaction", (msg, args) => {
 	hidden: true
 });
 
+bot.registerCommand("react", (msg, args) => {
+	if (args[2].includes(":")){
+		args[2] = args[2].substr(2, args[2].length-3);
+	}
+	bot.addMessageReaction(chooseChannel(args[0]), args[1], args[2]).catch((err) => {return;});
+},
+{
+	description: "React to a message (This is broken ?)",
+	hidden: true
+});
+
+
+const Submitted = "575732673402896404";
+const RevealStreamer = "405161681769988096";
+bot.registerCommand("add", (msg, args) => {
+	if (miscfuncs.hasCmdAccess(msg)){
+		var member = msg.member.id;
+		if (args[1] != undefined){
+			member = args[1];
+		}
+		msg.channel.guild.addMemberRole(member, args[0], "He asked nicely")
+		return "Gave user " + member + " Role " + args[0];
+		/* cycle through all the roles and print them
+		var roles = msg.channel.guild.roles;
+		roles.forEach((role) => {
+			bot.createMessage(msg.channel.id, role.name + " " + role.id)
+		})
+		//msg.channel.guild.addMemberRole(msg.member, "", "He asked nicely")
+		return "List Complete"*/
+	}
+},
+{
+	description: "This message should not appear",
+	fullDescription: "This message should not appear",
+	hidden: false
+});
+
+bot.registerCommand("rm", (msg, args) => {
+	if (miscfuncs.hasCmdAccess(msg)){
+		var member = msg.member.id;
+		if (args[1] != undefined){
+			member = args[1];
+		}
+		msg.channel.guild.removeMemberRole(member, args[0], "He asked for it")
+		return "Removed Role "+args[0]+" from user " + member;
+	}
+},
+{
+	description: "This message should not appear",
+	fullDescription: "This message should not appear",
+	hidden: true
+});
+
+bot.registerCommand("log", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+		bot.createMessage(CHANNELS.BOT_DMS, msg.channel.guild.id)
+		console.log(msg.content);
+	}
+},
+{
+	description: "",
+	fullDescription: "Logs the message in the console",
+	hidden: true
+});
+
 bot.connect();
+
+/* Command Template
+bot.registerCommand("", (msg, args) => {
+	if (users.hasCmdAccess(msg.member)) {
+
+	}
+},
+{
+	description: "",
+	fullDescription: "Usage: $",
+	hidden: true
+});
+*/
