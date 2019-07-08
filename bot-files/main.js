@@ -5,11 +5,11 @@ console.log("Starting main.js...");
 var fs = require("fs");
 const Eris = require("eris");
 
-var miscfuncs = require("./miscfuncs.js");
-var users = require("./users.js");
-var comp = require("./comp.js");
-var score = require("./score.js");
-var save = require("./save.js");
+const miscfuncs = require("./miscfuncs.js");
+const users = require("./users.js");
+const comp = require("./comp.js");
+const score = require("./score.js");
+const save = require("./save.js");
 
 // make new cfg file if it doesn't exist
 if (!fs.existsSync("save.cfg"))
@@ -31,9 +31,11 @@ const GUILDS = {"COMP":"397082495423741953","ABC":"267091686423789568"}
 const COMP_ACCOUNT = "397096658476728331";
 const SCORE_POINTER = "569918196971208734";
 const BOT_ACCOUNT = "555489679475081227"; // better way to identify self?
+const XANDER = "129045481387982848";
 
 // token
-var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w", {}, {
+const CompBot = "NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w";
+var bot = new Eris.CommandClient(CompBot, {}, {
 	description: "List of commands",
 	owner: "Eddio0141, Barry & Xander",
 	prefix: "$"
@@ -41,7 +43,9 @@ var bot = new Eris.CommandClient("NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15
 
 bot.on("ready", () => {
 	score.retrieveScore(bot);
-	console.log("Ready! (" + miscfuncs.getDateTime() + ")");
+	bot.getSelf().then((self) => {
+		console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
+	})
 });
 
 function addCommand(name, func, descrip, fullDescrip, hide){
@@ -52,7 +56,7 @@ function addCommand(name, func, descrip, fullDescrip, hide){
 		description: descrip,
 		fullDescription: fullDescrip,
 		hidden: hide,
-		caseInsensitive: false
+		caseInsensitive: true
 	});
 }
 
@@ -65,6 +69,7 @@ function ping(bot, msg, args){
 addCommand("ping", ping, "ping", "To check if the bot is not dead. Tells you time it takes to bait you in ms", false);
 
 // specials
+// this command doesnt do anything...
 bot.registerCommand("restart", (msg, args) => {
 	if (users.hasCmdAccess(msg.member)) {
 		restart();
@@ -92,17 +97,14 @@ bot.registerCommand("test", (msg, args) => {
 	hidden: true
 });
 
-bot.registerCommand("uptime", (msg, args) => {
-	if (users.hasCmdAccess(msg.member) && args.length < 1) {
-		bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
-		console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
-	}
-},
-{
-	description: "Prints uptime",
-	fullDescription: "Prints uptime",
-	hidden: true
-});
+
+function uptime(bot, msg, args){
+	bot.createMessage(msg.channel.id, miscfuncs.formatSecsToStr(process.uptime()));
+	console.log("uptime : " + miscfuncs.formatSecsToStr(process.uptime()));
+}
+addCommand("uptime", uptime, "Prints uptime", "Prints how long the bot has been connected", false);
+
+
 
 bot.registerCommand("starttask", (msg, args) => {
 	if (users.hasCmdAccess(msg.member) && args.length == 1) {
@@ -129,15 +131,9 @@ bot.registerCommand("starttask", (msg, args) => {
 });
 
 
-
-bot.registerCommand("score", (msg, args) => {
-	return score.processCommand(bot, msg, args);
-},
-{
-	description: "Edits #score",
-	fullDescription: "Usage: $score <action> <parameters>",
-	hidden: true
-});
+//addCommand("score", score.processCommand, "Edits #score", "Usage: ``$score <action> <parameters>``\nAnyone may use ``$score calculate`` and ``$score find <me or name>``", false)
+bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args);},
+{description: "Edits #score", fullDescription: "Usage: ``$score <action> <parameters>``"});
 
 
 
@@ -169,114 +165,38 @@ bot.on("messageCreate", (msg) => {
 			});
 		});
 	}
+
+
+ 	// Redirect Direct Messages that are sent to the bot
+	// doesn't expose people who have command access
+	if (miscfuncs.isDM(msg) && !miscfuncs.hasCmdAccess(msg)){
+
+		var message = "["+msg.author.username + "]: " + msg.content;
+
+		// Redirect to a specific channel
+		//bot.createMessage(CHANNELS.BOT_DMS, message);
+
+		// Redirect to a specific user (feel free to change when testing for yourself)
+		bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);});
+
+	}
+
 });
 
 
-// shortcut for channel IDs
-function chooseChannel(string){
-	string = string.toUpperCase()
-	if (CHANNELS[string] === undefined) {
-		return string;
-	} else {
-		return CHANNELS[string];
-	}
-}
+// Channel Commands (Allowed from #bot and #tasbottests)
+const alt = require("./altcommands.js");
+addCommand("ls", alt.getChannelAliases, "Retrieves the list of recognized channels", "Retrieves the list of channel aliases with their ids", false);
+addCommand("addChannel", alt.addChannelAlias, "Adds a shortcut for a ID", "Usage: ``$addChannel <alias> <channel_id>``\nAllows ``<alais>`` to be specified in place of ``<channel_id>`` for other commands.", false);
+addCommand("removeChannel", alt.removeChannelAlias, "Removes a channel alias from the database", "Usage: ``$removeChannel <alias>``", false);
 
-bot.registerCommand("addChannel", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)) {
-		CHANNELS[args[0].toUpperCase()] = args[1];
-		return "``"+args[0].toUpperCase()+": "+args[1]+"`` Added.";
-	}
-},
-{
-	description: "Adds a shortcut for a ID.",
-	fullDescription: "Usage: $addChannel <alias> <channel_id>\nAllows <alais> to be specified in place of <channel_id> for other commands.",
-	hidden: true
-});
+// Chat Commands (Allowed from #bot and #tasbottests)
+addCommand("send", alt.send, "Sends a message to a specified channel", "Usage: ``$send <channel_id or alias> <message>``\nFor a list of aliases use ``$ls``", true);
+addCommand("delete", alt.delete, "Deletes a message", "Usage: ``$delete <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
+addCommand("pin", alt.pin, "Pins a message", "Usage: ``$pin <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
+addCommand("unpin", alt.unpin, "Unpins a message", "Usage: ``$unpin <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
+addCommand("dm", alt.dm, "Sends a message to a user", "Usage: ``$dm <user_id> <message...>``\nThe message may contain spaces", true);
 
-bot.registerCommand("removeChannel", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)) {
-		delete CHANNELS[args[0].toUpperCase()];
-		return "``"+args[0]+"`` Removed."
-	}
-},
-{
-	description: "Removes a channel alias from the database",
-	fullDescription: "Usage: $removeChannel <alias>",
-	hidden: true
-});
-
-bot.registerCommand("getChannels", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)) {
-		var channels = "```";
-		for (var key in CHANNELS){
-			channels += key + ": " + CHANNELS[key] + "\n";
-		}
-		return channels+"```";
-	}
-},
-{
-	description: "Gets a list of channel aliases and thier IDs",
-	fullDescription: "Gets a list of channel aliases and thier IDs",
-	hidden: true
-});
-
-
-// Various mod commands:
-// people with command access
-// or anyone in #bot can use them
-
-bot.registerCommand("send", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)){
-		var message = msg.content.substr(5, msg.content.length-1);
-		message = message.substr(args[0].length+2, message.length-1)
-		bot.createMessage(chooseChannel(args[0]), message).catch((err) => {return;});
-	}
-},
-{
-	description: "Sends a message to a specified channel",
-	fullDescription: "Usage: $send <channel_id or alias> <message>",
-	hidden: true
-});
-
-bot.registerCommand("delete", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)){
-		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
-			msg.delete();
-		});
-	}
-},
-{
-	description: "Deletes a message",
-	fullDescription: "Usage: $delete <channel_id or alias> <message_id>",
-	hidden: true
-});
-
-bot.registerCommand("pin", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)){
-		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
-			msg.pin();
-		});
-	}
-},
-{
-	description: "Pins a message",
-	fullDescription: "Usage: $pin <channel_id or alias> <message_id>",
-	hidden: true
-});
-
-bot.registerCommand("unpin", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)){
-		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
-			msg.unpin();
-		});
-	}
-},
-{
-	description: "Unpins a message",
-	fullDescription: "Usage: $unpin <channel_id or alias> <message_id>",
-	hidden: true
-});
 
 /*
 		case "$addCmdAccess":
@@ -298,32 +218,34 @@ bot.registerCommand("unpin", (msg, args) => {
 */
 
 // add any reaction added to any message
-var echoReactions = true;
+var echoReactions = false;
 bot.on("messageReactionAdd", (msg, emoji) => {
+
 	if (!echoReactions){return;}
+
 	reaction = emoji.name;
 	if (emoji.id != null){
 		reaction += ":" + emoji.id;
 	}
 	bot.addMessageReaction(msg.channel.id, msg.id, reaction)
+
 	if (emoji.name == "😃"){ // auto add planes to smileys
 		bot.addMessageReaction(msg.channel.id, msg.id, "✈");
 	}
+
 });
 
 bot.registerCommand("toggleReaction", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)) {
-		echoReactions = !echoReactions;
-		if (echoReactions){
-			return "Reactions enabled";
-		} else {
-			return "Reactions disabled";
-		}
-	}
+	if (!miscfuncs.hasCmdAccess(msg)) {return;}
+
+	echoReactions = !echoReactions;
+	return echoReactions ? "Reactions enabled" : "Reactions disabled";
+
 },
 {
-	description: "Toggle whether the bot echos reactions",
-	hidden: true
+	description: "Toggle auto reactions (tr)",
+	fullDescription: "Switches echoing reactions on/off",
+	hidden: false
 });
 
 bot.registerCommand("react", (msg, args) => {
@@ -353,14 +275,13 @@ bot.registerCommand("add", (msg, args) => {
 		roles.forEach((role) => {
 			bot.createMessage(msg.channel.id, role.name + " " + role.id)
 		})
-		//msg.channel.guild.addMemberRole(msg.member, "", "He asked nicely")
 		return "List Complete"*/
 	}
 },
 {
 	description: "This message should not appear",
 	fullDescription: "This message should not appear",
-	hidden: false
+	hidden: true
 });
 
 bot.registerCommand("rm", (msg, args) => {
@@ -380,28 +301,67 @@ bot.registerCommand("rm", (msg, args) => {
 });
 
 bot.registerCommand("log", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)) {
-		bot.createMessage(CHANNELS.BOT_DMS, msg.channel.guild.id)
-		console.log(msg.content);
-	}
+	if (!miscfuncs.hasCmdAccess(msg)){return;}
+	console.log(msg.content);
+},
+{
+	description: "Logs the message in the console",
+	hidden: true
+});
+
+// Games
+const game = require("./game.js");
+addCommand("toggleGames", game.toggle, "Toggle game functions (tg)", "Switches the game functions on/off", false);
+addCommand("giveaway", game.giveaway, "Randomly selects from a list", "Randomly selects a winner from line separated entries for a giveaway", false)
+addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",true);
+
+// Announcements
+addCommand("ac", alt.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
+addCommand("acclear", alt.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
+
+
+// Various Command Aliases (<Alias>, <Original_Command_Name>)
+aliases = [
+	["channeladd", "addChannel"],
+	["channelremove", "removeChannel"],
+	["listchannels", "ls"],
+	["getchannels", "ls"],
+	["say", "send"],
+	["tr", "toggleReaction"],
+	["togglereactions", "toggleReaction"],
+	["tg", "toggleGames"],
+	["togglegame", "toggleGames"]
+];
+
+aliases.forEach((alias)=>(bot.registerCommandAlias(alias[0], alias[1])));
+
+bot.registerCommand("a", (msg, args) => {
+	//if (!miscfuncs.hasCmdAccess(msg)) {return;}
+	bot.createMessage(msg.channel.id, {content: "@everyone", disableEveryone: false})
+	//return "<&"+msg.channel.guild.id+">"
+
 },
 {
 	description: "",
-	fullDescription: "Logs the message in the console",
-	hidden: true
+	fullDescription: "Usage: ``$``",
+	hidden: true,
+	caseInsensitive: true
 });
+
 
 bot.connect();
 
 /* Command Template
 bot.registerCommand("", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)) {
+	if (!miscfuncs.hasCmdAccess(msg)) {return;}
 
-	}
+	// Code here:
+
 },
 {
 	description: "",
-	fullDescription: "Usage: $",
-	hidden: true
+	fullDescription: "Usage: ``$``",
+	hidden: true,
+	caseInsensitive: true
 });
 */
