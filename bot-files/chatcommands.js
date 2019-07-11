@@ -13,20 +13,18 @@ var CHANNELS = {"GENERAL": "397488794531528704",
 		"TASBOTTESTS": "562818543494889491",
 		"ANNOUNCEMENTS": "397841779535118347"}
 
-// shortcut for channel IDs
-function chooseChannel(string){
-	string = string.toUpperCase()
-	if (CHANNELS[string] === undefined) {
-		return string;
-	} else {
-  	return CHANNELS[string];
-	}
-}
-
-
 module.exports = {
 
 	// CHANNEL COMMANDS
+
+	chooseChannel:function(string){
+		string = string.toUpperCase()
+		if (CHANNELS[string] === undefined) {
+			return string;
+		} else {
+	  	return CHANNELS[string];
+		}
+	},
 
   addChannelAlias:function(bot, msg, args){
     if (!miscfuncs.hasCmdAccess(msg)) {return;}
@@ -104,7 +102,7 @@ module.exports = {
 
 	},
 
-	dm:function(bot, msg, args){
+	dm:async function(bot, msg, args){
 		if (!miscfuncs.hasCmdAccess(msg)) {return;}
 
 		var user_id = args.shift();
@@ -113,11 +111,10 @@ module.exports = {
 			return "Cannot send empty message";
 		}
 
-		bot.getDMChannel(user_id).then((dm) => {
-			dm.createMessage(args.join(" "))
-			return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ");
-		}).catch((e) => {return "DM Failed";});
-
+		let dm = await bot.getDMChannel(user_id).catch((e) => {return "DM Failed ``"+e+"``";});
+		dm.createMessage(args.join(" "));
+		
+		return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ");
 	},
 
 	// following announcement commands will be moved to their own module later

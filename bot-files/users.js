@@ -25,12 +25,21 @@ module.exports = {
   			console.log("banned member " + usernameAndTag);
 		});
 	},
-	getUser:function(bot, ID, callback){
+	getUserCallback:function(bot, ID, callback){
 		bot.getDMChannel(ID).then((dm) => {
-			return callback && callback(null, dm.recipient);
+			return callback && callback(null, dm.recipient, bot);
 		}).catch((err) => {
 			console.log("Failed to retrieve user: " + err)
 			return callback && callback(err);
 		})
+	},
+	getUserAsync:async function(bot, ID){
+		try {
+			let dm = await bot.getDMChannel(ID);
+			return dm.recipient;
+		} catch (error) {
+			console.log("Failed to retrieve user: " + error);
+			return {};
+		}
 	}
 };

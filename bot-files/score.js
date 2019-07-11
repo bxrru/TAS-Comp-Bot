@@ -709,6 +709,43 @@ module.exports = {
     this.setScoreMsg(vars.channel_id, vars.message_id);
     this.setTask(vars.task);
     this.setSetLength(vars.set_Length);
+  },
+
+  autoUpdateScore:async function(bot, msg){
+    // TODO: Move function outside of main such that only this function call is required from bot.onMessageCreate
+    // Potentially handle setting the results and score channels
+    // Use either ID or #mention (message.channelMentions[0])
+    if (msg.channel.id == ResultsChannel && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
+      var message = score.updateScore(msg.content);
+      let msg = await bot.createMessage(ScoreChannel, message);
+      scoreMsgID = [msg.channel.id, msg.id]
+      saveVars();
+    }
+  },
+
+  help:function(command){
+    var msg = "";
+    msg += "Usage: ``$score <action> <args...>``\n";
+    msg += "\nAnyone can use the following commands:";
+    msg += "```$score find <username or 'me'>```";
+    msg += "```$score calculate *<length of previous score> *<previous scores...> *<results...>```";
+    msg += "\nUsers with access may use the following commands:";
+    msg += "```$score print [task_number] [set_number]```";
+    msg += "```$score set *<scores...>```";
+    msg += "```$score clear```";
+    msg += "```$score changename <old_name> <new_name>```";
+    msg += "```$score changepoints <name> <new_points>```";
+    msg += "```$score combine <name1> <name2>```";
+    msg += "```$score add <name> [points]```";
+    msg += "```$score remove <name>```";
+    msg += "```$score changesetlength <set_length>```";
+    msg += "```$score changetask <task_number>```";
+    msg += "```$score setmessage <channel_id> <message_id>```";
+    msg += "\n``*`` Denotes arguments that must appear on new lines\n";
+    msg += "``[]`` Denotes optional arguments\n";
+    msg += "``...`` Denotes that multiple arguments may be entered\n";
+    msg += "\nFor more information on specific actions, contact Xander"; // actions, use ``$score help <action>`` or contact Xander
+    return msg;
   }
 
 };

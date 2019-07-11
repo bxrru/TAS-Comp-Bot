@@ -37,7 +37,7 @@ const XANDER = "129045481387982848";
 // token
 const ERGC = "NTMyOTc0NDU5MjY3NzEwOTg3.Dxlp2Q.QDe4dbD8_Pym_qonc9y47fybmx0";
 const CompBot = "NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w";
-var bot = new Eris.CommandClient(ERGC, {}, {
+var bot = new Eris.CommandClient(CompBot, {}, {
 	description: "List of commands",
 	owner: "Eddio0141, Barry & Xander",
 	prefix: "$"
@@ -45,6 +45,7 @@ var bot = new Eris.CommandClient(ERGC, {}, {
 
 bot.on("ready", () => {
 	//score.saveVars()
+	comp.saveVars()
 	score.retrieveScore(bot);
 	bot.getSelf().then((self) => {
 		BOT_ACCOUNT = self.id;
@@ -137,7 +138,7 @@ bot.registerCommand("starttask", (msg, args) => {
 
 //addCommand("score", score.processCommand, "Edits #score", "Usage: ``$score <action> <parameters>``\nAnyone may use ``$score calculate`` and ``$score find <me or name>``", false)
 bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args);},
-{description: "Edits #score", fullDescription: "Usage: ``$score <action> <parameters>``"});
+{description: "Edits #score", fullDescription: score.help()});
 
 var csmid = "598006436622237696"; //current submissions message id
 var num_subs = 0;
@@ -332,7 +333,7 @@ bot.registerCommand("log", (msg, args) => {
 // Games
 const game = require("./game.js");
 addCommand("toggleGames", game.toggle, "Toggle game functions (tg)", "Switches the game functions on/off", false);
-addCommand("giveaway", game.giveaway, "Randomly selects from a list", "Randomly selects a winner from line separated entries for a giveaway", false)
+addCommand("giveaway", game.giveaway, "Randomly selects from a list", "Randomly selects a winner from line separated entries for a giveaway", false);
 addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",true);
 
 // Announcements
@@ -341,6 +342,19 @@ const announce = require("./announcement.js");
 addCommand("ac", announce.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
 addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
 */
+
+// Submissions
+addCommand("startsubmissions", comp.startSubmissionMessage, "Sends a message to be used for current submissions", "Usage: ``$ss <channel>``", false);
+addCommand("submit", comp.addSubmission, "Registers a submission", "Usage: ``$submit <user_id>``\nAdds the username to the list and gives them the submitted role", false);
+addCommand("save", comp.saveVars, "Save comp data", "", false)
+function startSubmissions(bot, msg, args){
+	var channel = args[0];
+	var msg = "**__Current Submissions:__**\n\n"
+	bot.createMessage(chat.chooseChannel(channel), msg).then((message) => {
+		comp.setSubmissionMessage(message.channel.id, message.id);
+	});
+	return comp.startSubmissionMessage();
+}
 
 // Various Command Aliases (<Alias>, <Original_Command_Name>)
 aliases = [
