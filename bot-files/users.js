@@ -24,5 +24,13 @@ module.exports = {
 				console.log(err);
   			console.log("banned member " + usernameAndTag);
 		});
+	},
+	getUser:function(bot, ID, callback){
+		bot.getDMChannel(ID).then((dm) => {
+			return callback && callback(null, dm.recipient);
+		}).catch((err) => {
+			console.log("Failed to retrieve user: " + err)
+			return callback && callback(err);
+		})
 	}
 };

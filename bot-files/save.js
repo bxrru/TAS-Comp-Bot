@@ -1,4 +1,5 @@
 const fs = require("fs");
+const miscfuncs = require("./miscfuncs.js");
 
 // make sure the length of lists are the same
 var saves = [
@@ -11,7 +12,14 @@ var defaultVars = [
 	0
 ];
 
-//function cfgchange(thingToChange 
+//function cfgchange(thingToChange
+function saveFile(filename, content){
+	miscfuncs.makeFolderIfNotExist("./saves/");
+	fs.writeFile("./saves/"+filename, content, function(err, data) {
+		if (err) console.log(err);
+		console.log("Successfully created " + filename);
+	});
+}
 
 module.exports = {
 	saveoption:function(thingToSave, newVar){
@@ -27,19 +35,30 @@ module.exports = {
 		var newfilecontent = ""
 		for (i = 0;i < saves.length;i++)
 			newfilecontent += saves[i] + ": " + defaultVars[i] + "\n";
-		
-		fs.writeFile("save.cfg", newfilecontent.substring(0, newfilecontent.length - 1), function(err, data) {
-			if (err) console.log(err);
-			console.log("Successfully made new save config");
-		});
+		saveFile("save.cfg", newfilecontent.substring(0, newfilecontent.length - 1));
 	},
 	setDefaultVar:function(thingToReset){
 		for (i = 0;i < saves.length;i++){
 			//if (thingToReset == saves[i])
 				//saves[i] = defaultVars[i];
 		}
+	},
+
+	saveObject:function(filename, object){
+		saveFile(filename, JSON.stringify(object));
+	},
+
+	readObject:function(filename){
+		try {
+			var data = fs.readFileSync("./saves/"+filename);
+			var obj = JSON.parse(data);
+			return obj
+		} catch (err) {
+			console.log("Could not read file " + filename, err);
+			return {};
+		}
 	}
-	
+
 	// TODO
 	// add cfg checker and fix if cfg is missing something / broken
 };

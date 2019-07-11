@@ -1,4 +1,5 @@
 const miscfuncs = require("./miscfuncs.js");
+const save = require("./save.js");
 var announcements = [];
 var ac_1_default = ""
 var CHANNELS = {"GENERAL": "397488794531528704",
@@ -31,6 +32,8 @@ module.exports = {
     if (!miscfuncs.hasCmdAccess(msg)) {return;}
 
     CHANNELS[args[0].toUpperCase()] = args[1];
+		save.saveObject("channels.json", CHANNELS);
+
     return "Alias ``"+args[0].toUpperCase()+"`` added for channel ``"+args[1]+"``";
 
   },
@@ -39,7 +42,9 @@ module.exports = {
     if (!miscfuncs.hasCmdAccess(msg)) {return;}
 
     delete CHANNELS[args[0].toUpperCase()];
-    return "Alias ``"+args[0]+"`` Removed";
+		save.saveObject("channels.json", CHANNELS);
+
+    return "Alias ``"+args[0].toUpperCase()+"`` Removed";
 
   },
 
@@ -53,6 +58,13 @@ module.exports = {
     return channels+"```";
 
   },
+
+	loadChannels:function(){
+		var json = save.readObject("channels.json");
+		Object.keys(json).forEach((key) => {
+			CHANNELS[key] = json[key];
+		});
+	},
 
 
 	// CHAT COMMANDS
@@ -103,8 +115,8 @@ module.exports = {
 
 		bot.getDMChannel(user_id).then((dm) => {
 			dm.createMessage(args.join(" "))
+			return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ");
 		}).catch((e) => {return "DM Failed";});
-		return "DM Sent"
 
 	},
 

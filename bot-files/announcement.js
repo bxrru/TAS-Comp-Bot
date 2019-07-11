@@ -1,7 +1,15 @@
-// [timer, guild, channel, message, time, interval]
-// interval : {once, weekly, biweekly}
 var Announcements = [];
 var Commands = ["set", "clear", "list"];
+
+// example announcement object:
+var announcement = {
+	"timer":"",
+	"guild":"", // ID
+	"channel":"", // ID
+	"message":"",
+	"time":"", // UTC
+	"interval":"" // once, weekly, biweekly
+}
 
 module.exports = {
 
@@ -45,19 +53,36 @@ module.exports = {
 
 	},
 
-	addAnnouncement:function(message, time){
+	addAnnouncement:function(guild, channel, message, time, interval){
+		if (!miscfuncs.hasCmdAccess(msg)) {return;}
+
+		// TODO implement chroma to detect time
 
 		var delay = time - new Date();
 
-		Announcements.push(
-			setTimeout(function(){
-				bot.createMessage(channel, {content:msg, disableEveryone:false}); // send message (allow tags)
-				Announcements.shift(); // remove this from the array after it has been made
-			}, delay)
-		);
+		// parse message for everyone
+		var msg = message
+
+		var timer = setTimeout(function() {
+			bot.createMessage(channel, {content:msg, disableEveryone:false}); // send message (allow tags)
+			Announcements.shift(); // remove this from the array after it has been made
+		}, delay)
+
+		var announcement = {
+			"timer":timer,
+			"guild":guild, // ID
+			"channel":channel, // ID
+			"message":msg,
+			"time":"", // UTC
+			"interval":"" // once, weekly, biweekly
+		}
+
+		Announcements.push(announcement);
+
 
 	},
 
+// outdated function: this needs to be remade better
 	announce:function(bot, msg, args){
 		if (!miscfuncs.hasCmdAccess(msg)) {return;}
 
@@ -119,8 +144,8 @@ module.exports = {
 	clearAll:function(){
 
 		while (Announcement) {
-			announcements.forEach((announcement) => {
-				clearTimeout(announcement);
+			Announcements.forEach((announcement) => {
+				clearTimeout(announcement.timer);
 			});
 		}
 
@@ -135,10 +160,8 @@ module.exports = {
 		}
 
 		var deleted = Announcements.splice(index,1);
-		var msg = "Removed announcement:```";
-		msg += "Server: " + deleted[1] + "\n";
-		msg += "Channel: " + deleted[2] + "\n";
-		msg += "Time: " + deleted[3] + "\n";
+		var msg = "Removed announcement:";
+		msg += "```" + JSON.stringify(deleted) + "```";
 
 
 

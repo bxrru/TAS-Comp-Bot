@@ -17,10 +17,10 @@ module.exports = {
     if (!miscfuncs.hasCmdAccess(msg)){return;}
 
     var participants = msg.content.split('\n');
-    
+
     participants.splice(0, 1); // remove first line "$giveaway"
 
-    var rand = Math.floor(Math.random() * participants.length);
+    var rand = randInt(participants.length);
 
     return "And the winner is... ``" + participants[rand] + "`` Congratulations!";
 
@@ -71,7 +71,6 @@ module.exports = {
 
 
 }
-
 
 
 // Various helping commands

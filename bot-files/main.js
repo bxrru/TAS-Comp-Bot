@@ -26,24 +26,28 @@ var CHANNELS = {"GENERAL": "397488794531528704",
 		"MARIO_GENERAL": "267091914027696129",
 		"TASBOTTESTS": "562818543494889491"}
 
+var spam = "196442189604192256"
 const GUILDS = {"COMP":"397082495423741953","ABC":"267091686423789568"}
 
 const COMP_ACCOUNT = "397096658476728331";
 const SCORE_POINTER = "569918196971208734";
-const BOT_ACCOUNT = "555489679475081227"; // better way to identify self?
+var BOT_ACCOUNT = "532974459267710987" //"555489679475081227"; // better way to identify self?
 const XANDER = "129045481387982848";
 
 // token
+const ERGC = "NTMyOTc0NDU5MjY3NzEwOTg3.Dxlp2Q.QDe4dbD8_Pym_qonc9y47fybmx0";
 const CompBot = "NTU1NDg5Njc5NDc1MDgxMjI3.D2smAQ.wJYGkGHK5mdC15kEX3_0wThBA7w";
-var bot = new Eris.CommandClient(CompBot, {}, {
+var bot = new Eris.CommandClient(ERGC, {}, {
 	description: "List of commands",
 	owner: "Eddio0141, Barry & Xander",
 	prefix: "$"
 });
 
 bot.on("ready", () => {
+	//score.saveVars()
 	score.retrieveScore(bot);
 	bot.getSelf().then((self) => {
+		BOT_ACCOUNT = self.id;
 		console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
 	})
 });
@@ -135,8 +139,8 @@ bot.registerCommand("starttask", (msg, args) => {
 bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args);},
 {description: "Edits #score", fullDescription: "Usage: ``$score <action> <parameters>``"});
 
-
-
+var csmid = "598006436622237696"; //current submissions message id
+var num_subs = 0;
 // message handle
 bot.on("messageCreate", (msg) => {
 
@@ -152,7 +156,7 @@ bot.on("messageCreate", (msg) => {
 		bot.createMessage(msg.channel.id, "ye");
 	}
 
-	// message in #results (non-DQ) => calculate score
+	// Score Handle // message in #results (non-DQ) => calculate score
 	if (msg.channel.id == CHANNELS.RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
 
 		var message = score.updateScore(msg.content);
@@ -160,9 +164,7 @@ bot.on("messageCreate", (msg) => {
 		bot.createMessage(CHANNELS.SCORE, message).then((msg)=>{
 			// store the message so it may be edited
     	score.setScoreMsg(msg.channel.id, msg.id);
-			bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
-				channel.editMessage(SCORE_POINTER, msg.channel.id + " " + msg.id);
-			});
+			score.saveVars();
 		});
 	}
 
@@ -171,7 +173,7 @@ bot.on("messageCreate", (msg) => {
 	// doesn't expose people who have command access
 	if (miscfuncs.isDM(msg) && !miscfuncs.hasCmdAccess(msg)){
 
-		var message = "["+msg.author.username + "]: " + msg.content;
+		var message = "[" + msg.author.username + "]: " + msg.content;
 
 		// Redirect to a specific channel
 		//bot.createMessage(CHANNELS.BOT_DMS, message);
@@ -181,21 +183,40 @@ bot.on("messageCreate", (msg) => {
 
 	}
 
+
+	// detect if it has been sent a valid user id
+	if (miscfuncs.isDM(msg) && msg.author.id == COMP_ACCOUNT) {
+		users.getUser(bot, msg.content, (err, user) => {
+			if (!err) {
+				num_subs += 1;
+				bot.createMessage(msg.channel.id, "Username: ``"+user.username+"``")
+				/*
+				bot.getMessage(CHANNELS.BOT_DMS, csmid).then((cs) => {
+					cs.edit(cs.content + "\n"+num_subs+". "+user.username);
+				});
+				msg.channel.guild.addMemberRole(user.id, Submitted);
+				*/
+			}
+		});
+
+	}
+
+
 });
 
 
 // Channel Commands (Allowed from #bot and #tasbottests)
-const alt = require("./altcommands.js");
-addCommand("ls", alt.getChannelAliases, "Retrieves the list of recognized channels", "Retrieves the list of channel aliases with their ids", false);
-addCommand("addChannel", alt.addChannelAlias, "Adds a shortcut for a ID", "Usage: ``$addChannel <alias> <channel_id>``\nAllows ``<alais>`` to be specified in place of ``<channel_id>`` for other commands.", false);
-addCommand("removeChannel", alt.removeChannelAlias, "Removes a channel alias from the database", "Usage: ``$removeChannel <alias>``", false);
+const chat = require("./chatcommands.js");
+addCommand("ls", chat.getChannelAliases, "Retrieves the list of recognized channels", "Retrieves the list of channel aliases with their ids", false);
+addCommand("addChannel", chat.addChannelAlias, "Adds a shortcut for a ID", "Usage: ``$addChannel <alias> <channel_id>``\nAllows ``<alais>`` to be specified in place of ``<channel_id>`` for other commands.", false);
+addCommand("removeChannel", chat.removeChannelAlias, "Removes a channel alias from the database", "Usage: ``$removeChannel <alias>``", false);
 
 // Chat Commands (Allowed from #bot and #tasbottests)
-addCommand("send", alt.send, "Sends a message to a specified channel", "Usage: ``$send <channel_id or alias> <message>``\nFor a list of aliases use ``$ls``", true);
-addCommand("delete", alt.delete, "Deletes a message", "Usage: ``$delete <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
-addCommand("pin", alt.pin, "Pins a message", "Usage: ``$pin <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
-addCommand("unpin", alt.unpin, "Unpins a message", "Usage: ``$unpin <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
-addCommand("dm", alt.dm, "Sends a message to a user", "Usage: ``$dm <user_id> <message...>``\nThe message may contain spaces", true);
+addCommand("send", chat.send, "Sends a message to a specified channel", "Usage: ``$send <channel_id or alias> <message>``\nFor a list of aliases use ``$ls``", true);
+addCommand("delete", chat.delete, "Deletes a message", "Usage: ``$delete <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
+addCommand("pin", chat.pin, "Pins a message", "Usage: ``$pin <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
+addCommand("unpin", chat.unpin, "Unpins a message", "Usage: ``$unpin <channel_id or alias> <message_id>``\nFor a list of aliases use ``$ls``", true);
+addCommand("dm", chat.dm, "Sends a message to a user", "Usage: ``$dm <user_id> <message...>``\nThe message may contain spaces", true);
 
 
 /*
@@ -261,8 +282,7 @@ bot.registerCommand("react", (msg, args) => {
 
 
 const Submitted = "575732673402896404";
-const RevealStreamer = "405161681769988096";
-bot.registerCommand("add", (msg, args) => {
+bot.registerCommand("addrole", (msg, args) => {
 	if (miscfuncs.hasCmdAccess(msg)){
 		var member = msg.member.id;
 		if (args[1] != undefined){
@@ -280,11 +300,11 @@ bot.registerCommand("add", (msg, args) => {
 },
 {
 	description: "This message should not appear",
-	fullDescription: "This message should not appear",
+	fullDescription: "Adds a role. Usage ``$add <role_id> [member_id]``",
 	hidden: true
 });
 
-bot.registerCommand("rm", (msg, args) => {
+bot.registerCommand("removerole", (msg, args) => {
 	if (miscfuncs.hasCmdAccess(msg)){
 		var member = msg.member.id;
 		if (args[1] != undefined){
@@ -296,7 +316,7 @@ bot.registerCommand("rm", (msg, args) => {
 },
 {
 	description: "This message should not appear",
-	fullDescription: "This message should not appear",
+	fullDescription: "Removes a role. Usage ``$rm <role_id> [member_id]``",
 	hidden: true
 });
 
@@ -316,9 +336,11 @@ addCommand("giveaway", game.giveaway, "Randomly selects from a list", "Randomly 
 addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",true);
 
 // Announcements
-addCommand("ac", alt.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
-addCommand("acclear", alt.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
-
+const announce = require("./announcement.js");
+/*
+addCommand("ac", announce.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
+addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
+*/
 
 // Various Command Aliases (<Alias>, <Original_Command_Name>)
 aliases = [
@@ -334,19 +356,6 @@ aliases = [
 ];
 
 aliases.forEach((alias)=>(bot.registerCommandAlias(alias[0], alias[1])));
-
-bot.registerCommand("a", (msg, args) => {
-	//if (!miscfuncs.hasCmdAccess(msg)) {return;}
-	bot.createMessage(msg.channel.id, {content: "@everyone", disableEveryone: false})
-	//return "<&"+msg.channel.guild.id+">"
-
-},
-{
-	description: "",
-	fullDescription: "Usage: ``$``",
-	hidden: true,
-	caseInsensitive: true
-});
 
 
 bot.connect();

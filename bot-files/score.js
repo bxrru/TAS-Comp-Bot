@@ -1,11 +1,10 @@
 var score = [];
-var setLength = 5;
 var scoreMsgID = ["",""]; // [channel_id, message_id]
+var task = 1;
+var setLength = 5;
 
-var miscfuncs = require("./miscfuncs.js");
-const BOT_ACCOUNT = "555489679475081227"; // user ID
-const COMP_ACCOUNT = "397096658476728331"; // user ID
-const SCORE_POINTER = "569918196971208734"; // msg ID in DMs with the comp account
+const miscfuncs = require("./miscfuncs.js");
+const save = require("./save.js");
 
 module.exports = {
 
@@ -62,42 +61,39 @@ module.exports = {
 
 
 
-  // the score stored as an array
+  // GETTERS and SETTERS
   getScore:function(){
     return this.score;
   },
-
   setScore:function(a){
     this.score = [];
     while (a.length > 0){
       this.score.push(a.shift());
     }
   },
-
-
-
-  // Number of tasks in each set
-  getSetLength:function(){
-    if (isNaN(this.setLength)){this.setLength = 5}
-    return this.setLength;
-  },
-
-  setSetLength:function(x){
-    if (!isNaN(parseInt(x))){
-      this.setLength = parseInt(x);
-    }
-  },
-
-
-
-  // The bot's stored score message
   getScoreMsg:function(){
     return this.scoreMsgID;
   },
-
   setScoreMsg:function(channel, msg){
     this.scoreMsgID = [channel, msg];
   },
+  getTask:function(){
+    return this.task;
+  },
+  setTask:function(num){
+    if (!isNaN(parseInt(num))){
+      this.task = parseInt(num);
+    }
+  },
+  getSetLength:function(){
+    return this.setLength;
+  },
+  setSetLength:function(num){
+    if (!isNaN(parseInt(num))){
+      this.setLength = parseInt(num);
+    }
+  },
+
 
 
 
@@ -186,7 +182,7 @@ module.exports = {
 
         if (task === undefined){task = 1;}
 
-        set = ~~((parseInt(task) - 1) / this.getSetLength()) + 1;
+        set = ~~((parseInt(task) - 1) / this.setLength) + 1;
       }
 
       msg += "__Set " + set.toString() + " Score ";
@@ -262,12 +258,9 @@ module.exports = {
     var msg = "";
     try {
 
-      // "Task # Results"
-      var task = parseInt(resultsMessage.split("\n")[0].split(" ")[1]);
-      if (isNaN(task)){task=1;} // default to task 1
-
       // reset scores at the start of a new set
-      if ((task-1) % this.getSetLength() == 0){this.setScore([]);}
+      if ((this.getTask()) % this.getSetLength() == 0){this.setScore([]);}
+      this.setTask(this.getTask() + 1);
 
       var pastScore = this.getScore();
 
@@ -281,7 +274,7 @@ module.exports = {
 
     	this.setScore(newScore);
 
-    	msg = this.scoreToMessage(this.getScore(), task);
+    	msg = this.scoreToMessage(this.getScore(), this.getTask());
 
     } catch (e) {
 
@@ -456,7 +449,7 @@ module.exports = {
         if (args.length > 0){task = parseInt(args.shift());}
 
         // optional set
-        var set = ~~((task - 1)/ this.getSetLength() ) + 1;
+        var set = ~~((task - 1)/ this.setLength ) + 1;
         if (args.length > 0){set = parseInt(args.shift());}
 
         msg = this.scoreToMessage(this.getScore(), task, set, task!=0);
@@ -552,7 +545,7 @@ module.exports = {
         if (isNaN(parseInt(args[0]))){
           msg = "Set length must be an integer.";
         } else {
-          this.setSetLength(parseInt(args[0]));
+          this.setLength = parseInt(args[0]);
           msg = "Score will reset every " + parseInt(args[0]).toString() + " tasks.";
         }
         break;
@@ -562,7 +555,7 @@ module.exports = {
           msg = "Not enough arguments: ``<channel_ID> <message_ID>``.";
         } else {
           this.setScoreMsg(args[0], args[1]);
-          msg = "Message set.";
+          msg = "Message set. " + this.getScoreMsg()[0] + " " + this.getScoreMsg()[1];
         }
         break;
 
@@ -571,9 +564,10 @@ module.exports = {
           msg = "Not enough arguments: ``<task#>``.";
         } else {
           if (isNaN(parseInt(args[0]))){
-            msg = "Task number default to 1."
+            msg = "Task must be a number."
           } else {
             msg = "Task number set to "+parseInt(args[0]).toString()+".";
+            this.setTask(parseInt(args[0]));
           }
         }
         break;
@@ -663,30 +657,18 @@ module.exports = {
             return "Invalid channel or message. Could not find message.";
           });
 
-          bot.getDMChannel(COMP_ACCOUNT).then((channel) => {
-            channel.editMessage(SCORE_POINTER, params[0] + " " + params[1]);
-          });
         }
       }
 
       message = this.processRequest(msg.author, action, params);
 
       // directly edit the message in #SCORE
-      if (["CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CLEAR","SET","CHANGETASK"].includes(action)){
+      if (["CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CLEAR","SET","CHANGETASK","CHANGESETLENGTH","SETMESSAGE"].includes(action)){
+        this.saveVars();
         if (this.getScoreMsg()[0] == ""){
-
           message += " No message found to edit.";
         } else {
-
-          bot.getMessage(this.getScoreMsg()[0], this.getScoreMsg()[1]).then((msg) => {
-
-            var task = parseInt(msg.content.split("\n")[0].split(" ").pop());
-
-            if (action == "CHANGETASK"){task = parseInt(args[1]);}
-            if (isNaN(task)){task = 1;}
-
-            bot.editMessage(this.getScoreMsg()[0],this.getScoreMsg()[1],this.scoreToMessage(this.getScore(), task));
-          });
+          bot.editMessage(this.getScoreMsg()[0],this.getScoreMsg()[1],this.scoreToMessage(this.getScore(), this.getTask()));
         }
       }
 
@@ -699,31 +681,34 @@ module.exports = {
   },
 
 
-
-  // Gets the message containing score and stores it
-  // Currently this uses a DM with the bot account as a pointer
-  // TODO: switch to an offline file
+  // loads variables from save and verifies the message
   retrieveScore:function(bot){
+    this.loadVars();
+    var channel_id = this.getScoreMsg()[0];
+    var message_id = this.getScoreMsg()[1];
+    bot.getMessage(channel_id, message_id).catch((error) => {
+      this.setScoreMsg("","");
+      console.log("WARNING: Invalid score message");
+    });
+  },
 
-  	// retrieve pointer to message containing score
-  	bot.getDMChannel(COMP_ACCOUNT).then((dm) => {
-  		dm.getMessage(SCORE_POINTER).then((msg) => {
+  saveVars:function(){
+    var vars = {
+      score: this.getScore(),
+      channel_id: this.getScoreMsg()[0],
+      message_id: this.getScoreMsg()[1],
+      task: this.getTask(),
+      set_length: this.getSetLength()
+    }
+    save.saveObject("score.json", vars);
+  },
 
-  			// store the channel and id
-  			var channel = msg.content.split(" ")[0];
-  			var id = msg.content.split(" ")[1];
-  			this.setScoreMsg(channel, id);
-
-  			// store the current score (string manipulation garbage)
-  			bot.getMessage(channel, id).then((score_msg) => {
-  				var results = score_msg.content.replace("**","").replace("**","").split('\n');
-  				if (results[results.length-1]==''){results.splice(results.length-1,results.length-1)}
-  				results = this.scoreMessageToScore(results.slice(2));
-  				results = this.sortScore(results);
-  				this.setScore(results);
-  			});
-  		});
-  	});
+  loadVars:function(){
+    var vars = save.readObject("score.json");
+    this.setScore(vars.score);
+    this.setScoreMsg(vars.channel_id, vars.message_id);
+    this.setTask(vars.task);
+    this.setSetLength(vars.set_Length);
   }
 
 };
