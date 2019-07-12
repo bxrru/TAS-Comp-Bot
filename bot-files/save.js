@@ -52,6 +52,7 @@ module.exports = {
 		try {
 			var data = fs.readFileSync("./saves/"+filename);
 			var obj = JSON.parse(data);
+			console.log("Successfully read "+filename);
 			return obj
 		} catch (err) {
 			console.log("Could not read file " + filename, err);

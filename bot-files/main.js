@@ -10,6 +10,7 @@ const users = require("./users.js");
 const comp = require("./comp.js");
 const score = require("./score.js");
 const save = require("./save.js");
+const game = require("./game.js");
 
 // make new cfg file if it doesn't exist
 if (!fs.existsSync("save.cfg"))
@@ -44,8 +45,7 @@ var bot = new Eris.CommandClient(CompBot, {}, {
 });
 
 bot.on("ready", () => {
-	//score.saveVars()
-	comp.saveVars()
+	game.load();
 	score.retrieveScore(bot);
 	bot.getSelf().then((self) => {
 		BOT_ACCOUNT = self.id;
@@ -331,7 +331,6 @@ bot.registerCommand("log", (msg, args) => {
 });
 
 // Games
-const game = require("./game.js");
 addCommand("toggleGames", game.toggle, "Toggle game functions (tg)", "Switches the game functions on/off", false);
 addCommand("giveaway", game.giveaway, "Randomly selects from a list", "Randomly selects a winner from line separated entries for a giveaway", false);
 addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",true);

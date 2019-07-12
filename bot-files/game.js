@@ -1,12 +1,27 @@
 const miscfuncs = require("./miscfuncs.js");
-var enabled = false;
+const Save = require("./save.js");
+
+var DisabledServers = [];
+
+function disabled(guild_id){
+  return DisabledServers.includes(guild_id);
+}
 
 module.exports = {
 
   toggle:function(bot, msg, args){
     if (!miscfuncs.hasCmdAccess(msg)){return;}
-    enabled = !enabled;
-    return enabled ? "Games enabled" : "Games disabled";
+
+    for (var i = 0; i<DisabledServers.length; i++){
+      if (DisabledServers[i] == msg.channel.guild.id){
+        DisabledServers.pop(i);
+        module.exports.save();
+        return "Games enabled in ``"+msg.channel.guild.id+"``";
+      }
+    }
+    DisabledServers.push(msg.channel.guild.id);
+    module.exports.save();
+    return "Games disabled in ``"+msg.channel.guild.id+"``";
   },
 
   // expected input:
@@ -14,7 +29,7 @@ module.exports = {
   // 1. User
   // 2....."
   giveaway:function(bot, msg, args){
-    if (!miscfuncs.hasCmdAccess(msg)){return;}
+    if (disabled(msg.channel.guild.id)){return;}
 
     var participants = msg.content.split('\n');
 
@@ -27,10 +42,9 @@ module.exports = {
   },
 
   slots:function(bot, msg, args){
-    if (!enabled){return;}
 
     // TODO: Add timeout (?), use default emojis
-    if (!miscfuncs.hasCmdAccess(msg)){return;}
+    if (disabled(msg.channel.guild.id)){return;}
 
 		var numEmoji = args[0];
 		if (isNaN(numEmoji) || numEmoji < 2){
@@ -67,6 +81,18 @@ module.exports = {
 
   blackjack:function(bot, msg, args){
     // TODO ;)
+  },
+
+  save:function(){
+    console.log("Saving games...")
+    Save.saveObject("games.json", DisabledServers);
+  },
+  load:function(){
+    var data = Save.readObject("games.json");
+    DisabledServers = []
+    while (data.length > 0){
+      DisabledServers.push(data.pop());
+    }
   }
 
 
