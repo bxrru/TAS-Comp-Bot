@@ -45,6 +45,7 @@ var bot = new Eris.CommandClient(CompBot, {}, {
 });
 
 bot.on("ready", () => {
+	comp.load();
 	game.load();
 	score.retrieveScore(bot);
 	bot.getSelf().then((self) => {
@@ -343,9 +344,11 @@ addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements
 */
 
 // Submissions
-addCommand("startsubmissions", comp.startSubmissionMessage, "Sends a message to be used for current submissions", "Usage: ``$ss <channel>``", false);
+addCommand("start", comp.startSubmissionMessage, "Sends a message to be used for current submissions", "Usage: ``$ss <channel>``", false);
 addCommand("submit", comp.addSubmission, "Registers a submission", "Usage: ``$submit <user_id>``\nAdds the username to the list and gives them the submitted role", false);
-addCommand("save", comp.saveVars, "Save comp data", "", false)
+addCommand("setrole", comp.setRole, "Sets submitted role", "Usage: ``$setrole <role_id>``", false);
+addCommand("check", comp.getSubmission, "Check if someone has submitted", "Check if someone has submitted", false);
+
 function startSubmissions(bot, msg, args){
 	var channel = args[0];
 	var msg = "**__Current Submissions:__**\n\n"

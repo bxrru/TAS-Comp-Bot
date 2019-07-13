@@ -1,13 +1,25 @@
 const users = require("./users.js");
 const miscfuncs = require("./miscfuncs.js");
 const chat = require("./chatcommands.js");
-const SubmittedRole = "575732673402896404";
+const SAVE = require("./save.js")
+
 var allowSubmission = false;
 var task = 1;
-var SubmissionMessage = ["", ""]; // [channel_id, message_id]
-var Submissions = []; // {ID, Name, m64, st}
-var Num_Submissions = 0;
+
 var Guild = "397082495423741953";
+var SubmittedRole = "575732673402896404";
+var Channel_ID = ""//"555543392671760390";
+var Message_ID = ""//"599382510580793344";
+var Num_Submissions = 0;
+var Submissions = []; // {number, name, id, m64, st}
+
+function SubmissionsToMessage(){
+	var message = "**__Current Submissions:__**\n\n";
+	Submissions.forEach((player) => {
+		message += player.number + ". " + player.name + "\n";
+	});
+	return message
+}
 
 module.exports = {
 	allowSubmission:function(rawrxd){
@@ -24,166 +36,172 @@ module.exports = {
 		allowSubmission = false;
 	},
 	clearSubmissions:function(){
-		// clear google drive files
+		// clear google drive files // for when files are taken in as info too
 
 		// remove submitted roles from everyone
 
 		// clear #current_submissions
 	},
-	addSubmission:async function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){return "You do not have access";}
-
-		var user_id = args[0];
-		let dm = await bot.getDMChannel(user_id);
-		bot.addGuildMemberRole(Guild, user_id, SubmittedRole, "Command call by "+msg.author.username)
-
-		let message = await bot.getMessage(SubmissionMessage[0], SubmissionMessage[1])
-
-		Num_Submissions++;
-
-		if (Num_Submissions == 1){
-			message.edit(message.content + "\n\n"+Num_Submissions+". "+dm.recipient.username);
-		} else {
-			message.edit(message.content + "\n"+Num_Submissions+". "+dm.recipient.username);
-		}
-
-		return "Added "+dm.recipient.username;
-
-	},
-	startSubmissionMessage:async function(bot, msg, args){
-		Num_Submissions = 0;
-
-		if (args.length == 0) {args = ["bot_dms"];}
-		var channel = args[0];
-		var msg = "**__Current Submissions:__**\n\n"
-
-		// Set the message
-		let message = await bot.createMessage(chat.chooseChannel(channel), msg);
-		SubmissionMessage = [message.channel.id, message.id]
-
-	}
-};
-/* UNTESTED // NOT WORKING // YET TO IMPLEMENT
-	setServer:async function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){return;}
-
-		if (args.length == 0) {
-			args = [msg.channel.guild.id];
-		}
-		var guild_id = args[0];
-		let test = await bot.getGuildBans(guild_id).catch((error) => {
-			return "Invalid server ID ``" + error + "``";
-		});
-
-		Guild = guild_id;
-		saveVars();
-		return "Server set to ``" + guild_id + "``";
-	},
 	setRole:async function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){return;}
-
-		if (args.length == 0){
-			return "Missing argument ``<role_id>``";
-		}
+		if (!miscfuncs.hasCmdAccess(msg)) return
+		if (args.length == 0) return "Missing argument: ``<role_id>``"
 
 		var role = args[0];
+		var reason = "Testing role permissions, command call by " + msg.author.username;
+		let self = await bot.getSelf()
 
-		let self = await bot.getSelf();
+		try {
+			let test = await bot.addGuildMemberRole(Guild, self.id, role, reason);
+		} catch (e) {
+			return "Invalid Role ID ```"+e.id+"```"
+		}
 
-		let test = await bot.addGuildMemberRole(Guild, self.id, role, "Testing Role Permissions").catch((error) => {
-			return "Invalid role ID ``" + error + "``";
-		});
-
-		let test = await bot.removeGuildMemberRole(Guild, self.id, role, "Testing Role Permissions");
-
+	  bot.removeGuildMemberRole(Guild, self.id, role, reason);
 		SubmittedRole = role;
-		saveVars();
-		return "Role set to ``" + role + "``";
+		module.exports.save();
+		return "Role set to ``" + role + "``"
+	},
+	setServer:async function(bot, msg, args){
+		if (!miscfuncs.hasCmdAccess(msg)) return
+		if (args.length == 0) args = [msg.channel.guild.id];
+		var guild_id = args[0];
+
+		// test to see if it's a real server by getting bans
+		// this can return "Missing Permissions" whether the bot is in the server or not
+		// the REST API would need to be implemented to check for valid guilds
+		// (IE this function does not work)
+		try {
+			let test = await bot.getGuildBans(guild_id);
+		} catch (e) {
+			return "Invalid Server ID ```"+e+"```"
+		}
+
+		Guild = guild_id;
+		module.exports.save();
+		return "Set Guild to ``" + guild_id + "``"
 
 	},
 	addSubmission:async function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){return;}
-
-		if (args.length == 0){
-			args = ["0"];
-		}
+		if (!miscfuncs.hasCmdAccess(msg)) return
+		if (args.length == 0) return "Missing argument: ``<user_id>``"
 
 		var user_id = args[0];
 
-		if (hasSubmitted(user_id)){
-			return getSubmission(user_id).name + " has already submitted";
+		// Check if the user has already submitted
+		if (module.exports.hasSubmitted(user_id)){
+			var user = module.exports.getSubmission(user_id);
+			return user.name + " has already submitted (No. "+user.number+")"
 		}
 
-		let dm = await bot.getDMChannel(user_id);
-		bot.addGuildMemberRole(Guild, user_id, SubmittedRole, "Command call by "+msg.author.username)
+		// get the user
+		var name;
+		try {
+			let dm = await bot.getDMChannel(user_id);
+			name = dm.recipient.username;
+		} catch (e) {
+			return "Invalid User ID: ```"+e+"```"
+		}
 
-		let message = await bot.getMessage(ChannelID, MessageID)
-
+		// add the submission
 		Num_Submissions++;
+		var submission = {number: Num_Submissions, name:name, id:user_id}
+		Submissions.push(submission);
+		module.exports.save();
+		var result = "Added the following:```" + submission.number + ". " + submission.name + "```";
 
-		if (Num_Submissions == 1){ // need extra line for first submission
-			message.edit(message.content + "\n\n"+Num_Submissions+". "+dm.recipient.username);
-		} else {
-			message.edit(message.content + "\n"+Num_Submissions+". "+dm.recipient.username);
+		// add the role
+		try {
+			let addRole = await bot.addGuildMemberRole(Guild, user_id, SubmittedRole, "Command call by "+msg.author.username);
+		} catch (e) {
+			result += "Could not assign role: ```"+e+"```";
 		}
 
-		Submissions.push({id:user_id, name:dm.recipient.username});
+		// update the message
+		try {
+			let message = await bot.getMessage(Channel_ID, Message_ID);
+			message.edit(SubmissionsToMessage());
+		} catch (e) {
+			result += "Could not edit message: ```"+e+"```";
+		}
 
-		saveVars();
-		return "Added "+dm.recipient.username;
+		return result
 
 	},
 	hasSubmitted:function(user_id){
-		console.log("checking...")
-		return !Submissions.filter((entrant) => {entrant.id == user_id;}).length;
+		let check = function(submission) {return submission.id == user_id}
+		return Submissions.filter((i) => check(i)).length > 0;
 	},
 	getSubmission:function(user_id){
-		if (!hasSubmitted(user_id)){
-			return null;
-		}
-		return Submissions.filter((entrant) => {entrant.id == user_id;})[0];
+		if (!module.exports.hasSubmitted(user_id)) return null // ensure the submission exists
+		let check = function(submission) {return submission.id == user_id}
+		return Submissions.filter((i) => check(i))[0];
 	},
 	startSubmissionMessage:async function(bot, msg, args){
-		Num_Submissions = 0;
 
-		if (args.length == 0) {args = ["bot_dms"];}
+		if (args.length == 0) args = ["bot_dms"]; // default channel
 		var channel = args[0];
-		var msg = "**__Current Submissions:__**\n\n"
+
+		Num_Submissions = 0;
+		Submissions = [];
+		var result = "Submissions cleared. "
 
 		// Set the message
-		let message = await bot.createMessage(chat.chooseChannel(channel), msg);
-		ChannelID = message.channel.id;
-		MessageID = message.id;
+		try {
+			let message = await bot.createMessage(chat.chooseChannel(channel), SubmissionsToMessage());
+			Channel_ID = message.channel.id;
+			Message_ID = message.id;
+		} catch (e) {
+			result += "Unable to send message: ```"+e+"```";
+		}
+
+		module.exports.save();
+		return result
+
 	},
-	deleteSubmissionMessage:function(bot){
-		bot.getMessage(ChannelID, MessageID).then((msg) => {
-			msg.delete();
-		});
-	},
-	clearRoles:function(bot){
-		Submissions.forEach((user) => {
-			bot.removeGuildMemberRole(Guild, user.id, SubmittedRole, reason)
-		});
-	},
-	saveVars:async function(){
-		console.log("Saving comp data...")
+	save:async function(){
 		var data = {
-			server: Guild,
-			role: SubmittedRole,
-			channel_id: ChannelID,
-			message_id: MessageID,
+			guild_id: Guild,
+			role_id: SubmittedRole,
+			channel_id: Channel_ID,
+			message_id: Message_ID,
 			num: Num_Submissions,
 			submissions: Submissions
 		};
-		save.saveObject("submissions.json", data);
+		SAVE.saveObject("submissions.json", data);
 	},
-	loadVars:function(){
-		var data = save.readObject("submissions.json");
-		Guild = data.server;
-		SubmittedRole = data.role;
-		ChannelID = data.channel_id;
-		MessageID = data.message_id;
+	load:function(){
+		var data = SAVE.readObject("submissions.json");
+		Guild = data.guild_id
+		SubmittedRole = data.role_id;
+		Channel_ID = data.channel_id;
+		Message_ID = data.message_id;
 		Num_Submissions = data.num;
 		while (data.submissions.length > 0) Submissions.push(data.submissions.shift())
+	},
+
+ 	// UNTESTED // NOT WORKING // YET TO IMPLEMENT
+	deleteSubmissionMessage:async function(bot){
+		try {
+			let message = bot.getMessage(Channel_ID, Message_ID);
+			message.delete();
+		} catch (e) {
+			return "Could not find message to delete: ```"+e+"```"
+		}
+
+		Channel_ID = "";
+		Message_ID = "";
+		module.exports.save();
+		return "Deleted message. "
+
+	},
+	clearRoles:async function(bot){
+		Submissions.forEach((user) => {
+			try {
+				let clearRole = await bot.removeGuildMemberRole(Guild, user.id, SubmittedRole, reason);
+			} catch (e) {
+				console.log("Could not remove role from ", user.name, user.id);
+			}
+		});
+		return "Cleared roles. "
 	}
-};*/
+};
