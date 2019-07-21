@@ -34,6 +34,7 @@ const COMP_ACCOUNT = "397096658476728331";
 const SCORE_POINTER = "569918196971208734";
 var BOT_ACCOUNT = "532974459267710987" //"555489679475081227"; // better way to identify self?
 const XANDER = "129045481387982848";
+const BARRY = "146958598801457152";
 
 // token
 const ERGC = "NTMyOTc0NDU5MjY3NzEwOTg3.Dxlp2Q.QDe4dbD8_Pym_qonc9y47fybmx0";
@@ -45,6 +46,7 @@ var bot = new Eris.CommandClient(CompBot, {}, {
 });
 
 bot.on("ready", () => {
+	//miscfuncs.makeFolderIfHNotExist("./taskuploads/");
 	comp.load();
 	game.load();
 	score.retrieveScore(bot);
@@ -88,8 +90,14 @@ bot.registerCommand("restart", (msg, args) => {
 });
 
 bot.registerCommand("test", (msg, args) => {
-	if (users.hasCmdAccess(msg.member)){
-		console.log("test command called");
+	if (miscfuncs.hasCmdAccess(msg)){
+		var name = "lua.st"
+		var file = {
+			file: fs.readFileSync("./saves/"+name),
+			name: name
+		}
+		console.log("./saves/"+file.name, "Size: " + file.file.byteLength, file.file)
+		bot.createMessage(msg.channel.id, "** **", file);
 		//miscfuncs.makeFolderIfHNotExist("./taskuploads/");
 		//miscfuncs.downloadFromUrl(msg.attachments[0].url, "./taskuploads/" + msg.attachments[0].filename);
 		//return "done saving " + msg.attachments[0].filename;
@@ -151,7 +159,7 @@ bot.on("messageCreate", (msg) => {
 		bot.addMessageReaction(msg.channel.id, msg.id, "✈");
 	}
 
-	if (msg.author.id == BOT_ACCOUNT){return;} // ignore messages from self
+	if (msg.author.id == BOT_ACCOUNT) {return;} // ignore it's own messages
 
 	// handle task submissions
 	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
@@ -173,25 +181,53 @@ bot.on("messageCreate", (msg) => {
 
  	// Redirect Direct Messages that are sent to the bot
 	// doesn't expose people who have command access
-	if (miscfuncs.isDM(msg) && !miscfuncs.hasCmdAccess(msg)){
+	if (miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
 
 		var message = "[" + msg.author.username + "]: " + msg.content;
 
 		// Redirect to a specific channel
-		//bot.createMessage(CHANNELS.BOT_DMS, message);
+		bot.createMessage(CHANNELS.BOT_DMS, message);
 
 		// Redirect to a specific user (feel free to change when testing for yourself)
-		bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);});
+		//bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);});
 
+		if (msg.attachments.length > 0){
+			msg.attachments.forEach(attachment => {
+
+				comp.filerFiles(bot, msg, attachment);
+
+				/*
+				bot.createMessage(CHANNELS.BOT_DMS, "Attachment:```"+JSON.stringify(attachment)+"```");
+
+				if (comp.isM64(attachment)){
+					bot.createMessage(CHANNELS.BOT_DMS, "m64 file recieved: " + attachment.url);
+					miscfuncs.downloadFromUrl(attachments.url, "./taskuploads/" + attachment.filename)
+
+				} else if (comp.isSt(attachment)) {
+					bot.createMessage(CHANNELS.BOT_DMS, "savestate recieved: " + attachment.url);
+					miscfuncs.downloadFromUrl(attachments.url, "./taskuploads/" + attachment.filename)
+				}
+
+				var pfn = comp.properFileName();
+				if (attachment.filename.substr(0, pfn.length) == pfn){
+					// File is named properly
+				} else {
+					// Improper filename
+
+				}*/
+
+			});
+		}
 	}
 
 
-	// detect if it has been sent a valid user id
-	if (miscfuncs.isDM(msg) && msg.author.id == COMP_ACCOUNT) {
-		users.getUser(bot, msg.content, (err, user) => {
-			if (!err) {
-				num_subs += 1;
-				bot.createMessage(msg.channel.id, "Username: ``"+user.username+"``")
+	// detect if the bot has been sent a valid user id from the comp account
+	// this was discussed as a way to enter submissions but never used
+	//if (miscfuncs.isDM(msg) && msg.author.id == COMP_ACCOUNT) {
+		//users.getUser(bot, msg.content, (err, user) => {
+			//if (!err) {
+				//num_subs += 1;
+				//bot.createMessage(msg.channel.id, "Username: ``"+user.username+"``")
 				/*
 				bot.getMessage(CHANNELS.BOT_DMS, csmid).then((cs) => {
 					cs.edit(cs.content + "\n"+num_subs+". "+user.username);
@@ -325,6 +361,7 @@ bot.registerCommand("removerole", (msg, args) => {
 bot.registerCommand("log", (msg, args) => {
 	if (!miscfuncs.hasCmdAccess(msg)){return;}
 	console.log(msg.content);
+	console.log(args[0] == '"')
 },
 {
 	description: "Logs the message in the console",
@@ -345,18 +382,24 @@ addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements
 
 // Submissions
 addCommand("start", comp.startSubmissionMessage, "Sends a message to be used for current submissions", "Usage: ``$ss <channel>``", false);
-addCommand("submit", comp.addSubmission, "Registers a submission", "Usage: ``$submit <user_id>``\nAdds the username to the list and gives them the submitted role", false);
+addCommand("submit", comp.addSubmissionCommand, "Registers a submission", "Usage: ``$submit <user_id>``\nAdds the username to the list and gives them the submitted role", false);
 addCommand("setrole", comp.setRole, "Sets submitted role", "Usage: ``$setrole <role_id>``", false);
-addCommand("check", comp.getSubmission, "Check if someone has submitted", "Check if someone has submitted", false);
+addCommand("check", comp.getSubmission, "Check if someone has submitted", "Usage: `$check <user_id>`", false);
+addCommand("getsubmission", comp.checkSubmission, "Get submitted files (get)", "Usage: `$get <number ir 'all'>`\nNumer appears next to the names in #current_submissions. If you specify `all` the bot will upload a script that will automatically donwload every file", true)
 
-function startSubmissions(bot, msg, args){
-	var channel = args[0];
-	var msg = "**__Current Submissions:__**\n\n"
-	bot.createMessage(chat.chooseChannel(channel), msg).then((message) => {
-		comp.setSubmissionMessage(message.channel.id, message.id);
-	});
-	return comp.startSubmissionMessage();
-}
+addCommand("setname", comp.changeName, "Change you name as seen in #current_submissions", "Usage: `$setname <new name here>`\nSpaces and special characters are allowed. This will also change the name of your files", false);
+addCommand("status", comp.checkStatus, "Check your submission", "Tells you what you need to submit and sends you the links to your submitted files", false)
+
+bot.registerCommand("a", (msg, args) => {
+	if (!miscfuncs.hasCmdAccess(msg)) return
+	return //comp.changeName(bot, msg.author.id, args.join(" "))
+},
+{
+	description: "",
+	fullDescription: "Usage: ``$``",
+	hidden: true,
+	caseInsensitive: true
+});
 
 // Various Command Aliases (<Alias>, <Original_Command_Name>)
 aliases = [
@@ -368,7 +411,8 @@ aliases = [
 	["tr", "toggleReaction"],
 	["togglereactions", "toggleReaction"],
 	["tg", "toggleGames"],
-	["togglegame", "toggleGames"]
+	["togglegame", "toggleGames"],
+	["get", "getsubmission"]
 ];
 
 aliases.forEach((alias)=>(bot.registerCommandAlias(alias[0], alias[1])));

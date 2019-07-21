@@ -13,17 +13,22 @@ var CHANNELS = {"GENERAL": "397488794531528704",
 		"TASBOTTESTS": "562818543494889491",
 		"ANNOUNCEMENTS": "397841779535118347"}
 
+function chooseChannel(string){
+	string = string.toUpperCase()
+	if (CHANNELS[string] === undefined) {
+		return string;
+	} else {
+		return CHANNELS[string];
+	}
+}
+
 module.exports = {
 
 	// CHANNEL COMMANDS
 
+	// allow other modules to use this command
 	chooseChannel:function(string){
-		string = string.toUpperCase()
-		if (CHANNELS[string] === undefined) {
-			return string;
-		} else {
-	  	return CHANNELS[string];
-		}
+		chooseChannel(string)
 	},
 
   addChannelAlias:function(bot, msg, args){
@@ -113,7 +118,7 @@ module.exports = {
 
 		let dm = await bot.getDMChannel(user_id).catch((e) => {return "DM Failed ``"+e+"``";});
 		dm.createMessage(args.join(" "));
-		
+
 		return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ");
 	},
 
