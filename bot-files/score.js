@@ -2,9 +2,11 @@ var score = [];
 var scoreMsgID = ["",""]; // [channel_id, message_id]
 var task = 1;
 var setLength = 5;
+var ResultsChannel = "";
+var ScoreChannel = "";
 
 const miscfuncs = require("./miscfuncs.js");
-const save = require("./save.js");
+const SAVE = require("./save.js");
 
 module.exports = {
 
@@ -25,8 +27,9 @@ module.exports = {
     var score = [];
     var name, place, points, coop, participants;
 
-    // remove DQs and empty lines
+    // remove DQs, empty lines, and *s
     for (var i = a.length - 1; i>=0; i--){
+      while (a[i].split('').includes("*")) a[i] = a[i].replace("*","")
       if (a[i] == '' || a[i].toUpperCase().substr(0,2) == "DQ" || a[i].toUpperCase().substr(0,4) == "HTTP"){
         a.splice(i,1);
       }
@@ -86,11 +89,11 @@ module.exports = {
     }
   },
   getSetLength:function(){
-    return this.setLength;
+    return setLength;
   },
   setSetLength:function(num){
     if (!isNaN(parseInt(num))){
-      this.setLength = parseInt(num);
+      setLength = parseInt(num);
     }
   },
 
@@ -172,7 +175,7 @@ module.exports = {
 
     if (a === undefined || a.length == 0  || a[0].length == 0){return "No Results";}
 
-    var msg = "**";
+    var msg = "";
 
     if (useHeader === undefined){useHeader = true;}
 
@@ -182,14 +185,13 @@ module.exports = {
 
         if (task === undefined){task = 1;}
 
-        set = ~~((parseInt(task) - 1) / this.setLength) + 1;
+        set = Math.floor((parseInt(task) - 1) / setLength) + 1;
       }
 
-      msg += "__Set " + set.toString() + " Score ";
-      msg += "After Task " + task.toString() + "__\n\n";
+      msg += "**__Set " + set.toString() + " Score ";
+      msg += "After Task " + task.toString() + "__**\n\n";
     }
 
-    var stopBold = true;
     var place = 0;
     var name = "";
     var points = 0.0;
@@ -201,10 +203,7 @@ module.exports = {
       points = a[i][2];
 
       // bold top 3
-      if (place>3 && stopBold){
-        msg += "**";
-        stopBold = false;
-      }
+      if (place < 4) msg += "**"
 
       msg += place.toString();
 
@@ -238,14 +237,11 @@ module.exports = {
 
       msg += ". " + name + ": " + points.toString();
 
-      if (points.toString().substr(-2,1) != "."){msg += ".0";}
+      if (points.toString().substr(-2,1) != ".") msg += ".0"
+      if (place < 4) msg += "**"
 
       msg += "\n";
 
-    }
-
-    if (stopBold){
-      msg += "**";
     }
 
     return msg;
@@ -329,6 +325,7 @@ module.exports = {
       if (score[i][1].toUpperCase() == name.toUpperCase()){
         oldpts = score[i][2].toFixed(1);
         score[i][2] = parseFloat(num.toFixed(1));
+        this.setScore(this.sortScore(score))
         return "Changed ``"+name+"``'s points from ``"+oldpts.toString()+"`` to ``"+num.toFixed(1)+"``.";
       }
 
@@ -545,7 +542,7 @@ module.exports = {
         if (isNaN(parseInt(args[0]))){
           msg = "Set length must be an integer.";
         } else {
-          this.setLength = parseInt(args[0]);
+          setLength = parseInt(args[0]);
           msg = "Score will reset every " + parseInt(args[0]).toString() + " tasks.";
         }
         break;
@@ -600,10 +597,49 @@ module.exports = {
         }
         break;
 
+      case "INFO":
+        msg = "";
+        msg += "Task: " + this.getTask() + "\n";
+        msg += "Set Length: " + setLength + "\n";
+        msg += "Results Feed: <#" + ResultsChannel + ">\n";
+        msg += "Score Feed: <#" + ScoreChannel + ">\n";
+        msg += "Score Message ID: " + this.getScoreMsg()[1] + "\n";
+        msg += "Score Message Channel: <#" + this.getScoreMsg()[0] + ">\n";
+        break;
+
+      case "SETFEED":
+        if (args.length == 0){
+          msg = "Not enough arguments: `<'results' or 'score'>`";
+
+        } else {
+
+          var option = args.shift().toUpperCase();
+
+          if (args.length == 0){
+            msg = "Not enough arguments: `<channel_id>`"
+
+          } else if (option == "RESULT" || option == "RESULTS"){
+            msg = "Results feed changed from <#"+ResultsChannel+"> to <#"+args[0]+">";
+            ResultsChannel = args[0];
+            this.save()
+
+          } else if (option == "SCORE" || option == "SCORES"){
+            msg = "Score feed changed from <#"+ScoreChannel+"> to <#"+args[0]+">";
+            ScoreChannel = args[0];
+            this.save()
+
+          } else {
+            msg = "Argument not recognized. Specify `'results'` or 'score'";
+          }
+
+        }
+        break;
+
+
       default:
         if (action!="HELP"){msg = "Failed request, action: ``"+action+"`` not recognized. ";}
         msg += "Action must be ";
-        ["PRINT","FIND","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CHANGESETLENGTH","CHANGETASK","SETMESSAGE"].forEach(function(a){
+        ["PRINT","FIND","SET","CLEAR","CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CHANGESETLENGTH","CHANGETASK","SETMESSAGE","INFO","SETFEED"].forEach(function(a){
           msg += "``"+a+"``, ";
         });
         msg+="``CALCULATE``.";
@@ -618,8 +654,7 @@ module.exports = {
 
 
   // parses input from a user and responds accordingly
-  processCommand:function(bot, msg, args){
-
+  processCommand:async function(bot, msg, args){
 
     var action = "";
     var message = "";
@@ -664,11 +699,22 @@ module.exports = {
 
       // directly edit the message in #SCORE
       if (["CHANGENAME","CHANGEPOINTS","COMBINE","ADD","REMOVE","CLEAR","SET","CHANGETASK","CHANGESETLENGTH","SETMESSAGE"].includes(action)){
-        this.saveVars();
-        if (this.getScoreMsg()[0] == ""){
+        try {
+          await bot.editMessage(this.getScoreMsg()[0],this.getScoreMsg()[1],this.scoreToMessage(this.getScore(), this.getTask()));
+        } catch (e) {
+          this.setScoreMsg("","");
           message += " No message found to edit.";
-        } else {
-          bot.editMessage(this.getScoreMsg()[0],this.getScoreMsg()[1],this.scoreToMessage(this.getScore(), this.getTask()));
+        }
+        this.save();
+      }
+
+      if (action == "INFO"){
+        try {
+          var scoremsg = await bot.getMessage(this.getScoreMsg()[0],this.getScoreMsg()[1]);
+          message += "Message URL: https://discordapp.com/channels/";
+          message += scoremsg.channel.guild.id + "/" + scoremsg.channel.id + "/" + scoremsg.id;
+        } catch (e) {
+          message += "Invalid Message: Cannot retrieve URL"
         }
       }
 
@@ -683,7 +729,7 @@ module.exports = {
 
   // loads variables from save and verifies the message
   retrieveScore:function(bot){
-    this.loadVars();
+    this.load();
     var channel_id = this.getScoreMsg()[0];
     var message_id = this.getScoreMsg()[1];
     bot.getMessage(channel_id, message_id).catch((error) => {
@@ -692,34 +738,35 @@ module.exports = {
     });
   },
 
-  saveVars:function(){
+  save:function(){
     var vars = {
       score: this.getScore(),
       channel_id: this.getScoreMsg()[0],
       message_id: this.getScoreMsg()[1],
       task: this.getTask(),
-      set_length: this.getSetLength()
+      set_length: this.getSetLength(),
+      resultsfeed: ResultsChannel,
+      scorefeed: ScoreChannel
     }
-    save.saveObject("score.json", vars);
+    SAVE.saveObject("score.json", vars);
   },
 
-  loadVars:function(){
-    var vars = save.readObject("score.json");
+  load:function(){
+    var vars = SAVE.readObject("score.json");
     this.setScore(vars.score);
     this.setScoreMsg(vars.channel_id, vars.message_id);
     this.setTask(vars.task);
     this.setSetLength(vars.set_Length);
+    ResultsChannel = vars.resultsfeed;
+    ScoreChannel = vars.scorefeed;
   },
 
   autoUpdateScore:async function(bot, msg){
-    // TODO: Move function outside of main such that only this function call is required from bot.onMessageCreate
-    // Potentially handle setting the results and score channels
-    // Use either ID or #mention (message.channelMentions[0])
     if (msg.channel.id == ResultsChannel && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
-      var message = score.updateScore(msg.content);
-      let msg = await bot.createMessage(ScoreChannel, message);
-      scoreMsgID = [msg.channel.id, msg.id]
-      saveVars();
+      var message = this.updateScore(msg.content);
+      let score_message = await bot.createMessage(ScoreChannel, message);
+      this.setScoreMsg(score_message.channel.id, score_message.id);
+      this.save();
     }
   },
 
@@ -730,6 +777,7 @@ module.exports = {
     msg += "```$score find <username or 'me'>```";
     msg += "```$score calculate *<length of previous score> *<previous scores...> *<results...>```";
     msg += "\nUsers with access may use the following commands:";
+    msg += "```$score info```"
     msg += "```$score print [task_number] [set_number]```";
     msg += "```$score set *<scores...>```";
     msg += "```$score clear```";
@@ -741,9 +789,11 @@ module.exports = {
     msg += "```$score changesetlength <set_length>```";
     msg += "```$score changetask <task_number>```";
     msg += "```$score setmessage <channel_id> <message_id>```";
+    msg += "```$score setfeed <'results' or 'score'> <channel_id>```";
     msg += "\n``*`` Denotes arguments that must appear on new lines\n";
     msg += "``[]`` Denotes optional arguments\n";
     msg += "``...`` Denotes that multiple arguments may be entered\n";
+    msg += "\nCommands that edit the score will be automatically sorted, and the message will be directly edited.\n"
     msg += "\nFor more information on specific actions, contact Xander"; // actions, use ``$score help <action>`` or contact Xander
     return msg;
   }

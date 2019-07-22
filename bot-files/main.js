@@ -166,79 +166,28 @@ bot.on("messageCreate", (msg) => {
 		bot.createMessage(msg.channel.id, "ye");
 	}
 
-	// Score Handle // message in #results (non-DQ) => calculate score
-	if (msg.channel.id == CHANNELS.RESULTS && msg.content.split("\n")[0].toUpperCase().indexOf("DQ") == -1){
-
-		var message = score.updateScore(msg.content);
-
-		bot.createMessage(CHANNELS.SCORE, message).then((msg)=>{
-			// store the message so it may be edited
-    	score.setScoreMsg(msg.channel.id, msg.id);
-			score.saveVars();
-		});
-	}
-
+	// Handle results
+	score.autoUpdateScore(bot, msg);
 
  	// Redirect Direct Messages that are sent to the bot
-	// doesn't expose people who have command access
-	if (miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
+	if (miscfuncs.isDM(msg)) {
 
 		var message = "[" + msg.author.username + "]: " + msg.content;
 
 		// Redirect to a specific channel
 		bot.createMessage(CHANNELS.BOT_DMS, message);
 
-		// Redirect to a specific user (feel free to change when testing for yourself)
+		// Redirect to a specific user
 		//bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);});
 
-		if (msg.attachments.length > 0){
+		if (msg.attachments.length > 0 && comp.getAllowSubmission()){
 			msg.attachments.forEach(attachment => {
 
 				comp.filerFiles(bot, msg, attachment);
 
-				/*
-				bot.createMessage(CHANNELS.BOT_DMS, "Attachment:```"+JSON.stringify(attachment)+"```");
-
-				if (comp.isM64(attachment)){
-					bot.createMessage(CHANNELS.BOT_DMS, "m64 file recieved: " + attachment.url);
-					miscfuncs.downloadFromUrl(attachments.url, "./taskuploads/" + attachment.filename)
-
-				} else if (comp.isSt(attachment)) {
-					bot.createMessage(CHANNELS.BOT_DMS, "savestate recieved: " + attachment.url);
-					miscfuncs.downloadFromUrl(attachments.url, "./taskuploads/" + attachment.filename)
-				}
-
-				var pfn = comp.properFileName();
-				if (attachment.filename.substr(0, pfn.length) == pfn){
-					// File is named properly
-				} else {
-					// Improper filename
-
-				}*/
-
 			});
 		}
 	}
-
-
-	// detect if the bot has been sent a valid user id from the comp account
-	// this was discussed as a way to enter submissions but never used
-	//if (miscfuncs.isDM(msg) && msg.author.id == COMP_ACCOUNT) {
-		//users.getUser(bot, msg.content, (err, user) => {
-			//if (!err) {
-				//num_subs += 1;
-				//bot.createMessage(msg.channel.id, "Username: ``"+user.username+"``")
-				/*
-				bot.getMessage(CHANNELS.BOT_DMS, csmid).then((cs) => {
-					cs.edit(cs.content + "\n"+num_subs+". "+user.username);
-				});
-				msg.channel.guild.addMemberRole(user.id, Submitted);
-				*/
-			}
-		});
-
-	}
-
 
 });
 
