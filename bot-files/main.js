@@ -145,12 +145,8 @@ bot.registerCommand("starttask", (msg, args) => {
 });
 
 
-//addCommand("score", score.processCommand, "Edits #score", "Usage: ``$score <action> <parameters>``\nAnyone may use ``$score calculate`` and ``$score find <me or name>``", false)
-bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args);},
-{description: "Edits #score", fullDescription: score.help()});
 
-var csmid = "598006436622237696"; //current submissions message id
-var num_subs = 0;
+
 // message handle
 bot.on("messageCreate", (msg) => {
 
@@ -162,12 +158,15 @@ bot.on("messageCreate", (msg) => {
 	if (msg.author.id == BOT_ACCOUNT) {return;} // ignore it's own messages
 
 	// handle task submissions
-	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmission()) {
-		bot.createMessage(msg.channel.id, "ye");
+	if (msg.attachments.length > 0 && !users.isBanned(msg.author) && miscfuncs.isDM(msg) && comp.getAllowSubmissions()) {
+		//bot.createMessage(msg.channel.id, "ye");
 	}
 
-	// Handle results
+	// Handle Results
 	score.autoUpdateScore(bot, msg);
+
+	// Handle Submissions
+	comp.filterSubmissions(bot, msg);
 
  	// Redirect Direct Messages that are sent to the bot
 	if (miscfuncs.isDM(msg)) {
@@ -179,17 +178,14 @@ bot.on("messageCreate", (msg) => {
 
 		// Redirect to a specific user
 		//bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);});
-
-		if (msg.attachments.length > 0 && comp.getAllowSubmission()){
-			msg.attachments.forEach(attachment => {
-
-				comp.filerFiles(bot, msg, attachment);
-
-			});
-		}
 	}
 
 });
+
+
+//addCommand("score", score.processCommand, "Edits #score", "Usage: ``$score <action> <parameters>``\nAnyone may use ``$score calculate`` and ``$score find <me or name>``", false)
+bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args);},
+{description: "Edits #score", fullDescription: score.help()});
 
 
 // Channel Commands (Allowed from #bot and #tasbottests)
@@ -307,61 +303,67 @@ bot.registerCommand("removerole", (msg, args) => {
 	hidden: true
 });
 
-bot.registerCommand("log", (msg, args) => {
-	if (!miscfuncs.hasCmdAccess(msg)){return;}
-	console.log(msg.content);
-	console.log(args[0] == '"')
-},
-{
-	description: "Logs the message in the console",
-	hidden: true
-});
+// log a message
+bot.registerCommand("log", (msg, args) => {if (miscfuncs.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true});
 
 // Games
 addCommand("toggleGames", game.toggle, "Toggle game functions (tg)", "Switches the game functions on/off", false);
 addCommand("giveaway", game.giveaway, "Randomly selects from a list", "Randomly selects a winner from line separated entries for a giveaway", false);
-addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",true);
+addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message", true);
 
+/*
 // Announcements
 const announce = require("./announcement.js");
-/*
 addCommand("ac", announce.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
 addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
 */
 
-// Submissions
-addCommand("start", comp.startSubmissionMessage, "Sends a message to be used for current submissions", "Usage: ``$ss <channel>``", false);
-addCommand("submit", comp.addSubmissionCommand, "Registers a submission", "Usage: ``$submit <user_id>``\nAdds the username to the list and gives them the submitted role", false);
-addCommand("setrole", comp.setRole, "Sets submitted role", "Usage: ``$setrole <role_id>``", false);
-addCommand("check", comp.getSubmission, "Check if someone has submitted", "Usage: `$check <user_id>`", false);
-addCommand("getsubmission", comp.checkSubmission, "Get submitted files (get)", "Usage: `$get <number ir 'all'>`\nNumer appears next to the names in #current_submissions. If you specify `all` the bot will upload a script that will automatically donwload every file", true)
+// start / stop / clear submissions
+addCommand("startSubmissions", comp.allowSubmissions, "Starts accepting submissions", "Starts accepting submissions via DMs", true)
+addCommand("stopSubmissions", comp.stopSubmissions, "Stops accepting submissions", "Stops accepting submissions via DMs", true)
+addCommand("clearSubmissions", comp.clearSubmissions, "Deletes all submission files (WARNING)", "Removes the Submitted role from every user that has submitted. Deletes the message containing all the submissions and deletes all of the saved files **without a confirmation/warning**", true)
 
-addCommand("setname", comp.changeName, "Change you name as seen in #current_submissions", "Usage: `$setname <new name here>`\nSpaces and special characters are allowed. This will also change the name of your files", false);
-addCommand("status", comp.checkStatus, "Check your submission", "Tells you what you need to submit and sends you the links to your submitted files", false)
+// changing competition information
+addCommand("setServer", comp.setServer, "Sets the competition server", "Usage: `$setserver [guild_id]`\nIf no ID is specified it will use the ID of the channel the command was called from. This assumes that it is given a valid server ID.", true)
+addCommand("setSubmittedRole", comp.setRole, "Sets the submitted role", "Usage: `$setrole [role_id]`\nIf no ID is specified or the bot does not have permission to assign the role, it will disable giving roles to users that submit. Set the competition server using `$setServer` before using this command.", true);
+addCommand("setSubmissionMessage", comp.setMessage, "Sets the message to show all submissions", "Usage: `$setsm <channel> <message_id>`\nThis message is stored and will be updated until the bot is set to not accept submissions", true)
+addCommand("setSubmissionFeed", comp.setFeed, "Sets the default channel to send the submissions list to", "Usage: `$setfeed <channel>`\nThis does not ensure that the channel is a valid text channel that the bot can send messages to", true)
+addCommand("setTask", comp.setTask, "Sets the Task Number", "Usage: `$settask <Task_Number>`\nSets the task number that will be used when downloading competition files", true)
+addCommand("addHost", comp.addHost, "Sets a user to receive submission updates", "Usage: `$addhost <user_id>`\nThe selected user will receive DMs about new submissions, updated files, and errors such as failure to assign the submitted role. To see the curent list of hosts use `$compinfo`. To remove a user use `$removehost`", true)
+addCommand("removeHost", comp.removeHost, "Stops a user from receiving submission updates", "Usage: `removehost <user_id>`\nThe selected user will NO LONGER receive DMs about new submissions, updated files, and errors such as failure to assign the submitted role. To see the curent list of hosts use `$compinfo`. To add a user use `$addhost`", true)
 
-bot.registerCommand("a", (msg, args) => {
-	if (!miscfuncs.hasCmdAccess(msg)) return
-	return //comp.changeName(bot, msg.author.id, args.join(" "))
-},
-{
-	description: "",
-	fullDescription: "Usage: ``$``",
-	hidden: true,
-	caseInsensitive: true
-});
+// naming submissions
+addCommand("setname", comp.setName, "Change your name as seen in #current_submissions", "Usage: `$setname <new name here>`\nSpaces and special characters are allowed. Moderators are able to remove access if this command is abused", false);
+addCommand("lockName", comp.lockName, "Disable a user from changing their submission name", "Usage: `$lockname <Submission_Number> [Name]`\nPrevents the user from changing their name and sets it to `[Name]`. If no name is specified it will remain the same. To see the list of Submission Numbers use `$listsubmissions`", true)
+addCommand("unlockName", comp.unlockName, "Allow users to change their submission name", "Usage: `$unlockname <Submission_Number>`\nAllows the user to change their submission name. To see the list of Submission Numbers use `$listsubmissions`", true)
+
+// competition information
+addCommand("compinfo", comp.info, "Shows competition related information", "Shows current internal variables for the competition module", true)
+addCommand("getsubmission", comp.checkSubmission, "Get submitted files (get)", "Usage: `$get <Submission_Number or 'all'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all` the bot will upload a script that can automatically download every file. To see the list of Submission Numbers use `$listsubmissions`", true)
+addCommand("listSubmissions", comp.listSubmissions, "Shows the list of current submissions", "Shows the list of users that have submitted. Anyone can use this command in DMs", false)
+addCommand("status", comp.checkStatus, "Check your submitted files", "Tells you what you need to submit and sends you the links to your submitted files", false)
 
 // Various Command Aliases (<Alias>, <Original_Command_Name>)
 aliases = [
-	["channeladd", "addChannel"],
-	["channelremove", "removeChannel"],
-	["listchannels", "ls"],
-	["getchannels", "ls"],
-	["say", "send"],
-	["tr", "toggleReaction"],
-	["togglereactions", "toggleReaction"],
-	["tg", "toggleGames"],
-	["togglegame", "toggleGames"],
-	["get", "getsubmission"]
+	["channeladd","addChannel"],
+	["channelremove","removeChannel"],
+	["listchannels","ls"],
+	["getchannels","ls"],
+	["say","send"],
+	["tr","toggleReaction"],
+	["togglereactions","toggleReaction"],
+	["tg","toggleGames"],
+	["togglegame","toggleGames"],
+	["get","getsubmission"],
+	["setsm","setSubmissionMessage"],
+	["setsmsg","setSubmissionMessage"],
+	["setfeed","setSubmissionFeed"],
+	["startAccepting","startSubmissions"],
+	["startSubmission","startSubmissions"],
+	["stopAccepting","stopSubmissions"],
+	["stopSubmission","stopSubmissions"],
+	["clearAllSubmissions","clearSubmissions"],
+	["setRole","setSubmittedRole"]
 ];
 
 aliases.forEach((alias)=>(bot.registerCommandAlias(alias[0], alias[1])));

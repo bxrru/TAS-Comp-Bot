@@ -599,12 +599,10 @@ module.exports = {
 
       case "INFO":
         msg = "";
-        msg += "Task: " + this.getTask() + "\n";
-        msg += "Set Length: " + setLength + "\n";
-        msg += "Results Feed: <#" + ResultsChannel + ">\n";
-        msg += "Score Feed: <#" + ScoreChannel + ">\n";
-        msg += "Score Message ID: " + this.getScoreMsg()[1] + "\n";
-        msg += "Score Message Channel: <#" + this.getScoreMsg()[0] + ">\n";
+        msg += "**Task** - " + this.getTask() + "\n";
+        msg += "**Set Length** - " + setLength + "\n";
+        msg += "**Results Feed** - <#" + ResultsChannel + ">\n";
+        msg += "**Score Feed** - <#" + ScoreChannel + ">\n";
         break;
 
       case "SETFEED":
@@ -711,10 +709,10 @@ module.exports = {
       if (action == "INFO"){
         try {
           var scoremsg = await bot.getMessage(this.getScoreMsg()[0],this.getScoreMsg()[1]);
-          message += "Message URL: https://discordapp.com/channels/";
+          message += "**Score Message URL** - https://discordapp.com/channels/";
           message += scoremsg.channel.guild.id + "/" + scoremsg.channel.id + "/" + scoremsg.id;
         } catch (e) {
-          message += "Invalid Message: Cannot retrieve URL"
+          message += "Invalid Score Message: Cannot retrieve URL"
         }
       }
 

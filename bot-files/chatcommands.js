@@ -28,7 +28,7 @@ module.exports = {
 
 	// allow other modules to use this command
 	chooseChannel:function(string){
-		chooseChannel(string)
+		return chooseChannel(string)
 	},
 
   addChannelAlias:function(bot, msg, args){
