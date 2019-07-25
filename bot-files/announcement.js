@@ -13,6 +13,14 @@ var announcement = {
 
 module.exports = {
 
+	CommandInfo:function(){
+		var msg = "**CompBot** - Announcement Module\n"
+		msg += "\n**Announcement Commands:**\n"
+		msg += "\t**$ac** - ToDo\n"
+		msg += "\nType $help <command> for more info on a command."
+		return msg
+	},
+
 	processCommand:function(bot, msg, args){
 
 		if (!miscfuncs.hasCmdAccess(msg)) {return;}
@@ -168,3 +176,72 @@ module.exports = {
 	}
 
 }
+
+/*
+// The old announcement code
+
+announce:function(bot, msg, args){
+	if (!miscfuncs.hasCmdAccess(msg)) {return;}
+
+	var channel = chooseChannel(args.shift());
+
+	//bot.createMessage(channel, "test").then((m)=>{m.delete();});
+	//return;
+
+	var everyone;
+	// JANK get @everyone role
+	msg.channel.guild.roles.forEach((role) => {
+		if (role.id == "397082495423741953"){
+			everyone = role;
+		}
+	});
+
+	var now = new Date();
+
+	var hour = args.shift();
+	var min = (hour == "next") ? now.getMinutes()+1 : args.shift();
+
+	var delay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, min, 0, 0) - now;
+
+	if (delay < 0) {
+		hour = ('0'+hour).slice(-2);
+		min = ('0'+min).slice(-2);
+		var h = ('0' + now.getHours()).slice(-2);
+		var m = ('0' + now.getMinutes()).slice(-2);
+		var msg = "Time passed. `"+h+":"+m+"` > `"+hour+":"+min+"`"
+		console.log(msg);
+		return msg;
+	}
+
+	msg = "1 HOUR UNTIL TASK 12 DEADLINE! SUBMIT!!!1!";
+
+	for (var i = 0; i < args.length; i++){
+		if (args[i] == "`@everyone`"){
+			args[i] = "@everyone"; //everyone.mention;
+		}
+	}
+
+	if (args.length > 0){msg = args.join(" ");}
+
+	//msg = "16.5 HOURS UNTIL DEADLINE MAKE SURE TO SUBMIT!!\n\n(This message is an automated test thank you for continued support on the development of this bot)"
+
+	console.log(msg);
+
+	announcements.push(
+		setTimeout(function(){
+			bot.createMessage(channel, msg);
+			announcements.shift();
+		}, delay)
+	);
+	return "The following announcement will take place ``"+delay+"ms`` from now in channel ``"+channel+"``:```" + msg + "```";
+
+},
+
+clearAnnounce:function(bot, msg, args){
+	if (!miscfuncs.hasCmdAccess(msg)) {return;}
+	announcements.forEach((announcement) => {
+		clearTimeout(announcement);
+	});
+	return "Removed all planned announcements";
+}
+*/

@@ -43,3 +43,21 @@ module.exports = {
 		}
 	}
 };
+/*
+		case "$addCmdAccess":
+			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
+				var user = msg.content.split(" ", 2)[1].replace("@", "");
+				users.addCmdAccess(user);
+				bot.createMessage(msg.channel.id, "successfully added user " + user + " to CmdAccess");
+				console.log("successfully added user " + user + " to CmdAccess");
+			}
+			break;
+		case "$addBan":
+			if (users.hasCmdAccess(msg.member) && msg.content.split(" ").length == 2) {
+				var user = msg.content.split(" ", 2)[1].replace("@", "");
+				users.addBan(user);
+				bot.createMessage(msg.channel.id, "successfully banned user " + user);
+				console.log("successfully banned user " + user);
+			}
+			break;
+*/

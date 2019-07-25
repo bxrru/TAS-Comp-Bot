@@ -9,6 +9,27 @@ function disabled(guild_id){
 
 module.exports = {
 
+  save:function(){
+    console.log("Saving games...")
+    Save.saveObject("games.json", DisabledServers);
+  },
+  load:function(){
+    var data = Save.readObject("games.json");
+    DisabledServers = []
+    while (data.length > 0){
+      DisabledServers.push(data.pop());
+    }
+  },
+  CommandInfo:function(){
+    var msg = "**CompBot** - Games Module\n"
+    msg += "\n**Game Commands:**\n"
+    msg += "\t**$togglegames** - Toggle game functions (tg)\n"
+    msg += "\t**$slots** - Spin to win\n"
+    msg += "\t**$giveaway** - Randomly select a winner\n"
+    msg += "\nType $help <command> for more info on a command."
+    return msg
+  },
+
   toggle:function(bot, msg, args){
     if (!miscfuncs.hasCmdAccess(msg)){return;}
 
@@ -81,21 +102,7 @@ module.exports = {
 
   blackjack:function(bot, msg, args){
     // TODO ;)
-  },
-
-  save:function(){
-    console.log("Saving games...")
-    Save.saveObject("games.json", DisabledServers);
-  },
-  load:function(){
-    var data = Save.readObject("games.json");
-    DisabledServers = []
-    while (data.length > 0){
-      DisabledServers.push(data.pop());
-    }
   }
-
-
 }
 
 

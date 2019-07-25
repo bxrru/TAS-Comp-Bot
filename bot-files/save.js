@@ -1,17 +1,6 @@
 const fs = require("fs");
 const miscfuncs = require("./miscfuncs.js");
 
-// make sure the length of lists are the same
-var saves = [
-	"allowsubmission",
-	"tasknum"
-];
-
-var defaultVars = [
-	false,
-	0
-];
-
 //function cfgchange(thingToChange
 function saveFile(filename, content){
 	miscfuncs.makeFolderIfNotExist("./saves/");
@@ -43,11 +32,48 @@ module.exports = {
 				//saves[i] = defaultVars[i];
 		}
 	},
+	editFileLine:function(directory, line, newshit, callback){
+		var data = fs.readFileSync(directory, 'utf8');
+		var lines = data.split("\n");
 
+		if(+line > lines.length)
+			throw new Error("line number larger than file lines count");
+
+		lines[line] = newshit;
+
+		var newlines = "";
+
+		for (var i = 0; i < lines.length; i++)
+			newlines = lines[i] + "\n";
+
+		fs.writeFile(directory, newlines, function(err, data) {
+			if (err) throw new err;
+		});
+	},
+	makeFolderIfNotExist:function(path) {
+		if (!fs.existsSync(path)){
+			fs.mkdirSync(path);
+		}
+	},
+	deleteFilesInFolder:function(directory) {
+		fs.readdir(directory, (err, files) => {
+			if (err) throw err;
+
+			for (const file of files) {
+				fs.unlink(path.join(directory, file), err => {
+					if (err) throw err;
+				});
+			}
+		});
+	},
+	downloadFromUrl:function(url, path) {
+		request.get(url)
+        .on('error', console.error)
+        .pipe(fs.createWriteStream(path));
+	},
 	saveObject:function(filename, object){
 		saveFile(filename, JSON.stringify(object));
 	},
-
 	readObject:function(filename){
 		try {
 			var data = fs.readFileSync("./saves/"+filename);

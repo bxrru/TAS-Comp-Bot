@@ -24,6 +24,21 @@ function chooseChannel(string){
 
 module.exports = {
 
+	CommandInfo:function(){
+		var msg = "**CompBot** - Chat Module\n"
+    msg += "\n**Chat Commands:**\n"
+    msg += "\t**$listchannels** - lists recognized channel names (ls)\n"
+    msg += "\t**$addchannel** - Adds a channel name to the list\n"
+    msg += "\t**$removechannel** - Removes a channel name from the list\n"
+    msg += "\t**$send** - Sends a message to a specified channel\n"
+    msg += "\t**$delete** - Deletes a message\n"
+    msg += "\t**$pin** - Pins a message\n"
+    msg += "\t**$unpin** - Unpins a message\n"
+    msg += "\t**$dm** - Sends a message to a user\n"
+    msg += "\nType $help <command> for more info on a command."
+		return msg
+	},
+
 	// CHANNEL COMMANDS
 
 	// allow other modules to use this command
@@ -122,81 +137,4 @@ module.exports = {
 		return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ");
 	},
 
-	// following announcement commands will be moved to their own module later
-
-	announce:function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)) {return;}
-
-		var channel = chooseChannel(args.shift());
-
-		//bot.createMessage(channel, "test").then((m)=>{m.delete();});
-		//return;
-
-		var everyone;
-		// JANK get @everyone role
-		msg.channel.guild.roles.forEach((role) => {
-			if (role.id == "397082495423741953"){
-				everyone = role;
-			}
-		});
-
-		var now = new Date();
-
-		var hour = args.shift();
-		var min = (hour == "next") ? now.getMinutes()+1 : args.shift();
-
-		var delay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, min, 0, 0) - now;
-
-		if (delay < 0) {
-			hour = ('0'+hour).slice(-2);
-			min = ('0'+min).slice(-2);
-			var h = ('0' + now.getHours()).slice(-2);
-			var m = ('0' + now.getMinutes()).slice(-2);
-			var msg = "Time passed. `"+h+":"+m+"` > `"+hour+":"+min+"`"
-			console.log(msg);
-			return msg;
-		}
-
-		msg = "1 HOUR UNTIL TASK 12 DEADLINE! SUBMIT!!!1!";
-
-		for (var i = 0; i < args.length; i++){
-			if (args[i] == "`@everyone`"){
-				args[i] = "@everyone"; //everyone.mention;
-			}
-		}
-
-		if (args.length > 0){msg = args.join(" ");}
-
-		//msg = "16.5 HOURS UNTIL DEADLINE MAKE SURE TO SUBMIT!!\n\n(This message is an automated test thank you for continued support on the development of this bot)"
-
-		console.log(msg);
-
-		announcements.push(
-			setTimeout(function(){
-				bot.createMessage(channel, msg);
-				announcements.shift();
-			}, delay)
-		);
-		return "The following announcement will take place ``"+delay+"ms`` from now in channel ``"+channel+"``:```" + msg + "```";
-
-	},
-
-	clearAnnounce:function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)) {return;}
-		announcements.forEach((announcement) => {
-			clearTimeout(announcement);
-		});
-		return "Removed all planned announcements";
-	}
-
-
 }
-
-// this is sample code i might implement later
-/* Check if a user exists
-let guild = client.guilds.get('guild ID here'),
-  USER_ID = '123123123';
-
-if (guild.member(USER_ID)) {
-  // there is a GuildMember with that ID
-}*/

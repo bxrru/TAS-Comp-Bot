@@ -1,7 +1,7 @@
 const users = require("./users.js");
 const miscfuncs = require("./miscfuncs.js");
 const chat = require("./chatcommands.js");
-const SAVE = require("./save.js");
+const Save = require("./save.js");
 const fs = require("fs");
 const request = require("request");
 
@@ -44,6 +44,39 @@ function notifyHosts(bot, message){
 }
 
 module.exports = {
+
+	CommandInfo:function(){
+		var msg = "**CompBot** - Competition Module\n"
+
+		msg += "\n**Competition Commands:**\n"
+		msg += "\t**startsubmissions** - Starts accepting submissions\n"
+		msg += "\t**stopsubmissions** - Stops accepting submissions\n"
+		msg += "\t**clearsubmissions** - Deletes all submission files (WARNING: NO CONFIRMATION)\n"
+		msg += "\n"
+
+		msg += "\t**settask** - Sets the Task Number\n"
+		msg += "\t**setserver** - Sets the competition server\n"
+		msg += "\t**setsubmittedrole** - Sets the submitted role\n"
+		msg += "\t**setsubmissionfeed** - Sets the default channel to send the submissions list to\n"
+		msg += "\t**setsubmissionmessage** - Sets the message that shows the submissions list\n"
+		msg += "\t**addhost** - Sets a user to receive submission updates\n"
+		msg += "\t**removehost** - Stops a user from receiving submission updates\n"
+		msg += "\n"
+
+		msg += "\t**setname** - Change your name as seen in #current_submissions\n"
+		msg += "\t**lockname** - Disable a user from changing their submission name\n"
+		msg += "\t**unlockname** - Allow users to change their submission name\n"
+		msg += "\n"
+
+		msg += "\t**compinfo** - Shows module related information\n"
+		msg += "\t**getsubmission** - Get submitted files (get)\n"
+		msg += "\t**listsubmissions** - Shows the list of current submissions\n"
+		msg += "\t**status** - Check your submitted files\n"
+
+		msg += "\nType $help <command> for more info on a command."
+		return msg
+	},
+
 	getAllowSubmissions:function(){
 		return AllowSubmissions;
 	},
@@ -238,12 +271,12 @@ module.exports = {
 			num: Num_Submissions,
 			submissions: Submissions
 		}
-		SAVE.saveObject("submissions.json", data)
+		Save.saveObject("submissions.json", data)
 	},
 
 	// reads relevant information from submissions.json and stores it in memory
 	load:function(){
-		var data = SAVE.readObject("submissions.json")
+		var data = Save.readObject("submissions.json")
 		AllowSubmissions = data.acceptingSubmissions
 		Task = data.task
 		Guild = data.guild_id
@@ -328,7 +361,7 @@ module.exports = {
 		module.exports.forwardSubmission(bot, msg.author.id, filename)
 
 		// begin downloading the file
-		miscfuncs.downloadFromUrl(attachment.url, "./saves/" + filename)
+		Save.downloadFromUrl(attachment.url, "./saves/" + filename)
 
 		module.exports.uploadFile(bot, filename, attachment.size, msg)
 
@@ -344,7 +377,7 @@ module.exports = {
 			var filetype = "Savestate"
 			if (module.exports.isM64({filename:file.name})) filetype = "M64"
 
-			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check the status of your submission", file)
+			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check your submitted files", file)
 			var attachment = message.attachments[0]
 
 			// save the url and filesize in the submission
@@ -685,7 +718,7 @@ module.exports = {
 
 		if (!module.exports.hasSubmitted(user_id)) console.log("SOMETHING WENT WRONG: COULD NOT FORWARD SUBMISSION")
 		var submission = module.exports.getSubmission(user_id)
-		var result = submission.name + " (" + submission.number + ") updated file "
+		var result = submission.name + " (" + submission.number + ") updated a file "
 		if (module.exports.isM64({filename: filename})){
 			result += "(m64)"
 		} else {
