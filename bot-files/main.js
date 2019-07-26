@@ -192,10 +192,13 @@ addCommand("slots", game.slots, "Spin to win", "Chooses a number of random emoji
 // COMP MODULE //
 addCommand("comp", comp.CommandInfo, "List competition commands", comp.CommandInfo(), false)
 
-// start / stop / clear submissions
+// edit submissions
 addCommand("startSubmissions", comp.allowSubmissions, "Starts accepting submissions", "Starts accepting submissions via DMs", true)
 addCommand("stopSubmissions", comp.stopSubmissions, "Stops accepting submissions", "Stops accepting submissions via DMs", true)
 addCommand("clearSubmissions", comp.clearSubmissions, "Deletes all submission files (WARNING: NO CONFIRMATION)", "Removes the Submitted role from every user that has submitted. Deletes the message containing all the submissions and deletes all of the saved files **without a confirmation/warning upon using the command**", true)
+addCommand("addSubmission", comp.manuallyAddSubmission, "Adds a submission", "Usage: `$addsubmission <user_id>`\nAdds a submission with a name but no files. To add files use `$submitfile`. To remove a submission use `$deletesubmission`", true)
+addCommand("deleteSubmission", comp.removeSubmission, "Deletes a submission", "Usage: `$deletesubmission <Submission_Number>`\nTo see the list of Submission Numbers use `$listsubmissions", true)
+addCommand("submitFile", comp.setSubmissionFile, "Change a user's files", "Usage: `$submitfile <submission_number> <url>`\nSets the stored file to the url provided. The user will be notified that their files are changed.", true)
 
 // changing competition information
 addCommand("setTask", comp.setTask, "Sets the Task Number", "Usage: `$settask <Task_Number>`\nSets the task number that will be used when downloading competition files", true)
@@ -224,6 +227,12 @@ addCommand("status", comp.checkStatus, "Check your submitted files", "Tells you 
 //addCommand("ac", announce.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
 //addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
 
+addCommand("farenheit", miscfuncs.celciusToInferiorTemp, "Convert °C to °F", "Usage: `$farenheit <°C>`", true)
+addCommand("celcius", miscfuncs.inferiorTempToCelcius, "Convert °F to °C", "Usage: `$celcius <°F>`", true)
+addCommand("inches", miscfuncs.cmToInches, "Convert cm to inches", "Usage: `$inches <cm>`", true)
+addCommand("centimeters", miscfuncs.inchesToCm, "Convert inches to cm", "Usage: `$centimeters <inches>`", true)
+
+
 
 
 // Various Command Aliases (<Alias>, <Original_Command_Name>)
@@ -247,10 +256,12 @@ aliases = [
 	["stopSubmission","stopSubmissions"],
 	["clearAllSubmissions","clearSubmissions"],
 	["setRole","setSubmittedRole"],
-	["game", "games"]
-];
+	["game", "games"],
+	["removesubmission", "deleteSubmission"],
+	["cm", "centimeters"]
+]
 
-aliases.forEach((alias)=>(bot.registerCommandAlias(alias[0], alias[1])));
+aliases.forEach((alias)=>{bot.registerCommandAlias(alias[0], alias[1])});
 
 
 bot.connect();

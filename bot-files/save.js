@@ -1,13 +1,16 @@
 const fs = require("fs");
 const miscfuncs = require("./miscfuncs.js");
+const request = require("request");
 
 //function cfgchange(thingToChange
 function saveFile(filename, content){
-	miscfuncs.makeFolderIfNotExist("./saves/");
-	fs.writeFile("./saves/"+filename, content, function(err, data) {
-		if (err) console.log(err);
-		console.log("Successfully created " + filename);
-	});
+	module.exports.makeFolderIfNotExist("./saves/");
+	try {
+		fs.writeFileSync("./saves/"+filename, content)
+		console.log("Successfully created " + filename)
+	} catch (e) {
+		console.log("FAILED TO READ " + filename)
+	}
 }
 
 module.exports = {

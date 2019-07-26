@@ -1,7 +1,4 @@
-var request = require("request");
-var fs = require("fs");
 var users = require("./users.js");
-const path = require("path");
 
 module.exports = {
 	getDateTime:function() {
@@ -34,6 +31,30 @@ module.exports = {
 	},
 	ping:function(bot, msg){
 		return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)"
+	},
+	celciusToInferiorTemp:function(bot, msg, args){
+		if (args.length == 0) return "Not Enough Arguments: `<°C>`"
+		var C = parseFloat(args[0])
+		if (isNaN(C)) return "Input must be a number"
+		return (C * 9 / 5 + 32).toFixed(1) + "°F"
+	},
+	inferiorTempToCelcius:function(bot, msg, args){
+		if (args.length == 0) return "Not Enough Arguments: `<°F>`"
+		var F = parseFloat(args[0])
+		if (isNaN(F)) return "Input must be a number"
+		return ((F - 32) * 5 / 9).toFixed(1) + "°C"
+	},
+	cmToInches:function(bot, msg, args){
+		if (args.length == 0) return "Not Enough Arguments: `<cm>`"
+		var cm = parseFloat(args[0])
+		if (isNaN(cm)) return "Input must be a number"
+		return (cm / 2.54).toFixed(2) + '"'
+	},
+	inchesToCm:function(bot, msg, args){
+		if (args.length == 0) return "Not Enough Arguments: `<inches>`"
+		var I = parseFloat(args[0])
+		if (isNaN(I)) return "Input must be a number"
+		return (I * 2.54).toFixed(2) + "cm"
 	},
 	// COMMAND that adds a role to a user. Defaults to sender
 	addRole:async function(bot, msg, args){
