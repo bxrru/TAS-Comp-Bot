@@ -1,4 +1,5 @@
 var users = require("./users.js");
+var chat = require("./chatcommands.js")
 
 module.exports = {
 	getDateTime:function() {
@@ -24,7 +25,12 @@ module.exports = {
 		var hours = Math.floor(seconds / (60*60))
 		var minutes = Math.floor(seconds / 60) - hours * 60
 		var sec = (seconds - minutes*60 - hours*60*60).toFixed(3)
-		return pad(hours) + ':' + pad(minutes) + ':' + pad(sec)
+		var days = (hours - (hours%24)) / 24
+		var readable = `${days} ${days==1?'day':'days'}, `
+		readable += `${hours} ${hours==1?'hour':'hours'}, `
+		readable += `${minutes} ${minutes==1?'minute':'minutes'}, `
+		readable += `${sec} seconds`
+		return `${pad(hours)}:${pad(minutes)}:${pad(sec)} (${readable})`
 	},
 	hasCmdAccess:function(message){ // allow anyone to use commands in #bot and #tasbottests and #stream_stuff (for speed comp)
 		return users.hasCmdAccess(message.author) || ["554820730043367445","562818543494889491","488155410910543872"].includes(message.channel.id)
@@ -32,13 +38,13 @@ module.exports = {
 	ping:function(bot, msg){
 		return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)"
 	},
-	celciusToInferiorTemp:function(bot, msg, args){
+	celsiusToInferiorTemp:function(bot, msg, args){
 		if (args.length == 0) return "Not Enough Arguments: `<°C>`"
 		var C = parseFloat(args[0])
 		if (isNaN(C)) return "Input must be a number"
 		return (C * 9 / 5 + 32).toFixed(1) + "°F"
 	},
-	inferiorTempToCelcius:function(bot, msg, args){
+	inferiorTempToCelsius:function(bot, msg, args){
 		if (args.length == 0) return "Not Enough Arguments: `<°F>`"
 		var F = parseFloat(args[0])
 		if (isNaN(F)) return "Input must be a number"
@@ -57,13 +63,40 @@ module.exports = {
 		return (I * 2.54).toFixed(2) + "cm"
 	},
 	// COMMAND that adds a role to a user. Defaults to sender
-	addRole:async function(bot, msg, args){
+	addRole:function(bot, msg, args){
 		if (!module.exports.hasCmdAccess(msg)) return
 		if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
-		//if (args.length > 1)
+		var member = args[1] == undefined ? msg.member.id : args[1]
+		try {
+			msg.channel.guild.addMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
+			return `Gave user ${member} role ${args[0]}`
+		} catch (e) {
+			return "Failed to assign role```"+e+"```"
+		}
 	},
-	// COMMAND
+	// COMMAND removes a role from a user. Defaults to sender
 	removeRole:function(bot, msg, args){
-
+		if (!module.exports.hasCmdAccess(msg)) return
+		if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
+		var member = args[1] == undefined ? msg.member.id : args[1]
+		try {
+			msg.channel.guild.removeMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
+			return `Removed role ${args[0]} from user ${member}`
+		} catch (e) {
+			return "Failed to remove role```"+e+"```"
+		}
+	},
+	// COMMAND adds a reaction to a given message
+	addReaction:async function(bot, msg, args){
+		if (args.length < 3) return "Not Enough Arguments: <channel_id> <message_id> <emojis...>"
+		var channel = args.shift()
+		var message = args.shift()
+		for (var i = 0; i < args.length; i++){
+				if (args[i].includes(":")) args[i] = args[i].substr(2, args[i].length-3)
+		}
+		args.forEach(emoji => {
+			bot.addMessageReaction(chat.chooseChannel(channel), message, emoji)
+				.catch((e) => {return "Failed to add reaction```"+e+"```"})
+		})
 	}
 };

@@ -14,14 +14,14 @@ var SubmissionsChannel = "" //397096356985962508
 var Channel_ID = ""
 var Message_ID = ""
 var Num_Submissions = 0
-var Submissions = [] // {number, name, id, m64, m64_size, st, st_size, locked}
+var Submissions = [] // {number, name, id, m64, m64_size, st, st_size, namelocked, dq}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
 
 function SubmissionsToMessage(){
 	var message = "**__Current Submissions:__**\n\n";
 	if (Submissions.length == 0) message += "No Submissions (Yet)"
 	Submissions.forEach((player) => {
-		message += player.number + ". " + player.name + "\n";
+		message += player.dq ? "" : `${player.number}. ${player.name}\n`
 	});
 	return message
 }
@@ -194,7 +194,8 @@ module.exports = {
 			m64_size: m64_filesize,
 			st: st_url,
 			st_size: st_filesize,
-			locked: false
+			namelocked: false,
+			dq: false
 		}
 
 		Submissions.push(submission);
@@ -440,7 +441,7 @@ module.exports = {
 			return "You must submit files before changing your name"
 		}
 
-		if (module.exports.getSubmission(user_id).locked){
+		if (module.exports.getSubmission(user_id).namelocked){
 			return "Missing Permissions"
 		}
 
@@ -462,27 +463,33 @@ module.exports = {
 		}
 	},
 
-	// COMMAND to get all the relevant information about a submission
+	// COMMAND ($get) to get all the relevant information about a submission
 	// Specifying 'all' will return a script that can download every file
-	checkSubmission:function(bot, msg, args){
+	checkSubmission:async function(bot, msg, args){
 
 		if (notAllowed(msg)) return
 
-		if (args[0].toLowerCase() == "all"){
-			if (!miscfuncs.isDM(msg)) return "This command can only be called in DMs"
-			bot.createMessage(msg.channel.id, "Creating script...")
-			module.exports.getAllSubmissions(bot, msg.channel.id)
-			return
+		try {
+			if (Num_Submissions == 0) return "No submissions found"
+
+			var dm = await bot.getDMChannel(msg.author.id)
+			if (args[0].toLowerCase() == "all"){
+				bot.createMessage(dm.id, "Creating script...")
+				module.exports.getAllSubmissions(bot, msg.channel.id)
+				return
+			}
+
+			var num = parseInt(args[0])
+			if (isNaN(num) || num < 1 || num > Num_Submissions){
+				return "Submission number must be an integer between 1 and " + Num_Submissions + " inclusive"
+			}
+
+			var submission = Submissions[num - 1]
+			return `${num}. ${submission.name}\nID:: ${submission.id}\nm64: ${submission.m64}\nst: ${submission.st}`
+
+		} catch (e) {
+			return "Failed to send DM```"+e+"```"
 		}
-
-		var num = parseInt(args[0])
-		if (isNaN(num) || num < 1 || num > Num_Submissions){
-			return "Submission number must be between 1 and " + Num_Submissions + " inclusive"
-		}
-
-		var submission = Submissions[num - 1]
-
-		return num+". "+submission.name+"\nID: "+submission.id+"\n"+"m64: "+submission.m64+"\nst: "+submission.st
 
 	},
 
@@ -600,7 +607,7 @@ module.exports = {
 	// this is meant to parse every message and sort submissions
 	filterSubmissions:function(bot, msg){
 
-		if (AllowSubmissions && miscfuncs.isDM(msg)){
+		if (miscfuncs.isDM(msg) && AllowSubmissions && !users.isBanned(msg.author.id) && !module.exports.getSubmission(msg.author.id).dq){
 			msg.attachments.forEach(attachment => {
 				module.exports.filterFiles(bot, msg, attachment)
 			})
@@ -626,10 +633,10 @@ module.exports = {
 	info:async function(bot, msg, args){
 		if (notAllowed(msg)) return
 
-		var result = "Not accepting submissions\n"
-		if (AllowSubmissions) result = "Accepting submissions for **Task " + Task + "**\n"
+		var result = AllowSubmissions ? "Accepting submissions\n" : "Not accepting submissions\n"
+		result += `**Task** - ${Task}\n`
 
-		result += "**Server ID** - " + Guild + "\n"
+		result += `**Server ID** - ${Guild}\n`
 
 		result += "**Submitted Role ID** - "
 		if (SubmittedRole == "") {
@@ -667,7 +674,7 @@ module.exports = {
 		try {
 			var message = await bot.getMessage(Channel_ID, Message_ID)
 			result += "**Submissions Message URL** - https://discordapp.com/channels/"
-			result += message.channel.guild.id + "/" + message.channel.id + "/" + message.id
+			result += `${message.channel.guild.id}/${message.channel.id}/${message.id}`
 		} catch (e) {
 			result += "Invalid Current Submissions Message: Could not retrieve URL"
 			Channel_ID = ""
@@ -780,7 +787,7 @@ module.exports = {
 
 		if (args.length != 0) Submissions[num-1].name = args.join(" ")
 
-		Submissions[num-1].locked = true
+		Submissions[num-1].namelocked = true
 		module.exports.save()
 
 		module.exports.updateSubmissionMessage(bot)
@@ -800,7 +807,7 @@ module.exports = {
 			return "Submission number must be between 1 and " + Num_Submissions + " inclusive"
 		}
 
-		Submissions[num-1].locked = false
+		Submissions[num-1].namelocked = false
 		module.exports.save()
 
 		return "`$setname` privleges enabled for " + Submissions[num-1].name
@@ -948,5 +955,72 @@ module.exports = {
 
 		if (!updated) return "No Valid Attaachments or URLs Received"
 		*/
+	},
+
+
+	// COMMAND disqualifies a submission given a number
+	dq:async function(bot, msg, args){
+		if (notAllowed(msg)) return
+		if (Num_Submissions == 0) return "There are no submissions to edit"
+		if (args.length == 0) return "Not Enough Arguments: `<submission_number> [reason]`"
+
+		var num = parseInt(args.shift())
+		if (isNaN(num) || num < 1 || num > Num_Submissions){
+			return `Submission number must be between 1 and ${Num_Submissions} inclusive`
+		}
+
+		if (Submissions[num - 1].dq) return `${submission.name} has already been disqualified`
+
+		Submissions[num - 1].dq = true
+
+		var reason = args.length > 0 ? " for the following reason:```"+args.join(" ")+"```" : ". No reasoning provided"
+
+		try {
+			var dm = await bot.getDMChannel(Submissions[num - 1].id)
+			dm.createMessage(`Your Task ${Task} run has been disqualified. You are no longer allowed to submit to task ${Task}` + reason)
+			return `${Submissions[num - 1].name} has been disqualified`
+		} catch (e) {
+			return `${Submissions[num - 1].name} has been disqualified. Failed to notify user`
+		}
+
+	},
+
+	undq:async function(bot, msg, args){
+		if (notAllowed(msg)) return
+		if (Num_Submissions == 0) return "There are no submissions to edit"
+		if (args.length == 0) return "Not Enough Arguments: `<submission_number>`"
+
+		var num = parseInt(args.shift())
+		if (isNaN(num) || num < 1 || num > Num_Submissions){
+			return `Submission number must be between 1 and ${Num_Submissions} inclusive`
+		}
+
+		if (!Submissions[num - 1].dq) return `${submission.name} was not disqualified`
+
+		try {
+			var dm = await bot.getDMChannel(Submissions[num - 1].id)
+			dm.createMessage(`Your Task ${Task} run is no longer disqualified. You may now resubmit`)
+			return `${Submissions[num - 1].name} is no longer disqualified`
+		} catch (e) {
+			return `${Submissions[num - 1].name} is no longer disqualified. Failed to notify user`
+		}
+
+	},
+
+	// COMMAND to prevent someone from submitting
+	ban:async function(bot, msg, args){
+		if (notAllowed(msg)) return
+		if (args.length == 0) return "Not Enough Arguments: `<user_id>` [reason]"
+
+		users.addBan
+
+
+	},
+
+	// COMMAND to re-allow people to submit
+	unban:async function(bot, msg, args){
+		if (notAllowed(msg)) return
+
+
 	}
 };

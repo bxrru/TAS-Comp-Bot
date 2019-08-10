@@ -102,67 +102,17 @@ bot.on("messageReactionAdd", (msg, emoji) => {
 
 });
 
-bot.registerCommand("toggleReaction", (msg, args) => {
-	if (!miscfuncs.hasCmdAccess(msg)) {return;}
-
-	echoReactions = !echoReactions;
-	return echoReactions ? "Reactions enabled" : "Reactions disabled";
-
-},
-{
-	description: "Toggle auto reactions (tr)",
-	fullDescription: "Switches echoing reactions on/off",
-	hidden: false
-});
-
-bot.registerCommand("react", (msg, args) => {
-	if (args.length < 3) return "Not Enough Arguments: <channel> <message_id> <emoji>"
-	if (args[2].includes(":")) args[2] = args[2].substr(2, args[2].length-3)
-	bot.addMessageReaction(chat.chooseChannel(args[0]), args[1], args[2]).catch((err) => {return});
-},
-{
-	description: "React to a message (This is broken ?)",
-	hidden: true
-});
-
-
-bot.registerCommand("addrole", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)){
-		var member = msg.member.id;
-		if (args[1] != undefined){
-			member = args[1];
-		}
-		msg.channel.guild.addMemberRole(member, args[0], "He asked nicely")
-		return "Gave user " + member + " Role " + args[0];
-	}
-},
-{
-	description: "This message should not appear",
-	fullDescription: "Adds a role. Usage `$add <role_id> [member_id]`",
-	hidden: true
-});
-
-bot.registerCommand("removerole", (msg, args) => {
-	if (miscfuncs.hasCmdAccess(msg)){
-		var member = msg.member.id;
-		if (args[1] != undefined){
-			member = args[1];
-		}
-		msg.channel.guild.removeMemberRole(member, args[0], "He asked for it")
-		return "Removed Role "+args[0]+" from user " + member;
-	}
-},
-{
-	description: "This message should not appear",
-	fullDescription: "Removes a role. Usage ``$rm <role_id> [member_id]``",
-	hidden: true
-});
+// Specials //
+bot.registerCommand("toggleReaction", (msg, args) => {if (miscfuncs.hasCmdAccess(msg)) return (echoReactions = !echoReactions) ? "Reactions enabled" : "Reactions disabled"},{description: "Toggle auto reactions (tr)",fullDescription: "Switches echoing reactions on/off"})
+bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Edits #score", fullDescription: score.help()});
+bot.registerCommand("log", (msg, args) => {if (miscfuncs.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true});
 
 // MISC //
 addCommand("ping", miscfuncs.ping, "ping", "To check if the bot is not dead. Tells you time it takes to bait you in ms", false);
 addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false);
-bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Edits #score", fullDescription: score.help()});
-bot.registerCommand("log", (msg, args) => {if (miscfuncs.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true});
+addCommand("addrole", miscfuncs.addRole, "Gives a user a role", "Usage `$ar <role_id> [user_id]`\nuser_id defaults to the user that calls the command", true)
+addCommand("removerole", miscfuncs.removeRole, "Removes a role from a user", "Usage `$rr <role_id> [user_id]\nuser_id defaults to the user that calls the command", true)
+addCommand("addreaction", miscfuncs.addReaction, "Reacts to a message", "Usage `$react <channel_id> <message_id> <emojis...>`\nThis will reacat with multiple space separated emojis. For a list of channel names that can be used instead of `<channel_id>` use `$ls`", false)
 
 
 // CHAT MODULE //
@@ -209,10 +159,12 @@ addCommand("setSubmissionMessage", comp.setMessage, "Sets the message that shows
 addCommand("addHost", comp.addHost, "Sets a user to receive submission updates", "Usage: `$addhost <user_id>`\nThe selected user will receive DMs about new submissions, updated files, and errors such as failure to assign the submitted role. To see the curent list of hosts use `$compinfo`. To remove a user use `$removehost`", true)
 addCommand("removeHost", comp.removeHost, "Stops a user from receiving submission updates", "Usage: `removehost <user_id>`\nThe selected user will NO LONGER receive DMs about new submissions, updated files, and errors such as failure to assign the submitted role. To see the curent list of hosts use `$compinfo`. To add a user use `$addhost`", true)
 
-// naming submissions
+// edit users
 addCommand("setname", comp.setName, "Change your name as seen in #current_submissions", "Usage: `$setname <new name here>`\nSpaces and special characters are allowed. Moderators are able to remove access if this command is abused", false);
 addCommand("lockName", comp.lockName, "Disable a user from changing their submission name", "Usage: `$lockname <Submission_Number> [Name]`\nPrevents the user from changing their name and sets it to `[Name]`. If no name is specified it will remain the same. To see the list of Submission Numbers use `$listsubmissions`", true)
 addCommand("unlockName", comp.unlockName, "Allow users to change their submission name", "Usage: `$unlockname <Submission_Number>`\nAllows the user to change their submission name. To see the list of Submission Numbers use `$listsubmissions`", true)
+addCommand("disqualify", comp.dq, "DQ a user", "Usage: `$dq <submission_number> [reason]`\nThis prevents the user from resubmitting to the current task and excludes their name from #current_submissions. This will not remove their files. To see the list of Submission Numbers use `$listsubmissions`")
+addCommand("undoDisqualify", comp.undq, "", "Usage: `$undq <submission_number>`\nAllows the user to resubmit to the current task. To see the list of Submission Numbers use `$listsubmissions`")
 
 // competition information
 addCommand("compinfo", comp.info, "Shows module related information", "Shows current internal variables for the competition module", true)
@@ -227,11 +179,22 @@ addCommand("status", comp.checkStatus, "Check your submitted files", "Tells you 
 //addCommand("ac", announce.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
 //addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
 
-addCommand("farenheit", miscfuncs.celciusToInferiorTemp, "Convert °C to °F", "Usage: `$farenheit <°C>`", true)
-addCommand("celcius", miscfuncs.inferiorTempToCelcius, "Convert °F to °C", "Usage: `$celcius <°F>`", true)
+addCommand("fahrenheit", miscfuncs.celciusToInferiorTemp, "Convert °C to °F", "Usage: `$fahrenheit <°C>`", true)
+addCommand("celsius", miscfuncs.inferiorTempToCelcius, "Convert °F to °C", "Usage: `$celsius <°F>`", true)
 addCommand("inches", miscfuncs.cmToInches, "Convert cm to inches", "Usage: `$inches <cm>`", true)
-addCommand("centimeters", miscfuncs.inchesToCm, "Convert inches to cm", "Usage: `$centimeters <inches>`", true)
+addCommand("centimeters", miscfuncs.inchesToCm, "Convert inches to cm", "Usage: `$cm <inches>`", true)
 
+bot.registerCommand("restart", (msg, args) => {
+	if (!miscfuncs.hasCmdAccess(msg)) return
+	bot.createMessage(msg.channel, "Restarting :wave:")
+	process.exit(42) // this can be any unique code in the exclusive range (12, 128)
+},
+{
+	description: "",
+	fullDescription: "Usage: ``$``",
+	hidden: true,
+	caseInsensitive: true
+});
 
 
 
@@ -258,7 +221,13 @@ aliases = [
 	["setRole","setSubmittedRole"],
 	["game", "games"],
 	["removesubmission", "deleteSubmission"],
-	["cm", "centimeters"]
+	["cm", "centimeters"],
+	["celcius", "celsius"],
+	["farenheit", "fahrenheit"],
+	["ar", "addrole"],
+	["rr", "removerole"],
+	["react", "addreaction"],
+	["addreactions", "addreaction"]
 ]
 
 aliases.forEach((alias)=>{bot.registerCommandAlias(alias[0], alias[1])});
@@ -268,7 +237,7 @@ bot.connect();
 
 /* Command Template
 bot.registerCommand("", (msg, args) => {
-	if (!miscfuncs.hasCmdAccess(msg)) {return;}
+	if (!miscfuncs.hasCmdAccess(msg)) return
 
 	// Code here:
 

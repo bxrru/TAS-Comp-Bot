@@ -92,11 +92,7 @@ module.exports = {
 		}
 
 		bot.createMessage(msg.channel.id, result);
-		if (win){
-			bot.createMessage(msg.channel.id, "WINNER!");
-		} else {
-			bot.createMessage(msg.channel.id, "Please Play Again");
-		}
+	  bot.createMessage(msg.channel.id, win ? "WINNER!" : "Please Play Again");
 
   },
 

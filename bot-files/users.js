@@ -1,4 +1,6 @@
 const fs = require("fs");
+const Save = require("./save.js")
+Bans = []
 
 module.exports = {
 	hasCmdAccess:function(author) {
@@ -17,13 +19,20 @@ module.exports = {
   			console.log("added member " + id);
 		});
 	},
-	// TODO test
-	addBan:function(usernameAndTag) {
+	addBanDep:function(usernameAndTag) {
 		fs.appendFile("./bot-files/users/comp_banned.txt", "\n" + usernameAndTag, function (err) {
 			if (err)
 				console.log(err);
   			console.log("banned member " + usernameAndTag);
 		});
+	},
+	addBan:function(user_id){
+		Bans.push(user_id)
+		Save.saveObject("bans.json", Bans)
+	},
+	isBanned:function(user_id){
+		Bans = Save.readObject("bans.json")
+		return Bans.includes(user_id)
 	},
 	getUserCallback:function(bot, ID, callback){
 		bot.getDMChannel(ID).then((dm) => {
