@@ -196,7 +196,7 @@ bot.registerCommand("restart", (msg, args) => {
 	caseInsensitive: true
 });
 
-
+addCommand("NewCMD", function(){return "Update Test"}, "", "", false)
 
 // Various Command Aliases (<Alias>, <Original_Command_Name>)
 aliases = [
