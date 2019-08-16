@@ -5,7 +5,7 @@ var setLength = 5;
 var ResultsChannel = "";
 var ScoreChannel = "";
 
-const miscfuncs = require("./miscfuncs.js");
+const users = require("./users.js");
 const SAVE = require("./save.js");
 
 module.exports = {
@@ -664,7 +664,7 @@ module.exports = {
     }
 
     // allow people to calculate scores and find themselves
-    if (["FIND","CALCULATE"].includes(action) || miscfuncs.hasCmdAccess(msg)){
+    if (["FIND","CALCULATE"].includes(action) || users.hasCmdAccess(msg)){
 
       var params = [];
 
@@ -767,7 +767,7 @@ module.exports = {
       this.save();
     }
   },
-
+  
   help:function(command){
     var msg = "";
     msg += "Usage: ``$score <action> <args...>``\n";

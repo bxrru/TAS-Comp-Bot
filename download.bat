@@ -1,7 +1,0 @@
-md "Task 3"
-cd "Task 3"
-md "ERGCXander"
-cd "ERGCXander"
-powershell -Command "Invoke-WebRequest  -OutFile TASCompetitionTask3ByERGCXander.m64"
-powershell -Command "Invoke-WebRequest  -OutFile TASCompetitionTask3ByERGCXander.st"
-cd ".."

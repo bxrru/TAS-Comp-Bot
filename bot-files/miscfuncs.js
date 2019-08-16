@@ -32,9 +32,6 @@ module.exports = {
 		readable += `${sec} seconds`
 		return `${pad(hours)}:${pad(minutes)}:${pad(sec)} (${readable})`
 	},
-	hasCmdAccess:function(message){ // allow anyone to use commands in #bot and #tasbottests and #stream_stuff (for speed comp)
-		return users.hasCmdAccess(message.author) || ["554820730043367445","562818543494889491","488155410910543872"].includes(message.channel.id)
-	},
 	ping:function(bot, msg){
 		return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)"
 	},
@@ -64,7 +61,7 @@ module.exports = {
 	},
 	// COMMAND that adds a role to a user. Defaults to sender
 	addRole:function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+		if (!users.hasCmdAccess(msg)) return
 		if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
 		var member = args[1] == undefined ? msg.member.id : args[1]
 		try {
@@ -76,7 +73,7 @@ module.exports = {
 	},
 	// COMMAND removes a role from a user. Defaults to sender
 	removeRole:function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+		if (!users.hasCmdAccess(msg)) return
 		if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
 		var member = args[1] == undefined ? msg.member.id : args[1]
 		try {
@@ -98,5 +95,11 @@ module.exports = {
 			bot.addMessageReaction(chat.chooseChannel(channel), message, emoji)
 				.catch((e) => {return "Failed to add reaction```"+e+"```"})
 		})
+	},
+	mentionChannel:function(channel_id){
+		return `<#${channel_id}>`
+	},
+	mentionUser:function(user_id){
+		return `<@${user_id}>`
 	}
 };

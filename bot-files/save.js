@@ -7,9 +7,8 @@ function saveFile(filename, content){
 	module.exports.makeFolderIfNotExist("./saves/");
 	try {
 		fs.writeFileSync("./saves/"+filename, content)
-		console.log("Successfully created " + filename)
 	} catch (e) {
-		console.log("FAILED TO READ " + filename)
+		console.log("FAILED TO LOAD " + filename)
 	}
 }
 
@@ -31,11 +30,10 @@ module.exports = {
 		try {
 			var data = fs.readFileSync("./saves/"+filename);
 			var obj = JSON.parse(data);
-			console.log("Successfully read "+filename);
 			return obj
 		} catch (err) {
-			console.log("Could not read file " + filename, err);
-			return {};
+			console.log("Could not read file " + filename);
+			return null;
 		}
 	}
 

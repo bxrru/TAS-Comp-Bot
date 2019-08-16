@@ -1,4 +1,4 @@
-const miscfuncs = require("./miscfuncs.js");
+const users = require("./users.js");
 const save = require("./save.js");
 var announcements = [];
 var ac_1_default = ""
@@ -47,7 +47,7 @@ module.exports = {
 	},
 
   addChannelAlias:function(bot, msg, args){
-    if (!miscfuncs.hasCmdAccess(msg)) {return;}
+    if (!users.hasCmdAccess(msg)) {return;}
 
     CHANNELS[args[0].toUpperCase()] = args[1];
 		save.saveObject("channels.json", CHANNELS);
@@ -57,7 +57,7 @@ module.exports = {
   },
 
   removeChannelAlias:function(bot, msg, args){
-    if (!miscfuncs.hasCmdAccess(msg)) {return;}
+    if (!users.hasCmdAccess(msg)) {return;}
 
     delete CHANNELS[args[0].toUpperCase()];
 		save.saveObject("channels.json", CHANNELS);
@@ -67,7 +67,7 @@ module.exports = {
   },
 
   getChannelAliases:function(bot, msg, args){
-    if (!miscfuncs.hasCmdAccess(msg)) {return;}
+    if (!users.hasCmdAccess(msg)) {return;}
 
     var channels = "```";
     for (var key in CHANNELS){
@@ -88,7 +88,7 @@ module.exports = {
 	// CHAT COMMANDS
 
 	send:function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){return;}
+		if (!users.hasCmdAccess(msg)){return;}
 
 		var channel = args.shift();
 		bot.createMessage(chooseChannel(channel), args.join(" ")).catch((e) => {return e.toString();});
@@ -96,7 +96,7 @@ module.exports = {
 	},
 
 	delete:function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){return;}
+		if (!users.hasCmdAccess(msg)){return;}
 
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.delete();
@@ -105,7 +105,7 @@ module.exports = {
 	},
 
 	pin:function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){returm;}
+		if (!users.hasCmdAccess(msg)){returm;}
 
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.pin();
@@ -114,7 +114,7 @@ module.exports = {
 	},
 
 	unpin:function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)){returm;}
+		if (!users.hasCmdAccess(msg)){returm;}
 
 		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
 			msg.unpin();
@@ -123,7 +123,7 @@ module.exports = {
 	},
 
 	dm:async function(bot, msg, args){
-		if (!miscfuncs.hasCmdAccess(msg)) {return;}
+		if (!users.hasCmdAccess(msg)) {return;}
 
 		var user_id = args.shift();
 

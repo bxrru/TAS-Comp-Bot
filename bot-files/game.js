@@ -1,5 +1,6 @@
-const miscfuncs = require("./miscfuncs.js");
-const Save = require("./save.js");
+const users = require("./users.js")
+const miscfuncs = require("./miscfuncs.js")
+const Save = require("./save.js")
 
 var DisabledServers = [];
 
@@ -31,7 +32,7 @@ module.exports = {
   },
 
   toggle:function(bot, msg, args){
-    if (!miscfuncs.hasCmdAccess(msg)){return;}
+    if (!users.hasCmdAccess(msg)) return
 
     for (var i = 0; i<DisabledServers.length; i++){
       if (DisabledServers[i] == msg.channel.guild.id){

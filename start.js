@@ -1,8 +1,37 @@
 const cp = require('child_process')
+const fs = require('fs')
 var bar = "\n====================================================\n"
 var AllowUpdates = true
 var Started = false
 var CompBot
+
+// Helper function
+var deleteFolderRecursive = function(path) {
+  if (!fs.existsSync(path)) return // if it doesnt exist, end
+  fs.readdirSync(path).forEach(function(file,index) { // loop through each subfile
+    var filepath = `${path}/${file}`
+    if (fs.lstatSync(filepath).isDirectory()) {
+      deleteFolderRecursive(filepath) // recusive call
+    } else {
+      fs.unlinkSync(filepath) // delete file
+    }
+  })
+  fs.rmdirSync(path) // delete directory
+}
+
+// Helper function
+var copyFolderRecursive = function(path, destination) {
+  if (!fs.existsSync(path)) return
+  if (!fs.existsSync(destination)) fs.mkdirSync(destination) // create destination folder if none exists
+  fs.readdirSync(path).forEach(file => {
+    var filepath = `${path}/${file}`
+    if (fs.lstatSync(filepath).isDirectory()) {
+      copyFolderRecursive(filepath, `${destination}/${file}`) // copy files in the subfolder
+    } else {
+      fs.copyFileSync(filepath, `${destination}/${file}`) // copy file
+    }
+  })
+}
 
 var updateFiles = function() {
 
@@ -20,48 +49,24 @@ var updateFiles = function() {
   try {
 
     // download new files
+    deleteFolderRecursive('./TAS-Comp-Bot') // just incase it's leftover
     cp.execSync(`git clone "https://${username}:${password}@github.com/Barryyyyyy/TAS-Comp-Bot"`)
 
     // delete old files
-    var deleteFolderRecursive = function(path){
-      if (!fs.existsSync(path)) return // if it doesnt exist, end
-      fs.readdirSync(path).forEach(function(file,index) { // loop through each subfile
-        var filepath = `${path}/${file}`
-        if (fs.lstatSync(filepath).isDirectory()) {
-          deleteFolderRecursive(filepath) // recusive call
-        } else {
-          fs.unlinkSync(filepath) // delete file
-        }
-      })
-      fs.rmdirSync(path)
-    }
-
     deleteFolderRecursive('./bot-files/')
 
     // copy new files
-    var copyFolderRecursive = function(path, destination){
-      if (!fs.existsSync(path)) return
-      if (!fs.existsSync(destination)) fs.mkdirSync(destination) // create destination folder if none exists
-      fs.readdirSync(path).forEach(file => {
-        var filepath = `${path}/${file}`
-        if (fs.lstatSync(filepath).isDirectory()) {
-          copyFolderRecursive(filepath, `${destination}/${file}`) // copy files in the subfolder
-        } else {
-          fs.copyFileSync(filepath, `${destination}/${file}`) // copy file
-        }
-      })
-    }
-
     copyFolderRecursive('./TAS-Comp-Bot/bot-files/', './bot-files/')
 
     // delete temp download
     deleteFolderRecursive('./TAS-Comp-Bot/')
 
-    start()
-
   } catch (e) {
     AllowUpdates = false
     console.log("UPDATE FAILED. Updates disabled", e)
+
+  } finally {
+    start()
   }
 
 }
@@ -76,7 +81,7 @@ var start = function() {
     if (error) {
       Started = false
       console.error(`Error: ${error}`)
-      console.log("Press any key to restart bot...")
+      console.log("Press Enter to restart bot...")
     }
   });
 
@@ -85,11 +90,11 @@ var start = function() {
 
   // State exit code & update bot-files on custom exit code
   CompBot.on('close', (number, signal) => {
-    console.log(`Exit Code: ${number}`)
+    console.log(`Exit Code: ${number}` + number == 42 ? ` UPDATING` : ` (No Update)`)
     Started = false
     if (number == 42) {
       updateFiles()
-    } else {
+    } else if (number == 0 || number == 69){
       start() // keep the bot alive
     }
   })
