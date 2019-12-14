@@ -41,76 +41,93 @@ module.exports = {
 	},
 
 	// COMMAND returns a list of names with IDs and channel mentions that have command access
-	listAccessCMD:async function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+	listAccessCMD:{
+		name: "listAccess",
+		short_descrip: "List the users and channels with command access",
+		full_descrip: "Every command may be used by the people listed and from the channels listed. To give access or remove it use `$addCmdAccess` or `$removeCmdAccess` respectively",
+		hidden: true,
+		function: async function(bot, msg, args){
+			if (!module.exports.hasCmdAccess(msg)) return
 
-		var result = `**Users:**\n`
-		for (const id of Admin.users) {
-			var user = await module.exports.getUser(bot, id)
-			result += `${user.username} \`(${id})\`\n`
+			var result = `**Users:**\n`
+			for (const id of Admin.users) {
+				var user = await module.exports.getUser(bot, id)
+				result += `${user.username} \`(${id})\`\n`
+			}
+
+			result += "**Channels:**\n"
+			Admin.channels.forEach(id => {
+				result += `<#${id}>\n`
+			})
+
+			return result
 		}
-
-		result += "**Channels:**\n"
-		Admin.channels.forEach(id => {
-			result += `<#${id}>\n`
-		})
-
-		return result
 	},
 
 	// COMMAND allows a user or every message from a channel to use every commands
-	addCmdAccessCMD:function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+	addCmdAccessCMD:{
+		name: "addCommandAccess",
+		short_descrip: "Gives permissions to use commands",
+		full_descrip: "Usage: `$addCmdAccess [@user, #channel...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!module.exports.hasCmdAccess(msg)) return
 
-		if (args.length && !msg.channelMentions.length && !msg.mentions.length)
-			return "Incorrect Usage: `$addCmdAccess [@user, #channel...]`"
+			if (args.length && !msg.channelMentions.length && !msg.mentions.length)
+				return "Incorrect Usage: `$addCmdAccess [@user, #channel...]`"
 
-		var result = `Command access given to: `
+			var result = `Command access given to: `
 
-		if (args.length == 0){ // add current channel
-			module.exports.addCmdAccessChannel(msg.channel.id)
-			result += `<#${msg.channel.id}> `
+			if (args.length == 0){ // add current channel
+				module.exports.addCmdAccessChannel(msg.channel.id)
+				result += `<#${msg.channel.id}> `
+			}
+
+			msg.channelMentions.forEach(id => {
+				module.exports.addCmdAccessChannel(msg.channel.id)
+				result += `<#${id}> `
+			})
+
+			msg.mentions.forEach(user => {
+				module.exports.addCmdAccessUser(user.id)
+				result += `<@${user.id}> `
+			})
+
+			return result
 		}
-
-		msg.channelMentions.forEach(id => {
-			module.exports.addCmdAccessChannel(msg.channel.id)
-			result += `<#${id}> `
-		})
-
-		msg.mentions.forEach(user => {
-			module.exports.addCmdAccessUser(user.id)
-			result += `<@${user.id}> `
-		})
-
-		return result
-
 	},
 
 	// COMMAND that removes a user's or channel's access to every command
-	removeCmdAccessCMD:function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+	removeCmdAccessCMD:{
+		name: "removeCommandAccess",
+		short_descrip: "Removes permissions to use commands",
+		full_descrip: "Usage: `$removeCmdAccess [@user, #channel...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!module.exports.hasCmdAccess(msg)) return
 
-		if (args.length && !msg.channelMentions.length && !msg.mentions.length)
-			return "Incorrect Usage: `$addCmdAccess [@user, #channel...]`"
+			if (args.length && !msg.channelMentions.length && !msg.mentions.length)
+				return "Incorrect Usage: `$addCmdAccess [@user, #channel...]`"
 
-		var result = `Command access removed from: `
+			var result = `Command access removed from: `
 
-		if (args.length == 0){ // add current channel
-			module.exports.removeCmdAccessChannel(msg.channel.id)
-			result += `<#${msg.channel.id}> `
+			if (args.length == 0){ // add current channel
+				module.exports.removeCmdAccessChannel(msg.channel.id)
+				result += `<#${msg.channel.id}> `
+			}
+
+			msg.channelMentions.forEach(id => {
+				module.exports.removeCmdAccessChannel(msg.channel.id)
+				result += `<#${id}> `
+			})
+
+			msg.mentions.forEach(user => {
+				module.exports.removeCmdAccessUser(user.id)
+				result += `<@${user.id}> `
+			})
+
+			return result
 		}
-
-		msg.channelMentions.forEach(id => {
-			module.exports.removeCmdAccessChannel(msg.channel.id)
-			result += `<#${id}> `
-		})
-
-		msg.mentions.forEach(user => {
-			module.exports.removeCmdAccessUser(user.id)
-			result += `<@${user.id}> `
-		})
-
-		return result
 	},
 
 	getUser:async function(bot, user_id){
@@ -140,75 +157,91 @@ module.exports = {
 	},
 
 	// COMMAND shows the current list of banned users with their ids
-	listBansCMD:async function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
-		if (Bans.length == 0) return "There are no banned users"
-		var message = "Banned Users:\n"
-		for (const id of Bans){
-			var user = await module.exports.getUser(bot, id)
-			message += user == null ? `NULL \`(${id})\`\n` : `${user.username} \`(${id})\`\n` //
+	listBansCMD:{
+		name: "listBans",
+		short_descrip: "List the banned users",
+		full_descrip: "Users listed are not allowed to submit to the competition. To add a ban or remove one use `$ban` or `$unban` respectively",
+		hidden: true,
+		function: async function(bot, msg, args){
+			if (!module.exports.hasCmdAccess(msg)) return
+			if (Bans.length == 0) return "There are no banned users"
+			var message = "Banned Users:\n"
+			for (const id of Bans){
+				var user = await module.exports.getUser(bot, id)
+				message += user == null ? `NULL \`(${id})\`\n` : `${user.username} \`(${id})\`\n` //
+			}
+			return message
 		}
-		return message
 	},
 
 	// COMMAND bans a user from the competition. DMs them if possible
-	BanCMD:async function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+	BanCMD:{
+		name: "ban",
+		short_descrip: "Bans a user",
+		full_descrip: "Usage: `$ban <@user or user_id> [reason]`\nPrevents the user from submitting to the competition. This will DM the user being banned. To see the current list of banned users use `$listbans`",
+		hidden: true, custom: true,
+		function: async function(bot, msg, args){
+			if (!module.exports.hasCmdAccess(msg)) return
 
-		if (args.length == 0) return "Not Enough Arguments: `<user_id or @user> [reason]`>"
+			if (args.length == 0) return "Not Enough Arguments: `<user_id or @user> [reason]`>"
 
-		// use mention if the message contains one
-		var id = msg.mentions.length ? msg.mentions[0].id : args[0]
+			// use mention if the message contains one
+			var id = msg.mentions.length ? msg.mentions[0].id : args[0]
 
-		// if the mention isnt the first argument, assume the first argument is the id
-		// this is in case an @mention is used in the reason
-		if (msg.mentions.length && `<@${id}}>` == args[0]) id = args[0]
+			// if the mention isnt the first argument, assume the first argument is the id
+			// this is in case an @mention is used in the reason
+			if (msg.mentions.length && `<@${id}}>` == args[0]) id = args[0]
 
-		var user = await module.exports.getUser(bot, id)
-		if (user == null) return `User ID \`${id}\` Not Recognized`
+			var user = await module.exports.getUser(bot, id)
+			if (user == null) return `User ID \`${id}\` Not Recognized`
 
-		if (Bans.includes(id)) return `${user.username} \`(${id})\` is already banned`
-		module.exports.addBan(id)
+			if (Bans.includes(id)) return `${user.username} \`(${id})\` is already banned`
+			module.exports.addBan(id)
 
-		args.shift()
-		var reason = args.length ? "Provided Reason: " + args.join(" ") : "No reason has been provided"
+			args.shift()
+			var reason = args.length ? "Provided Reason: " + args.join(" ") : "No reason has been provided"
 
-		var result = `${user.username} \`(${id})\` has been banned from the competition. `
-		try {
-			var dm = await bot.getDMChannel(id)
-			dm.createMessage(`You have been banned from the TAS Competition. Submissions you send in will no longer be accepted. ${reason}`)
-		} catch (e) {
-			result += `Failed to notify user. `
+			var result = `${user.username} \`(${id})\` has been banned from the competition. `
+			try {
+				var dm = await bot.getDMChannel(id)
+				dm.createMessage(`You have been banned from the TAS Competition. Submissions you send in will no longer be accepted. ${reason}`)
+			} catch (e) {
+				result += `Failed to notify user. `
 
-		} finally {
-			return `${result}[banned by ${msg.author.username}]`
+			} finally {
+				return `${result}[banned by ${msg.author.username}]`
+			}
 		}
-
 	},
 
 	// COMMAND
-	unbanCMD:async function(bot, msg, args){
-		if (!module.exports.hasCmdAccess(msg)) return
+	unbanCMD:{
+		name: "unban",
+		short_descrip: "Unbans a user",
+		full_descrip: "Usage: `$ban <@user or user_id> [reason]`\nLift a ban and allow the user to submit to the competition again. This will DM the user being unbanned. To see the current list of banned users use `$listbans`",
+		hidden: true, custom: true,
+		function: async function(bot, msg, args){
+			if (!module.exports.hasCmdAccess(msg)) return
 
-		if (args.length == 0) return "Not Enough Arguments: `<user_id or @user>`>"
+			if (args.length == 0) return "Not Enough Arguments: `<user_id or @user>`>"
 
-		var id = msg.mentions.length ? msg.mentions[0].id : args[0]
+			var id = msg.mentions.length ? msg.mentions[0].id : args[0]
 
-		var user = await module.exports.getUser(bot, id)
-		if (user == null) return `User ID \`${id}\` Not Recognized`
-		module.exports.removeBan(id)
+			var user = await module.exports.getUser(bot, id)
+			if (user == null) return `User ID \`${id}\` Not Recognized`
+			module.exports.removeBan(id)
 
-		var result = `${user.username} \`(${id})\` has been unbanned from the competition. `
-		try {
-			var dm = await bot.getDMChannel(id)
-			dm.createMessage(`You are no longer banned from the TAS Competition. Submissions you send in will now be accepted`)
-		} catch (e) {
-			result +=  `Failed to notify user. `
+			var result = `${user.username} \`(${id})\` has been unbanned from the competition. `
+			try {
+				var dm = await bot.getDMChannel(id)
+				dm.createMessage(`You are no longer banned from the TAS Competition. Submissions you send in will now be accepted`)
+			} catch (e) {
+				result +=  `Failed to notify user. `
 
-		} finally {
-			return `${result}[unbanned by ${msg.author.username}]`
+			} finally {
+				return `${result}[unbanned by ${msg.author.username}]`
+			}
 		}
-
 	},
 
 	commandInfo:function(){

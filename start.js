@@ -5,6 +5,10 @@ var AllowUpdates = true
 var Started = false
 var CompBot
 
+const info = require('./SETUP-INFO.js')
+var username = info.Git_Username
+var password = info.Git_Password
+
 // Helper function
 var deleteFolderRecursive = function(path) {
   if (!fs.existsSync(path)) return // if it doesnt exist, end
@@ -37,15 +41,6 @@ var updateFiles = function() {
 
   if (!AllowUpdates) return
 
-  var username = ''
-  var password = ''
-
-  if (username == '' || password == '') {
-    AllowUpdates = false
-    console.log(`${bar}WARNING: No username or password entered. Updates Disabled${bar}`)
-    return
-  }
-
   try {
 
     // download new files
@@ -74,10 +69,16 @@ var updateFiles = function() {
 var start = function() {
 
   if (Started) return
+
+  if (info.Bot_Token == ''){
+    console.log(`${bar}No Bot Token found in SETUP-INFO.js\nUnable to start bot${bar}`)
+    return
+  }
+
   console.log("Starting Bot...")
   Started = true
 
-  var CompBot = cp.exec('node ./bot-files/main.js', (error, stdout, stderr) => {
+  var CompBot = cp.exec(`node ./bot-files/main.js ${info.Bot_Token}`, (error, stdout, stderr) => {
     if (error) {
       Started = false
       console.error(`Error: ${error}`)
@@ -105,7 +106,13 @@ var start = function() {
 var gitTest = function(){
   try {
     var git = cp.execSync('git --version')
-    console.log("git installed. Auto-updates enabled")
+    if (username == '' || password == '') {
+      AllowUpdates = false
+      console.log(`${bar}WARNING: No username or password entered. Updates Disabled${bar}`)
+      return
+    } else {
+      console.log("git installed. Auto-updates enabled")
+    }
   } catch (e) {
     AllowUpdates = false
     console.log(`${bar}WARNING: git is not installed. Auto-updates disabled${bar}`)

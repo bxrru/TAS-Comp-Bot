@@ -46,35 +46,50 @@ module.exports = {
 		return chooseChannel(string)
 	},
 
-  addChannelAlias:function(bot, msg, args){
-    if (!users.hasCmdAccess(msg)) {return;}
+  addChannelAlias:{
+		name:"addChannel",
+		short_descrip: "Adds a channel name to the list",
+		full_descrip: "Usage: `$addChannel <alias> <channel_id>`\nAllows `<alais>` to be specified in place of `<channel_id>` for other commands.",
+		hidden: true,
+		function: function(bot, msg, args){
+	    if (!users.hasCmdAccess(msg)) return
 
-    CHANNELS[args[0].toUpperCase()] = args[1];
-		save.saveObject("channels.json", CHANNELS);
+	    CHANNELS[args[0].toUpperCase()] = args[1]
+			save.saveObject("channels.json", CHANNELS)
 
-    return "Alias ``"+args[0].toUpperCase()+"`` added for channel ``"+args[1]+"``";
-
+	    return "Alias ``"+args[0].toUpperCase()+"`` added for channel ``"+args[1]+"``"
+		}
   },
 
-  removeChannelAlias:function(bot, msg, args){
-    if (!users.hasCmdAccess(msg)) {return;}
+  removeChannelAlias:{
+		name: "removeChannel",
+		short_descrip: "Removes a channel name from the list",
+		full_descrip: "Usage: `$removeChannel <alias>`",
+		hidden: true,
+		function: function(bot, msg, args){
+	    if (!users.hasCmdAccess(msg)) return
 
-    delete CHANNELS[args[0].toUpperCase()];
-		save.saveObject("channels.json", CHANNELS);
+	    delete CHANNELS[args[0].toUpperCase()]
+			save.saveObject("channels.json", CHANNELS)
 
-    return "Alias ``"+args[0].toUpperCase()+"`` Removed";
-
+	    return "Alias ``"+args[0].toUpperCase()+"`` Removed"
+		}
   },
 
-  getChannelAliases:function(bot, msg, args){
-    if (!users.hasCmdAccess(msg)) {return;}
+  getChannelAliases:{
+		name:"ls",
+		short_descrip:"Lists recognized channel names",
+		full_descrip:"Retrieves the list of channel aliases that may replace `<channel_id>` in other commands",
+		hidden:true,
+		function: function(bot, msg, args){
+	    if (!users.hasCmdAccess(msg)) return
 
-    var channels = "```";
-    for (var key in CHANNELS){
-      channels += key + ": " + CHANNELS[key] + "\n";
-    }
-    return channels+"```";
-
+	    var channels = "```"
+	    for (var key in CHANNELS){
+	      channels += `${key}: ${CHANNELS[key]}\n`
+	    }
+	    return channels+"```"
+		}
   },
 
 	loadChannels:function(){
@@ -87,54 +102,80 @@ module.exports = {
 
 	// CHAT COMMANDS
 
-	send:function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)){return;}
+	send:{
+		name: "send",
+		short_descrip: "Sends a message to a specified channel",
+		full_descrip: "Usage: `$send <channel_id> <message>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
 
-		var channel = args.shift();
-		bot.createMessage(chooseChannel(channel), args.join(" ")).catch((e) => {return e.toString();});
-
-	},
-
-	delete:function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)){return;}
-
-		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
-			msg.delete();
-		}).catch((e) => {return e.toString();});
-
-	},
-
-	pin:function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)){returm;}
-
-		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
-			msg.pin();
-		}).catch((e) => {return e.toString();});
-
-	},
-
-	unpin:function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)){returm;}
-
-		bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
-			msg.unpin();
-		}).catch((e) => {return e.toString();});
-
-	},
-
-	dm:async function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)) {return;}
-
-		var user_id = args.shift();
-
-		if (args.length == 0){
-			return "Cannot send empty message";
+			var channel = args.shift()
+			bot.createMessage(chooseChannel(channel), args.join(" ")).catch((e) => {return e.toString()})
 		}
+	},
 
-		let dm = await bot.getDMChannel(user_id).catch((e) => {return "DM Failed ``"+e+"``";});
-		dm.createMessage(args.join(" "));
+	delete:{
+		name: "delete",
+		short_descrip: "Deletes a message",
+		full_descrip: "Usage: `$delete <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
 
-		return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ");
+			bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
+				msg.delete()
+			}).catch((e) => {return e.toString()})
+		}
+	},
+
+	pin:{
+		name: "pin",
+		short_descrip: "Pins a message",
+		full_descrip: "Usage: `$pin <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+
+			bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
+				msg.pin()
+			}).catch((e) => {return e.toString();})
+		}
+	},
+
+	unpin:{
+		name: "unpin",
+		short_descrip: "Unpins a message",
+		full_descrip: "Usage: `$unpin <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+
+			bot.getMessage(chooseChannel(args[0]), args[1]).then((msg) => {
+				msg.unpin()
+			}).catch((e) => {return e.toString();})
+		}
+	},
+
+	dm:{
+		name: "dm",
+		short_descrip: "Sends a message to a user",
+		full_descrip: "Usage: `$dm <user_id> <message...>`\nThe message may contain spaces",
+		hidden: true,
+		function: async function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+
+			var user_id = args.shift()
+
+			if (args.length == 0){
+				return "Cannot send empty message"
+			}
+
+			let dm = await bot.getDMChannel(user_id).catch((e) => {return "DM Failed ``"+e+"``";})
+			dm.createMessage(args.join(" "))
+
+			return "[Bot -> "+dm.recipient.username+"]: "+args.join(" ")
+		}
 	},
 
 }

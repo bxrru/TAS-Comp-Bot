@@ -1,14 +1,23 @@
-var Announcements = [];
-var Commands = ["set", "clear", "list"];
+const users = require("./users.js")
+const miscfuncs = require("./miscfuncs.js")
+
+var Announcements = []
+var Commands = ["add", "remove", "list", "editmessage"]
 
 // example announcement object:
 var announcement = {
 	"timer":"",
-	"guild":"", // ID
 	"channel":"", // ID
 	"message":"",
 	"time":"", // UTC
-	"interval":"" // once, weekly, biweekly
+	"interval":"" // once, biweekly
+}
+
+// delays for repeated announcements
+var Delays = {
+    once: 0, 0: 0, 1: 0,
+    weekly: 604800000,
+    biweekly: 1209600000
 }
 
 module.exports = {
@@ -19,6 +28,76 @@ module.exports = {
 		msg += "\t**$ac** - ToDo\n"
 		msg += "\nType $help <command> for more info on a command."
 		return msg
+	},
+
+	// COMMAND that adds an announcement to the saved list
+	// Usage: $addac <channel> <interval> "message" time and date
+	addAnnouncementCMD:function(bot, msg, args){
+		if (!users.hasCmdAccess(msg)) return
+		if (args.length < 4) return `Missing Arguments: \`$addac <channel> <interval> "message" time and date\``
+
+		var channel = miscfuncs.getChannelID(args.shift())
+
+		// if the announcement should repeat
+		var interval = args.shift()
+		if (!Object.keys(Delays).includes(interval)){
+    	return `Interval \`${interval}\`not recognized: currently supported intervals are \`once\`, \`weekly\`, and \`biweekly\``
+		}
+		var interval = Delay[interval]
+
+		// get the message
+		var message = ""
+
+
+
+
+		setTimeout(()=>{}, delay, )
+	},
+
+	addAnnouncement:function(channel, message, delay, interval){
+
+		var timer = setTimeout(function() {
+			bot.createMessage(channel, {content:msg, disableEveryone:false}) // send message (allow tags)
+			Announcements.shift() // remove this from the array after it has been made
+		}, delay)
+
+		var announcement = {
+			"timer":timer,
+			"channel":channel, // ID
+			"message":msg,
+			"time":"", // UTC
+			"interval":"" // once, weekly, biweekly
+		}
+
+		Announcements.push(announcement)
+
+	},
+
+	listAnnouncementsCMD:function(bot, msg, args){
+		if (!users.hasCmdAccess(msg)) return
+
+		if (Announcements.length == 0) return "No Active Announcements"
+
+		var message = "```ID Channel Time Interval Message"
+		var summary = ""
+
+		for (var i = 0; i < Announcements.length; i++) {
+			summary = i.toString() + ": "
+			summary += miscfuncs.mentionChannel(Announcements[i].channel) + " "
+			summary += Announcements[i].time + " " + Announcements[i].interval + " "
+			summary += Announcements[i].message.substr(0,10) // only show a portion of the message
+			summary += "...\n" if Announcements[i].message.length < 10 else "\n"
+
+			// Send multiple messages if it passes the character limit
+			if ((message + summary).length > 1996){
+				bot.createMessage(msg.channel.id, message + "```")
+				message = "```" + summary
+			}
+
+		}
+
+		return message + "```"
+
 	},
 
 	processCommand:function(bot, msg, args){
@@ -61,37 +140,8 @@ module.exports = {
 
 	},
 
-	addAnnouncement:function(guild, channel, message, time, interval){
-		if (!miscfuncs.hasCmdAccess(msg)) {return;}
-
-		// TODO implement chroma to detect time
-
-		var delay = time - new Date();
-
-		// parse message for everyone
-		var msg = message
-
-		var timer = setTimeout(function() {
-			bot.createMessage(channel, {content:msg, disableEveryone:false}); // send message (allow tags)
-			Announcements.shift(); // remove this from the array after it has been made
-		}, delay)
-
-		var announcement = {
-			"timer":timer,
-			"guild":guild, // ID
-			"channel":channel, // ID
-			"message":msg,
-			"time":"", // UTC
-			"interval":"" // once, weekly, biweekly
-		}
-
-		Announcements.push(announcement);
-
-
-	},
-
 // outdated function: this needs to be remade better
-	announce:function(bot, msg, args){
+	announce_dep:function(bot, msg, args){
 		if (!miscfuncs.hasCmdAccess(msg)) {return;}
 
 		var channel = chooseChannel(args.shift());
@@ -149,15 +199,17 @@ module.exports = {
 	},
 
 
-	clearAll:function(){
+	clearCMD:function(bot, msg, args){
+		if (!miscfuncs.hasCmdAccess(msg)) return
 
 		while (Announcement) {
 			Announcements.forEach((announcement) => {
-				clearTimeout(announcement.timer);
+				clearTimeout(announcement.timer)
 			});
+			Announcements = []
 		}
 
-		return "Deleted all planned announcements";
+		return "Deleted all planned announcements"
 
 	},
 

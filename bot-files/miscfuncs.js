@@ -32,74 +32,164 @@ module.exports = {
 		readable += `${sec} seconds`
 		return `${pad(hours)}:${pad(minutes)}:${pad(sec)} (${readable})`
 	},
-	ping:function(bot, msg){
-		return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)"
+	ping:{
+		name: "ping",
+		short_descrip: "ping",
+		full_descrip: "To check if the bot is not dead. Tells you time it takes to bait you in ms",
+		hidden: false,
+		function: function(bot, msg){
+			return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)"
+		}
 	},
-	celsiusToInferiorTemp:function(bot, msg, args){
-		if (args.length == 0) return "Not Enough Arguments: `<°C>`"
-		var C = parseFloat(args[0])
-		if (isNaN(C)) return "Input must be a number"
-		return (C * 9 / 5 + 32).toFixed(1) + "°F"
+	celsiusToInferiorTemp:{
+		name: "fahrenheit",
+		short_descrip: "Convert °C to °F",
+		full_descrip: "Usage: `$c->f <°C>`",
+		hidden: false,
+		function: function(bot, msg, args){
+			if (args.length == 0) return "Not Enough Arguments: `<°C>`"
+			var C = parseFloat(args[0])
+			if (isNaN(C)) return "Input must be a number"
+			return (C * 9 / 5 + 32).toFixed(1) + "°F"
+		}
 	},
-	inferiorTempToCelsius:function(bot, msg, args){
-		if (args.length == 0) return "Not Enough Arguments: `<°F>`"
-		var F = parseFloat(args[0])
-		if (isNaN(F)) return "Input must be a number"
-		return ((F - 32) * 5 / 9).toFixed(1) + "°C"
+	inferiorTempToCelsius:{
+		name: "celsius",
+		short_descrip: "Convert °F to °C",
+		full_descrip: "Usage: `$f->c <°F>`",
+		hidden: false,
+		function: function(bot, msg, args){
+			if (args.length == 0) return "Not Enough Arguments: `<°F>`"
+			var F = parseFloat(args[0])
+			if (isNaN(F)) return "Input must be a number"
+			return ((F - 32) * 5 / 9).toFixed(1) + "°C"
+		}
 	},
-	cmToInches:function(bot, msg, args){
-		if (args.length == 0) return "Not Enough Arguments: `<cm>`"
-		var cm = parseFloat(args[0])
-		if (isNaN(cm)) return "Input must be a number"
-		return (cm / 2.54).toFixed(2) + '"'
+	cmToInches:{
+		name: "inches",
+		short_descrip: "Convert cm to inches",
+		full_descrip: "Usage: `$cm->inch <cm>`",
+		hidden: false,
+		function: function(bot, msg, args){
+			if (args.length == 0) return "Not Enough Arguments: `<cm>`"
+			var cm = parseFloat(args[0])
+			if (isNaN(cm)) return "Input must be a number"
+			return (cm / 2.54).toFixed(2) + '"'
+		}
 	},
-	inchesToCm:function(bot, msg, args){
-		if (args.length == 0) return "Not Enough Arguments: `<inches>`"
-		var I = parseFloat(args[0])
-		if (isNaN(I)) return "Input must be a number"
-		return (I * 2.54).toFixed(2) + "cm"
+	inchesToCm:{
+		name: "centimeters",
+		short_descrip: "Convert inches to cm",
+		full_descrip: "Usage: `$inch->cm <inches>`",
+		hidden: false,
+		function: function(bot, msg, args){
+			if (args.length == 0) return "Not Enough Arguments: `<inches>`"
+			var I = parseFloat(args[0])
+			if (isNaN(I)) return "Input must be a number"
+			return (I * 2.54).toFixed(2) + "cm"
+		}
 	},
 	// COMMAND that adds a role to a user. Defaults to sender
-	addRole:function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)) return
-		if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
-		var member = args[1] == undefined ? msg.member.id : args[1]
-		try {
-			msg.channel.guild.addMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
-			return `Gave user ${member} role ${args[0]}`
-		} catch (e) {
-			return "Failed to assign role```"+e+"```"
+	addRole:{
+		name: "addrole",
+		short_descrip: "Gives a user a role",
+		full_descrip: "Usage `$ar <role_id> [user_id]`\nuser_id defaults to the user that calls the command",
+		hidden: false, // T?
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+			if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
+			var member = args[1] == undefined ? msg.member.id : args[1]
+			try {
+				msg.channel.guild.addMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
+				return `Gave user ${member} role ${args[0]}`
+			} catch (e) {
+				return "Failed to assign role```"+e+"```"
+			}
 		}
 	},
 	// COMMAND removes a role from a user. Defaults to sender
-	removeRole:function(bot, msg, args){
-		if (!users.hasCmdAccess(msg)) return
-		if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
-		var member = args[1] == undefined ? msg.member.id : args[1]
-		try {
-			msg.channel.guild.removeMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
-			return `Removed role ${args[0]} from user ${member}`
-		} catch (e) {
-			return "Failed to remove role```"+e+"```"
+	removeRole:{
+		name: "removerole",
+		short_descrip: "Removes a role from a user",
+		full_descrip: "Usage `$rr <role_id> [user_id]\nuser_id defaults to the user that calls the command",
+		hidden: false, // T?
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+			if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
+			var member = args[1] == undefined ? msg.member.id : args[1]
+			try {
+				msg.channel.guild.removeMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
+				return `Removed role ${args[0]} from user ${member}`
+			} catch (e) {
+				return "Failed to remove role```"+e+"```"
+			}
 		}
 	},
 	// COMMAND adds a reaction to a given message
-	addReaction:async function(bot, msg, args){
-		if (args.length < 3) return "Not Enough Arguments: <channel_id> <message_id> <emojis...>"
-		var channel = args.shift()
-		var message = args.shift()
-		for (var i = 0; i < args.length; i++){
-				if (args[i].includes(":")) args[i] = args[i].substr(2, args[i].length-3)
+	addReaction:{
+		name: "addreaction",
+		short_descrip: "Reacts to a message",
+		full_descrip: "Usage `$react <channel_id> <message_id> <emojis...>`\nThis will reacat with multiple space separated emojis. For a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		hidden: false, // T?
+		function: async function(bot, msg, args){
+			if (args.length < 3) return "Not Enough Arguments: <channel_id> <message_id> <emojis...>"
+			var channel = args.shift()
+			var message = args.shift()
+			for (var i = 0; i < args.length; i++){
+					if (args[i].includes(":")) args[i] = args[i].substr(2, args[i].length-3)
+			}
+			args.forEach(emoji => {
+				bot.addMessageReaction(chat.chooseChannel(channel), message, emoji)
+					.catch((e) => {return "Failed to add reaction```"+e+"```"})
+			})
 		}
-		args.forEach(emoji => {
-			bot.addMessageReaction(chat.chooseChannel(channel), message, emoji)
-				.catch((e) => {return "Failed to add reaction```"+e+"```"})
-		})
 	},
 	mentionChannel:function(channel_id){
 		return `<#${channel_id}>`
 	},
+	getChannelID:function(arg){
+		if (arg.startsWith('<#') && arg.endsWith('>')){
+		    arg = arg.substr(2, arg.length-3)
+		}
+		return arg
+	},
 	mentionUser:function(user_id){
 		return `<@${user_id}>`
-	}
+	},
+	getUserID:function(arg){
+		if (arg.startsWith('<@') && arg.endsWith('>')){
+		    arg = arg.substr(2, arg.length-3)
+		}
+		return arg
+	},
+	// List of command aliases
+	// [Alias, Original_Command_Name]
+	aliases:[
+		["channeladd","addChannel"],
+		["channelremove","removeChannel"],
+		["listchannels","ls"], ["getchannels","ls"],
+		["say","send"],
+		["tr","toggleReaction"], ["togglereactions","toggleReaction"],
+		["tg","toggleGames"], ["togglegame","toggleGames"],
+		["get","getsubmission"],
+		["setsm","setSubmissionMessage"], ["setsmsg","setSubmissionMessage"],
+		["setfeed","setSubmissionFeed"],
+		["startAccepting","startSubmissions"], ["startSubmission","startSubmissions"],
+		["stopAccepting","stopSubmissions"], ["stopSubmission","stopSubmissions"],
+		["clearAllSubmissions","clearSubmissions"],
+		["setRole","setSubmittedRole"],
+		["game", "games"],
+		["removesubmission", "deleteSubmission"],
+		["cm", "centimeters"], ["inch->cm", "centimeters"],
+		["celcius", "celsius"], ["f->c", "celsius"],
+		["farenheit", "fahrenheit"], ["c->f", "fahrenheit"],
+		["ar", "addrole"],
+		["rr", "removerole"],
+		["react", "addreaction"], ["addreactions", "addreaction"],
+		["addCmdAccess", "addCommandAccess"],
+		["removeCmdAccess", "removeCommandAccess"],
+		["dq", "disqualify"],
+		["undq", "undodisqualify"],
+		["ss", "secretsanta"]
+	]
 };
