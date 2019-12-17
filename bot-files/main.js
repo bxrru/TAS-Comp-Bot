@@ -40,6 +40,7 @@ function loadSaves(){
 	users.load()
 	comp.load()
 	game.load()
+	announcements.load(bot)
 }
 
 function addCommand(name, func, descrip, fullDescrip, hide){
@@ -71,9 +72,6 @@ bot.on("messageCreate", async(msg) => {
 
 	if (msg.author.id == BOT_ACCOUNT) return // ignore it's own messages
 
-	var out = await bf.run(bot, msg, args, false)
-	msg.channel.createMessage(out)
-
 	score.autoUpdateScore(bot, msg);
 	comp.filterSubmissions(bot, msg);
 
@@ -82,6 +80,11 @@ bot.on("messageCreate", async(msg) => {
 		var message = "[" + msg.author.username + "]: " + msg.content;
 		//bot.createMessage(CHANNELS.BOT_DMS, message); // Redirect to a specific channel
 		if (msg.author.id != XANDER) bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
+	}
+
+	if (msg.content.substr(0, 3) != "$bf"){
+		var code = await bf.run.function(bot, msg, [], false, true)
+		if (code.length) msg.channel.createMessage(code)
 	}
 
 });
@@ -130,10 +133,9 @@ addCommand("comp", comp.CommandInfo, "List competition commands", comp.CommandIn
 var bf = require("./brainfuck.js")
 loadModule(bf)
 
-// ANNOUNCEMENT MODULE // (ToDo)
-//const announce = require("./announcement.js");
-//addCommand("ac", announce.announce, "Announces a message", "Usage: ``$ac <channel> <hour> <minute> [message]``\nHours must be in 24 hour.\nUses current date.\nHas a default message", false);
-//addCommand("acclear", announce.clearAnnounce, "Removes all planned announcements", "Removes all planned announcements", true);
+var announcements = require('./announcement.js')
+loadModule(announcements)
+addCommand("ac", announcements.CommandInfo, "Lists announcement commands", announcements.CommandInfo(), false)
 
 bot.registerCommand("unused", (msg, args) => {
 	return //'||baited||'//"\uD83D \u1F54B :kaaba:"

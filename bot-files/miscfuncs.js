@@ -190,6 +190,8 @@ module.exports = {
 		["removeCmdAccess", "removeCommandAccess"],
 		["dq", "disqualify"],
 		["undq", "undodisqualify"],
-		["ss", "secretsanta"]
+		["ss", "secretsanta"],
+		["acset", "acadd"],
+		["acdelete", "acclear"], ["acremove", "acclear"]
 	]
 };

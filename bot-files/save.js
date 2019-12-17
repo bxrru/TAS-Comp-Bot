@@ -2,13 +2,12 @@ const fs = require("fs");
 const miscfuncs = require("./miscfuncs.js");
 const request = require("request");
 
-//function cfgchange(thingToChange
 function saveFile(filename, content){
 	module.exports.makeFolderIfNotExist("./saves/");
 	try {
 		fs.writeFileSync("./saves/"+filename, content)
 	} catch (e) {
-		console.log("FAILED TO LOAD " + filename)
+		console.log("FAILED TO SAVE " + filename)
 	}
 }
 
@@ -36,7 +35,4 @@ module.exports = {
 			return null;
 		}
 	}
-
-	// TODO
-	// add cfg checker and fix if cfg is missing something / broken
 };

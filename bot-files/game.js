@@ -133,6 +133,9 @@ module.exports = {
         users.push({username:person.username, id:person.id, bans:[person.id]})
       })
 
+      if (users.length == 2)
+        return "Minimum of 3 people required"
+
       users.forEach(async(recipient)=>{
 
         //console.log(`Recipient: ${recipient.username}`)
