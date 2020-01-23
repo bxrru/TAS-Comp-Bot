@@ -72,20 +72,26 @@ bot.on("messageCreate", async(msg) => {
 
 	if (msg.author.id == BOT_ACCOUNT) return // ignore it's own messages
 
+	// another meme
+	if (msg.content.split(' ').includes('<@!532974459267710987>') || msg.content.split(' ').includes('<@532974459267710987>')) {
+		bot.createMessage(msg.channel.id, "What the fuck. Did you really ping me at this time for that? You did. Arrangements have been made so that I will no longer be directly pinged from you. If you need me, contact somebody else.")
+	}
+
 	score.autoUpdateScore(bot, msg);
 	comp.filterSubmissions(bot, msg);
 
  	// Redirect Direct Messages that are sent to the bot
 	if (miscfuncs.isDM(msg)) {
-		var message = "[" + msg.author.username + "]: " + msg.content;
+		var message = `[${msg.author.username} (${msg.author.id})]: ${msg.content}`
 		//bot.createMessage(CHANNELS.BOT_DMS, message); // Redirect to a specific channel
 		if (msg.author.id != XANDER) bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
 	}
 
-	if (msg.content.substr(0, 3) != "$bf"){
+	/*// automatically compile brainfuck code - currently very buggy
+	if (msg.content.substr(0, 3) != "$bf"){ // dont double compile commands
 		var code = await bf.run.function(bot, msg, [], false, true)
 		if (code.length) msg.channel.createMessage(code)
-	}
+	}*/
 
 });
 

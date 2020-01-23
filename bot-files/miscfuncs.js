@@ -174,8 +174,8 @@ module.exports = {
 		["get","getsubmission"],
 		["setsm","setSubmissionMessage"], ["setsmsg","setSubmissionMessage"],
 		["setfeed","setSubmissionFeed"],
-		["startAccepting","startSubmissions"], ["startSubmission","startSubmissions"],
-		["stopAccepting","stopSubmissions"], ["stopSubmission","stopSubmissions"],
+		["startAccepting","startTask"], ["startSubmission","startTask"], ["startSubmissions", "startTask"],
+		["stopAccepting","stopTask"], ["stopSubmission","stopTask"], ["stopSubmissions", "stopTask"],
 		["clearAllSubmissions","clearSubmissions"],
 		["setRole","setSubmittedRole"],
 		["game", "games"],
@@ -192,6 +192,10 @@ module.exports = {
 		["undq", "undodisqualify"],
 		["ss", "secretsanta"],
 		["acset", "acadd"],
-		["acdelete", "acclear"], ["acremove", "acclear"]
+		["acdelete", "acclear"], ["acremove", "acclear"],
+		["setTaskTime", "setTaskLength"], ["setTaskWindow", "setTaskLength"], ["setTaskTimeWindow", "setTaskLength"], ["setTaskTimeFrame", "setTaskLength"],
+		["setTaskMessage", "setTaskMsg"],
+		["ctts", "checkTimedTaskStatus"],
+		["taskPreview", "previewTask"]
 	]
 };

@@ -4,6 +4,8 @@ const chat = require("./chatcommands.js")
 const Save = require("./save.js")
 const fs = require("fs")
 const request = require("request")
+const chrono = require("chrono-node")
+const Announcement = require("./announcement.js")
 
 var AllowSubmissions = false
 var Task = 1
@@ -17,6 +19,14 @@ var Message_ID = ""
 var DQs = []
 var Submissions = [] // {number, name, id, m64, m64_size, st, st_size, namelocked, dq}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
+
+var TimedTask = false
+var Hours = 1
+var Minutes = 30
+var TaskMessage = "No Task Available"
+var TimedTaskStatus = {started:[],completed:[]} // stores the IDs of people who are participating
+// TODO: Implement a confirmation of request feature that makes people
+// resend a task request with some number to actually start the task
 
 function SubmissionsToMessage(showInfo){
 	var message = "**__Current Submissions:__**\n\n"
@@ -96,7 +106,7 @@ module.exports = {
 		msg += "\t**submitfile** - Change a user's files\n"
 		msg += "\n"
 
-		msg += "\t**settask** - Sets the Task Number\n"
+		msg += "\t**settasknum** - Sets the Task Number\n"
 		msg += "\t**setfileprefix** - Sets the prefix for submission filenames\n"
 		msg += "\t**setserver** - Sets the competition server\n"
 		msg += "\t**setsubmittedrole** - Sets the submitted role\n"
@@ -117,6 +127,14 @@ module.exports = {
 		msg += "\t**compinfo** - Shows module related information\n"
 		msg += "\t**setname** - Change your name as seen in #current_submissions\n"
 		msg += "\t**status** - Check your submitted files\n"
+		msg += "\n"
+
+		// TimedTask Commands
+		msg += "\t**setTaskMsg** - Sets the task message for timed tasks\n"
+		msg += "\t**previewTask** - Previews the timed task message\n"
+		msg += "\t**setTaskLength** - Sets the time limit for timed tasks\n"
+		msg += "\t**checkTimedTaskStatus** - See who has started and completed the timed task\n"
+		msg += "\t**requestTask** - Starts a timed task\n"
 
 		msg += "\nAnyone may use `$status` and `$setname`"
 		msg += "\nType $help <command> for more info on a command."
@@ -132,9 +150,9 @@ module.exports = {
 
 	// COMMAND that changes the current task number
 	setTask:{
-		name: "setTask",
+		name: "setTaskNum",
 		short_descrip: "Sets the Task Number",
-		full_descrip: "Usage: `$settask <Task_Number>`\nSets the task number that will be used when downloading competition files",
+		full_descrip: "Usage: `$settasknum <Task_Number>`\nSets the task number that will be used when downloading competition files",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
@@ -146,31 +164,165 @@ module.exports = {
 		}
 	},
 
-	// COMMAND that starts accepting submissions
-	allowSubmissions:{
-		name: "startSubmissions",
-		short_descrip: "Starts accepting submissions",
-		full_descrip: "Starts accepting submissions via DMs",
+	setTimeWindow:{
+		name: "setTaskLength",
+		short_descrip: "Sets the time limit for timed tasks",
+		full_descrip: "Sets how long participants will have during timed tasks. Usage: `$setTaskLength <hours> <minutes>`. User's will always be given a 15 minute warning so the time cannot be less than 15 minutes.",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
+
+			if (args.length < 2) return "Missing Arguments: `$setTaskLength <hours> <minutes>`"
+
+			if (isNaN(args[0]) || isNaN(args[1]) || Number(args[0]) < 0 || Number(args[1]) < 0)
+				return "Invalid Arguments: Arguments must be positive numbers"
+
+			if (args[0] == 0 && args[1] < 15) return "Invalid Arguments: Time must be 15 minutes minimum"
+
+			Hours = Math.floor(args[0])
+			Minutes = Math.floor(args[1])
+			module.exports.save()
+
+			return `Task length set to ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes`
+		}
+	},
+
+	setTaskMsg:{
+		name: "setTaskMsg",
+		short_descrip: "Sets the task message for timed tasks",
+		full_descrip: "Sets the task message that will be sent out to users who request the timed tasks. Everything that appears after the command call will be stored as the message. Attachments are not currently supported. To see the message use `$previewTask`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (notAllowed(msg)) return
+
+			if (args.join(' ') == '') {
+				TaskMessage = "No Task Available"
+				module.exports.save()
+				return "No task message found. Task message has been cleared."
+			} else {
+				TaskMessage = args.join(' ')
+				module.exports.save()
+				return "Task message has been set. Use `$previewTask` to see what it looks like"
+			}
+		}
+	},
+
+	previewTask:{
+		name: "previewTask",
+		short_descrip: "Previews the timed task message",
+		full_descrip: "Sends you a DM with the task message to see what participants will see (admin only). To set the message use `$setTaskMsg`",
+		hidden: true,
+		function: async function(bot, msg, args){
+			if (notAllowed(msg)) return
+
+			try {
+				var dm = await bot.getDMChannel(msg.author.id)
+				dm.createMessage(TaskMessage)
+			} catch (e) {
+				return `Could not DM preview\`\`\`${e}\`\`\``
+			}
+		}
+	},
+
+	checkTimedTaskStatus:{
+		name: "checkTimedTaskStatus",
+		short_descrip: "See who has started and completed the timed task",
+		full_descrip: "See the IDs of people who have started and completed the timed task. This command has been left in after testing so it isn't fancy.",
+		hidden:true,
+		function: function(bot, msg, args){
+			if (notAllowed(msg)) return
+			return `\`\`\`${JSON.stringify(TimedTaskStatus)}\`\`\``
+		}
+	},
+
+	requestTask:{
+		name: "requestTask",
+		short_descrip: "Starts a timed task",
+		full_descrip: "Starts the current timed task. Once a participant calls this command they will be sent the task message (set with `$setTaskMsg`) and allowed to submit files for the allotted time (set with `$setTaskLength`). There is no confirmation, the timer will begin counting down as soon as the command is called.",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!TimedTask) return `There is no active timed task to participate in right now`
+			if (!miscfuncs.isDM(msg)) return `This command can only be used in DMs`
+
+			if (TimedTaskStatus.started.includes(msg.author.id)) return `You've already started Task ${Task}!`
+			if (TimedTaskStatus.completed.includes(msg.author.id)) return `You've already completed Task ${Task}! Use \`$status\` to check your files.`
+
+			TimedTaskStatus.started.push(msg.author.id)
+			module.exports.save()
+
+			Announcement.AddExternalAnnouncement(bot, msg.author.id, "You have 15 minutes remaining", "_", Hours, Minutes - 15, true)
+			Announcement.AddExternalAnnouncement(bot, msg.author.id, `Your Time is up! Thank you for participating in Task ${Task}. To see your final files use \`$status\``, `Comp ${msg.author.id}`, Hours, Minutes, true)
+
+			// send messages
+			notifyHosts(bot, `${msg.author.username} (${msg.author.id}) has started Task ${Task}`)
+			bot.createMessage(msg.channel.id, TaskMessage)
+			bot.createMessage(msg.channel.id, `You have started Task ${Task}. You have ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes to submit.`)
+		}
+	},
+
+	// the function called when someone's time limit is reached
+	// This moves them to "completed" and notifies hosts.
+	// The "Time's up!" message that is sent is controlled by the Announcement
+	endTimedTask:async function(bot, id, notify){
+		if (TimedTaskStatus.started.filter(u => u == id).length == 0) {
+			console.log(`Tried to end task for user that has not *started* ${id}`)
+			return
+		}
+
+		TimedTaskStatus.started = TimedTaskStatus.started.filter(u => u != id)
+		TimedTaskStatus.completed.push(id)
+		module.exports.save()
+
+		var user = await Users.getUser(bot, id)
+		if (notify) notifyHosts(bot, `Time's up for ${user.username} (${id})!`)
+	},
+
+	// COMMAND that starts accepting submissions
+	allowSubmissions:{
+		name: "startTask",
+		short_descrip: "Starts accepting submissions",
+		full_descrip: "Starts accepting submissions via DMs. To start a timed task where participants have a limited amount of time to submit use `$startTask timed`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (notAllowed(msg)) return
+
+			var message = `Now accepting submissions for Task ${Task}. `
+
+			if (args.length > 0 && args[0].toUpperCase() == "TIMED") {
+				message += `This is a timed task. Participants will have `
+				message += `**${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes** to submit.`
+				TimedTask = true
+			}
+
+			if (Submissions.length || DQs.length)
+				message += "\nWARNING: Preexisting submissions detected. Use `$clearsubmissions` to remove previous data"
+
+			notifyHosts(bot, message)
+
 			AllowSubmissions = true
 			module.exports.save()
-			notifyHosts(bot, "Now accepting submissions for Task " + Task)
-			return "Now accepting submissions for Task " + Task
+
+			return `Now accepting submissions for ${TimedTask ? "Timed " : ""}Task ${Task}`
 		}
 	},
 
 	// COMMAND that stops accepting submissions
 	stopSubmissions:{
-		name: "stopSubmissions",
+		name: "stopTask",
 		short_descrip: "Stops accepting submissions",
 		full_descrip: "Stops accepting submissions via DMs",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
+
+			TimedTask = false
 			AllowSubmissions = false
 			module.exports.save()
+
+			TimedTaskStatus.started.forEach(id => {
+				module.exports.endTimedTask(bot, id, false)
+			})
+
 			notifyHosts(bot, "No longer accepting submissions for Task " + Task)
 			return "No longer accepting submissions for Task " + Task
 		}
@@ -191,6 +343,8 @@ module.exports = {
 
 			Submissions = []
 			DQs = []
+			TimedTaskStatus.started = []
+			TimedTaskStatus.completed = []
 			module.exports.save()
 
 			notifyHosts(bot, result)
@@ -352,7 +506,12 @@ module.exports = {
 			channel_id: Channel_ID,
 			message_id: Message_ID,
 			submissions: Submissions,
-			dqs: DQs
+			dqs: DQs,
+			timedtask: TimedTask,
+			hr: Hours,
+			min: Minutes,
+			taskmsg: TaskMessage,
+			timedtaskstatus: TimedTaskStatus
 		}
 		Save.saveObject("submissions.json", data)
 	},
@@ -369,6 +528,12 @@ module.exports = {
 		SubmissionsChannel = data.feed
 		Channel_ID = data.channel_id
 		Message_ID = data.message_id
+		TimedTask = data.timedtask
+		Hours = data.hr
+		Minutes = data.min
+		TaskMessage = data.taskmsg
+		while (data.timedtaskstatus.started.length > 0) TimedTaskStatus.started.push(data.timedtaskstatus.started.shift())
+		while (data.timedtaskstatus.completed.length > 0) TimedTaskStatus.completed.push(data.timedtaskstatus.completed.shift())
 		while (data.submissions.length > 0) Submissions.push(data.submissions.shift())
 		while (data.dqs.length > 0) DQs.push(data.dqs.shift())
 	},
@@ -721,6 +886,10 @@ module.exports = {
 		if (!AllowSubmissions) return
 		if (Users.isBanned(msg.author.id)) return
 		if (DQs.filter(user => user.id == msg.author.id).length) return
+		if (TimedTask && !TimedTaskStatus.started.includes(msg.author.id)) return
+		if (TimedTask && TimedTaskStatus.completed.includes(msg.author.id)) {
+			bot.createMessage(msg.channel.id, "Your time is up, you can no longer submit files. Thank you for participating.")
+		}
 
 		msg.attachments.forEach(attachment => {
 			module.exports.filterFiles(bot, msg, attachment)
@@ -754,7 +923,7 @@ module.exports = {
 			var result = AllowSubmissions ? "Accepting submissions\n" : "Not accepting submissions\n"
 			result += `**Task** - ${Task}\n`
 
-			result += `**Filenames** - ${FilePrefix}Task${Task}By<Name>.st/m64`
+			result += `**Filenames** - ${FilePrefix}Task${Task}By<Name>.st/m64\n`
 
 			result += `**Server ID** - ${Guild}\n`
 
@@ -768,7 +937,7 @@ module.exports = {
 			if (Host_IDs.length == 0) {
 				result += "No users are set to receive submission updates" + "\n"
 
-			} else if (Host_IDs.length == 0){
+			} else if (Host_IDs.length == 1){
 				result += "**Update Recipient** "
 
 			} else { // Host_IDs.length > 1
@@ -779,7 +948,7 @@ module.exports = {
 					var dm = await bot.getDMChannel(Host_IDs[i])
 					result += "- " + dm.recipient.username + " (ID: `" + Host_IDs[i] + "`)\n"
 				} catch (e) {
-					console.log("Removed invalid Host ID", Host_IDs.pop(i))
+					console.log("Removed invalid Host ID", Host_IDs.splice(i, 1))
 					module.exports.save()
 				}
 			}
@@ -794,12 +963,14 @@ module.exports = {
 			try {
 				var message = await bot.getMessage(Channel_ID, Message_ID)
 				result += "**Submissions Message URL** - https://discordapp.com/channels/"
-				result += `${message.channel.guild.id}/${message.channel.id}/${message.id}`
+				result += `${message.channel.guild.id}/${message.channel.id}/${message.id}\n`
 			} catch (e) {
-				result += "Invalid Current Submissions Message: Could not retrieve URL"
+				result += "**Invalid Current Submissions Message** - Could not retrieve URL\n"
 				Channel_ID = ""
 				Message_ID = ""
 			}
+
+			result += `**Timed Task Length** - ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes\n`
 
 			return result
 		}

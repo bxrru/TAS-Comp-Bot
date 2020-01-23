@@ -14,16 +14,18 @@ var Delays = {
     biweekly: 1209600000
 }
 
+// TODO: send missed announcements and say how much it was delayed by (in load func)
+
 module.exports = {
 
 	AddAnnouncement:{
 		name: "acadd",
 		short_descrip: "Add an accouncement",
-		full_descrip: "Sets a message that will automatically be sent to the specified channel at the given time and date. Usage: `$acadd <channel> <interval> \"message\" date and time`. To use quotations within the announcement type \`\\\"\`. Otherwise, everything between the first two quotations will be used. Everything after the last quotation will be interpreted as a time and date. To see a list of intervals use `$acinterval`",
+		full_descrip: "Sets a message that will automatically be sent to the specified channel at the given time and date. Usage: `$acadd <channel> <interval> \"message\" date and time`. To use quotations within the announcement type \`\\\"\`. Otherwise, everything between the first two quotations will be used. Everything after the last quotation will be interpreted as a time and date. To see a list of intervals use `$acinterval`. To send it as a DM, put `DM` before the user id without a space. Ex: `$acadd DM532974459267710987 once \"Hi there!\" at 4:20pm est tomorrow`",
 		hidden: true,
 		function: async function(bot, msg, args){
 
-			if (!users.hasCmdAccess(msg)) return
+			if (msg.InternalCall == undefined && !users.hasCmdAccess(msg)) return
 
 			if (args.length < 4)
 				return `Missing Arguments: \`$addac <channel> <interval> "message" date and time\``
@@ -33,6 +35,8 @@ module.exports = {
 
 			var text = args.slice(2, args.length).join(' ')
 			var text = module.exports.getMessage(text)
+      if (text[0].length == 0)
+        return `Invalid Argument: Message cannot be empty`
 
 			if (text[1].length == 0)
 				return `No time or date specified: \`$addac <channel> <interval> "message" date and time\``
@@ -52,6 +56,9 @@ module.exports = {
 
 			if (delay < 0)
 				return "Specified time has already passed."
+
+      if (msg.InternalCall != undefined)
+        announcement.InternalCall = msg.InternalCall
 
 			Announcements.push(announcement)
 			module.exports.SetAnnouncement(bot, announcement, delay)
@@ -99,6 +106,7 @@ module.exports = {
 			id: announcement.id,
 			timer: setTimeout(async() => {
 				await module.exports.SendAnnouncement(bot, announcement) // send message
+        if (announcement.InternalCall != undefined) module.exports.ExternalFunctions(bot, announcement.InternalCall)
 				module.exports.LoopAnnouncement(bot, announcement) // repeat announcement
 			}, delay)
 		}
@@ -108,9 +116,15 @@ module.exports = {
 	// Sends a message
 	SendAnnouncement:async function(bot, announcement){
 
-		try {
-			// try to send the announcement
-			await bot.createMessage(announcement.channel, {content: announcement.message, disableEveryone: false})
+		try { // try to send the announcement
+      // determine if it's a DM or not
+      if (announcement.channel.substr(0, 2).toUpperCase() == "DM") {
+        var dm_ac = await bot.getDMChannel(announcement.channel.substr(2))
+        await dm_ac.createMessage(announcement.message)
+      } else {
+			   await bot.createMessage(announcement.channel, {content: announcement.message, disableEveryone: false})
+      }
+
 		} catch (e) {
 			// log any error
 			console.log(`Failed Announcement #${announcement.id}\n${e}`)
@@ -161,14 +175,14 @@ module.exports = {
 		for (var i = 0; i<Timers.length; i++){
 			if (Timers[i].id == id){
 				clearTimeout(Timers[i].timer)
-				Timers.pop(i)
+				Timers.splice(i, 1)
 			}
 		}
 
 		// remove the Announcement
 		for (var i = 0; i<Announcements.length; i++){
 			if (Announcements[i].id == id)
-				return Announcements.pop(i)
+				return Announcements.splice(i, 1)
 		}
 
 		// not found
@@ -183,6 +197,7 @@ module.exports = {
 		var data = save.readObject("announcements.json")
 
 		var recoverAnnouncement = async function(announcement){
+
 			var date = chrono.parseDate(announcement.time)
 			var now = new Date()
 			var delay = date - now
@@ -191,12 +206,14 @@ module.exports = {
 
 				console.log("Announcement Missed", announcement)
 
-				try { // message the user to tell them that the announcement was missed
-					var dm = await bot.getDMChannel(announcement.user.id)
-					dm.createMessage(`Announcement Missed \`\`\`Channel: ${announcement.channel}\nTime: ${announcement.time}\nMessage: ${announcement.message}\`\`\``)
-				} catch (e) {
-					console.log(`Failed to notify user ${announcement.user.username} (${announcement.user.id})`)
-				}
+        if (!announcement.user == "BOT") { // dont try to DM internal announcements
+  				try { // message the user to tell them that the announcement was missed
+  					var dm = await bot.getDMChannel(announcement.user.id)
+  					dm.createMessage(`Announcement Missed \`\`\`Channel: ${announcement.channel}\nTime: ${announcement.time}\nMessage: ${announcement.message}\`\`\``)
+  				} catch (e) {
+  					console.log(`Failed to notify user ${announcement.user.username} (${announcement.user.id})`)
+  				}
+        }
 
 			} else {
 				// if it passed but happens regularly, shift it to the next time
@@ -231,7 +248,11 @@ module.exports = {
 
 					result += `\`\`\`Announcement Info (ID ${a.id})\n`
 					result += `\tadded by: ${a.user.username} (${a.user.id})\n`
-					result += `\tchannel: #${bot.getChannel(a.channel).name} (${a.channel})\n`
+          if (a.channel.substr(0,2).toUpperCase() == "DM") {
+            result += `\tUser ID (DM): ${a.channel}\n`
+          } else {
+            result += `\tchannel: #${bot.getChannel(a.channel).name} (${a.channel})\n`
+          }
 					result += `\tinterval: ${a.interval} `
 					result += a.interval == 0 ? `(Once)\n` : `ms (repeated)\n`
 					result += `\ttime: ${a.time}\n`
@@ -259,20 +280,30 @@ module.exports = {
 		function:function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
 
-			if (Announcements.length == 0) return `No scheduled announcements at this time.`
+      // optional different message if there are none
+			//if (Announcements.length == 0) return `No scheduled announcements at this time.`
 
 			var result = [`\`\`\`ID | Message Preview | Channel\n`, ``]
 
 			var PreviewLength = 50
 
 			Announcements.forEach(a => {
+
+        // escape internal announcement calls (if we want to delay a function call)
+        if (a.InternalCall != undefined) return
+
 				var entry = `${a.id} | `
 				entry += `${a.message.substr(0,PreviewLength) + (a.message.length < PreviewLength ? "" : "...")} | `
-				entry += `#${bot.getChannel(a.channel).name}\n`
+
+        if (a.channel.substr(0, 2).toUpperCase() == "DM") {
+          entry += `DM: ${a.channel.substr(2)}\n`
+        } else {
+          entry += `#${bot.getChannel(a.channel).name}\n`
+        }
 
 				// only guarantees support for up to 99 pages of entries (Page AB/XY)
 				// any more and this could potentially pass the discord character limit by 2 ("Page ABC/XYZ")
-				if (result[0].length + entry.length + result[result.length-1] + "```Page AB/XY".length > 2000){
+				if ((result[0].length + entry.length + result[result.length-1].length + "```Page AB/XY".length) < 2000){
 					result[result.length-1] += entry
 
 				} else { // message too big, add another page
@@ -369,6 +400,30 @@ module.exports = {
 
 		msg += "\nType $help <command> for more info on a command."
 		return msg
-	}
+	},
+
+  // shortcut for other modules to send announcements
+  // it will take place delay_hours and delay_minutes from the moment it is called
+  // this does not check for valid input
+  AddExternalAnnouncement:function(bot, channel_id, message, key, delay_hours, delay_minutes, isDM){
+    var date = new Date()
+    date.setHours(date.getHours() + delay_hours)
+    date.setMinutes(date.getMinutes() + delay_minutes)
+    var args = [`${isDM ? "DM" : ""}${channel_id}`, "once", `"${message}"`, date.toString()]
+    module.exports.AddAnnouncement.function(bot, {InternalCall: key, author: "BOT"}, args)
+  },
+
+  // Other bot modules can use announcements to delay function calls.
+  // They pass 'msg.InternalCall = key' when calling AddAnnouncement and
+  // that key is hardcoded here to do said function
+  ExternalFunctions:function(bot, key){
+    key = key.toUpperCase()
+    if (key == "NOTHING" || key == "_"){
+      return // these keys will not be used
+    } else if (key.split(' ')[0] == "COMP") {
+      var comp = require('./comp.js')
+      comp.endTimedTask(bot, key.split(' ')[1], true)
+    }
+  }
 
 }

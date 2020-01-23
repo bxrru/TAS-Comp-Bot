@@ -43,7 +43,7 @@ module.exports = {
 
       for (var i = 0; i<DisabledServers.length; i++){
         if (DisabledServers[i] == msg.channel.guild.id){
-          DisabledServers.pop(i)
+          DisabledServers.splice(i, 1)
           module.exports.save()
           return "Games enabled in ``"+msg.channel.guild.id+"``"
         }
