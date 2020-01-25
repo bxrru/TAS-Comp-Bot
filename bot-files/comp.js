@@ -1270,7 +1270,7 @@ module.exports = {
 				module.exports.update_m64(user.id, args[0], 0)
 				return notifyUserAndHost("M64")
 
-			} else if (module.exports.isM64({filename:args[0]})){
+			} else if (module.exports.isSt({filename:args[0]})){
 				module.exports.update_m64(user.id, args[0], 0)
 				return notifyUserAndHost("ST")
 
