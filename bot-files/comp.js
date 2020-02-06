@@ -1268,11 +1268,13 @@ module.exports = {
 			// check if it was given a url
 			if (module.exports.isM64({filename:args[0]})){
 				module.exports.update_m64(user.id, args[0], 0)
-				return notifyUserAndHost("M64")
+				notifyUserAndHost("M64")
+				return "Successfully updated M64"
 
-			} else if (module.exports.isM64({filename:args[0]})){
-				module.exports.update_m64(user.id, args[0], 0)
-				return notifyUserAndHost("ST")
+			} else if (module.exports.isSt({filename:args[0]})){
+				module.exports.update_st(user.id, args[0], 0)
+				notifyUserAndHost("ST")
+				return "Successfully updated ST"
 
 			} else {
 				return "Invalid Filetype: Must be `.m64` or `.st`"
