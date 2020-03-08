@@ -9,6 +9,7 @@ var Timers = [] // {id, timer}
 // delays for repeated announcements
 var Delays = {
     once: 0,
+    ten: 10000,
 		daily: 86400000,
     weekly: 604800000,
     biweekly: 1209600000
@@ -35,7 +36,7 @@ module.exports = {
 
 			var text = args.slice(2, args.length).join(' ')
 			var text = module.exports.getMessage(text)
-      if (text[0].length == 0)
+      if (text[0].length == 0 && msg.InternalCall == undefined)
         return `Invalid Argument: Message cannot be empty`
 
 			if (text[1].length == 0)
@@ -54,16 +55,16 @@ module.exports = {
 			var now = new Date()
 			var delay = date - now
 
-			if (delay < 0)
-				return "Specified time has already passed."
+			if (delay < 0) {
+				return `Specified time \`${date.toString()}\` has already passed (\`${now.toString()}\`). Try a more specific date and time.`
+      }
 
-      if (msg.InternalCall != undefined)
-        announcement.InternalCall = msg.InternalCall
+      if (msg.InternalCall != undefined) announcement.InternalCall = msg.InternalCall
 
 			Announcements.push(announcement)
 			module.exports.SetAnnouncement(bot, announcement, delay)
 			module.exports.save()
-
+      //console.log(`Announcement Added: ${announcement.InternallCall}`)
 			return `Announcement Added (ID: ${announcement.id}). For a list of announcements use $aclist`
 
 		}
@@ -115,6 +116,11 @@ module.exports = {
 
 	// Sends a message
 	SendAnnouncement:async function(bot, announcement){
+
+    if (announcement.message == "") {
+      announcement.interval = 0
+      return
+    }
 
 		try { // try to send the announcement
       // determine if it's a DM or not
@@ -275,7 +281,7 @@ module.exports = {
 	AnnouncementList:{
 		name: "aclist",
 		short_descrip: "Lists all the announcements",
-		full_descrip: "Lists some information about scheduled announcements. Usage: \`$aclist [page]\`. For more information on a specific announcement, use $acinfo",
+		full_descrip: "Lists some information about scheduled announcements. Usage: \`$aclist [page]\`. For more information on a specific announcement, use $acinfo. Passing the keyword \`admin\` will show internall delayed functions.",
 		hidden: true,
 		function:function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -288,17 +294,21 @@ module.exports = {
 			var PreviewLength = 50
 
 			Announcements.forEach(a => {
-
+        var entry = ""
         // escape internal announcement calls (if we want to delay a function call)
-        if (a.InternalCall != undefined) return
-
-				var entry = `${a.id} | `
-				entry += `${a.message.substr(0,PreviewLength) + (a.message.length < PreviewLength ? "" : "...")} | `
-
-        if (a.channel.substr(0, 2).toUpperCase() == "DM") {
-          entry += `DM: ${a.channel.substr(2)}\n`
+        if (a.InternalCall != undefined) {
+          if (args[1] != "admin") return
+          entry = `Key = ${a.InternalCall}\n`
         } else {
-          entry += `#${bot.getChannel(a.channel).name}\n`
+
+  				var entry = `${a.id} | `
+  				entry += `${a.message.substr(0,PreviewLength) + (a.message.length < PreviewLength ? "" : "...")} | `
+
+          if (a.channel.substr(0, 2).toUpperCase() == "DM") {
+            entry += `DM: ${a.channel.substr(2)}\n`
+          } else {
+            entry += `#${bot.getChannel(a.channel).name}\n`
+          }
         }
 
 				// only guarantees support for up to 99 pages of entries (Page AB/XY)
@@ -404,12 +414,13 @@ module.exports = {
 
   // shortcut for other modules to send announcements
   // it will take place delay_hours and delay_minutes from the moment it is called
-  // this does not check for valid input
+  // This does not check for valid input
   AddExternalAnnouncement:function(bot, channel_id, message, key, delay_hours, delay_minutes, isDM){
     var date = new Date()
     date.setHours(date.getHours() + delay_hours)
     date.setMinutes(date.getMinutes() + delay_minutes)
     var args = [`${isDM ? "DM" : ""}${channel_id}`, "once", `"${message}"`, date.toString()]
+    //console.log("ADDING ANNOUNCEMENT...")
     module.exports.AddAnnouncement.function(bot, {InternalCall: key, author: "BOT"}, args)
   },
 
@@ -420,10 +431,37 @@ module.exports = {
     key = key.toUpperCase()
     if (key == "NOTHING" || key == "_"){
       return // these keys will not be used
+
     } else if (key.split(' ')[0] == "COMP") {
       var comp = require('./comp.js')
       comp.endTimedTask(bot, key.split(' ')[1], true)
+
+    } else if (key == "PKMN-END") {
+      var pkmn = require('./whosthatpokemon.js')
+      pkmn.PostSolution(bot)
+
+    } else if (key == "PKMN-START") {
+      var pkmn = require('./whosthatpokemon.js')
+      pkmn.StartQuiz(bot)
+
     }
+
+  },
+
+  DelayFunction:function(bot, key, delay_hours, delay_minutes){
+    //console.log("DELAYING...")
+    module.exports.AddExternalAnnouncement(bot, "", "", key, delay_hours, delay_minutes, false)
+  },
+
+  // search for a specific key to end that announcement
+  KillDelayedFunction:function(key){
+    for (var i = 0; i<Announcements.length; i++) {
+      if (Announcements[i].InternalCall == key) { // found
+        module.exports.RemoveAnnouncement(Announcements[i].id)
+        return 1
+      }
+    }
+    return null
   }
 
 }

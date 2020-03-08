@@ -37,7 +37,7 @@ module.exports = {
 	},
 
 	hasCmdAccess:function(message){
-		return message.author.id == XANDER || Admin.users.includes(message.author.id) || Admin.channels.includes(message.channel.id)
+		return message.author.id == XANDER || Admin.users.includes(message.author.id) || Admin.channels.includes(message.channel.id) || message.author == "BOT"
 	},
 
 	// COMMAND returns a list of names with IDs and channel mentions that have command access

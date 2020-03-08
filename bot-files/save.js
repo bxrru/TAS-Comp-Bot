@@ -1,6 +1,6 @@
 const fs = require("fs");
-const miscfuncs = require("./miscfuncs.js");
 const request = require("request");
+const LOG_LOADS = false;
 
 function saveFile(filename, content){
 	module.exports.makeFolderIfNotExist("./saves/");
@@ -23,12 +23,16 @@ module.exports = {
         .pipe(fs.createWriteStream(path));
 	},
 	saveObject:function(filename, object){
+		if (!filename.toUpperCase().endsWith(".JSON")) filename += ".json"
+		if (LOG_LOADS) console.log(`Saving ${filename}...`)
 		saveFile(filename, JSON.stringify(object));
 	},
 	readObject:function(filename){
 		try {
+			if (!filename.toUpperCase().endsWith(".JSON")) filename += ".json"
 			var data = fs.readFileSync("./saves/"+filename);
 			var obj = JSON.parse(data);
+			if (LOG_LOADS) console.log(`${filename} loaded`)
 			return obj
 		} catch (err) {
 			console.log("Could not read file " + filename);

@@ -72,7 +72,7 @@ var start = function() {
 
   if (info.Bot_Token == ''){
     console.log(`${bar}No Bot Token found in SETUP-INFO.js\nUnable to start bot${bar}`)
-    return
+    process.exit()
   }
 
   console.log("Starting Bot...")

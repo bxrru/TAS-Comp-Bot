@@ -1,9 +1,10 @@
 process.title = "CompBOT";
 console.log("Starting main.js...");
+var NAME = "BOT"
 
 // other js files
 var fs = require("fs");
-const Eris = require("eris");
+const Eris = require("eris-additions")(require("eris"));
 
 const miscfuncs = require("./miscfuncs.js");
 const users = require("./users.js");
@@ -12,6 +13,7 @@ const score = require("./score.js");
 const save = require("./save.js");
 const game = require("./game.js");
 const chat = require("./chatcommands.js");
+const pkmn = require("./whosthatpokemon.js")
 
 const GUILDS = {"COMP":"397082495423741953","ABC":"267091686423789568"}
 
@@ -29,6 +31,8 @@ bot.on("ready", () => {
 	loadSaves()
 	bot.getSelf().then((self) => {
 		BOT_ACCOUNT = self.id;
+		NAME = self.username
+		createHelpCommand(pkmn) // have the right name (move this later)
 		console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
 	})
 	bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
@@ -62,6 +66,19 @@ function loadModule(mod){
 			addCommand(command.name, command.function, command.short_descrip, command.full_descrip, command.hidden)
 		}
 	})
+	if (mod.load != undefined) mod.load(bot) // load saves
+}
+
+function createHelpCommand(mod){
+	var msg = `**${NAME}** - ${mod.name}\n\n`
+	Object.keys(mod).forEach(key => {
+		var cmd = mod[key]
+		if (Object.prototype.toString.call(cmd) == "[object Object]"){
+			msg += `\t**${cmd.name}** - ${cmd.short_descrip}\n`
+		}
+	})
+	msg += "\nType \`$help <command>\` for more info on a command."
+	addCommand(mod.short_name, function(){return msg}, `Lists ${mod.short_name} commands`, function(){return msg}, false)
 }
 
 
@@ -83,8 +100,8 @@ bot.on("messageCreate", async(msg) => {
  	// Redirect Direct Messages that are sent to the bot
 	if (miscfuncs.isDM(msg)) {
 		var message = `[${msg.author.username} (${msg.author.id})]: ${msg.content}`
-		//bot.createMessage(CHANNELS.BOT_DMS, message); // Redirect to a specific channel
-		if (msg.author.id != XANDER) bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
+		bot.createMessage(chat.chooseChannel('bot_dms'), message)
+		//if (msg.author.id != XANDER) bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
 	}
 
 	/*// automatically compile brainfuck code - currently very buggy
@@ -143,10 +160,26 @@ var announcements = require('./announcement.js')
 loadModule(announcements)
 addCommand("ac", announcements.CommandInfo, "Lists announcement commands", announcements.CommandInfo(), false)
 
+loadModule(pkmn)
+
 bot.registerCommand("unused", (msg, args) => {
 	return //'||baited||'//"\uD83D \u1F54B :kaaba:"
-
 }, {hidden: true, caseInsensitive: true});
+
+bot.registerCommand("attachmentTest", async function(msg, args) {
+	if (msg.attachments.length == 0) return "No Attachments"
+	//console.log(msg.attachments)
+	for (var i = 0; i < msg.attachments.length; i++) {
+		var result = `${i}:\`\`\``
+		Object.keys(msg.attachments[i]).forEach(key => {
+			//console.log(key)
+			result += `${key}: ${msg.attachments[i][key]}\n`
+		})
+		result += "```"
+		await bot.createMessage(msg.channel.id, result)
+	}
+	return "No More Attachments"
+}, {hidden: true, caseInsensitive: true})
 
 miscfuncs.aliases.forEach((alias)=>{bot.registerCommandAlias(alias[0], alias[1])})
 

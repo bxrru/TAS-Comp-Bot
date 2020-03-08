@@ -2,7 +2,7 @@
   "name": "CompBOT",
   "version": "a0.081",
   "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry, hosted on https://github.com/Barryyyyyy/TAS-Comp-Bot",
-  "main": ".\bot-files\main.js",
+  "main": "./bot-files/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -23,6 +23,7 @@
     "node-opus": "^0.2.9",
     "pako": "^1.0.6",
     "uws": "^9.148.0",
-    "zlib-sync": "^0.1.4"
+    "zlib-sync": "^0.1.4",
+    "eris-additions": "github:minemidnight/eris-additions"
   }
 }
