@@ -726,8 +726,8 @@ module.exports = {
 
 
   // loads variables from save and verifies the message
-  retrieveScore:function(bot){
-    this.load();
+  load:function(bot){ // retrieveScore
+    module.exports.loadFiles();
     var channel_id = this.getScoreMsg()[0];
     var message_id = this.getScoreMsg()[1];
     bot.getMessage(channel_id, message_id).catch((error) => {
@@ -749,7 +749,7 @@ module.exports = {
     SAVE.saveObject("score.json", vars);
   },
 
-  load:function(){
+  loadFiles:function(){
     var vars = SAVE.readObject("score.json");
     this.setScore(vars.score);
     this.setScoreMsg(vars.channel_id, vars.message_id);
@@ -767,7 +767,7 @@ module.exports = {
       this.save();
     }
   },
-  
+
   help:function(command){
     var msg = "";
     msg += "Usage: ``$score <action> <args...>``\n";

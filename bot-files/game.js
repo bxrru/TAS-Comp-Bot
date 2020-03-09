@@ -10,7 +10,8 @@ function disabled(guild_id){
 }
 
 module.exports = {
-
+  name: "Games",
+  short_name: "games",
   save:function(){
     console.log("Saving games...")
     Save.saveObject("games.json", DisabledServers);
@@ -22,22 +23,13 @@ module.exports = {
       DisabledServers.push(data.pop());
     }
   },
-  CommandInfo:function(){
-    var msg = "**CompBot** - Games Module\n"
-    msg += "\n**Game Commands:**\n"
-    msg += "\t**$togglegames** - Toggle game functions (tg)\n"
-    msg += "\t**$slots** - Spin to win\n"
-    msg += "\t**$giveaway** - Randomly select a winner\n"
-    msg += "\t**$ss** - Chooses your Secret Santa\n"
-    msg += "\nType $help <command> for more info on a command."
-    return msg
-  },
 
   toggle:{
-    name: "toggleGames",
-    short_descrip: "Toggle game functions (tg)",
+    name: "tg",
+		aliases: ["toggleGames", "toggleGame"],
+    short_descrip: "Toggle game functions",
     full_descrip: "Switches the game functions on/off for a specific server",
-    hidden: false,
+    hidden: true,
     function: function(bot, msg, args){
       if (!users.hasCmdAccess(msg)) return
 
@@ -80,7 +72,7 @@ module.exports = {
     name: "slots",
     short_descrip: "Spin to Win",
     full_descrip: "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",
-    hidden: false,
+    hidden: true,
     function: function(bot, msg, args){
 
       // TODO: Add timeout (?), use default emojis
@@ -123,6 +115,7 @@ module.exports = {
   // DM each one a different name on the list (meant for secret santa deligation)
   assign_random:{
     name: "secretsanta",
+		aliases: ["ss"],
     short_descrip: "Chooses your Secret Santa",
     full_descrip: "Sends a DM to everyone @ mentioned in the command, with a name of another person on the list. No 2 users will get each other, and nobody will get themself.",
     hidden: true,

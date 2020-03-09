@@ -7,6 +7,8 @@ Admin = {
 }
 
 module.exports = {
+	name: "Users",
+	short_name: "mod",
 	load:function(){
 		Admin = Save.readObject("admin.json")
 		Bans = Save.readObject("bans.json")
@@ -67,6 +69,7 @@ module.exports = {
 	// COMMAND allows a user or every message from a channel to use every commands
 	addCmdAccessCMD:{
 		name: "addCommandAccess",
+		aliases: ["addCmdAccess"],
 		short_descrip: "Gives permissions to use commands",
 		full_descrip: "Usage: `$addCmdAccess [@user, #channel...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
 		hidden: true,
@@ -100,6 +103,7 @@ module.exports = {
 	// COMMAND that removes a user's or channel's access to every command
 	removeCmdAccessCMD:{
 		name: "removeCommandAccess",
+		aliases: ["removeCmdAccess"],
 		short_descrip: "Removes permissions to use commands",
 		full_descrip: "Usage: `$removeCmdAccess [@user, #channel...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
 		hidden: true,
@@ -242,22 +246,5 @@ module.exports = {
 				return `${result}[unbanned by ${msg.author.username}]`
 			}
 		}
-	},
-
-	commandInfo:function(){
-		var msg = "**CompBot** - User Module\n"
-
-		msg += "\n**User Commands:**\n"
-		msg += "\t**addCmdAccess** - Gives permissions to use commands\n"
-		msg += "\t**removeCmdAccess** - Removes permissions to use commands\n"
-		msg += "\t**listAccess** - List the users and channels with command access\n"
-		msg += "\n"
-
-		msg += "\t**ban** - Bans a user\n"
-		msg += "\t**unban** - Unbans a user\n"
-		msg += "\t**listbans** - List the banned users\n"
-
-		msg += "\nType $help <command> for more info on a command."
-		return msg
 	}
 };

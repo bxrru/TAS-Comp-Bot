@@ -2,6 +2,8 @@ var users = require("./users.js");
 var chat = require("./chatcommands.js")
 
 module.exports = {
+	name: "Miscellaneous",
+	short_name: "misc",
 	getDateTime:function() {
 		var now = new Date()
 		var year = now.getFullYear()
@@ -36,16 +38,17 @@ module.exports = {
 		name: "ping",
 		short_descrip: "ping",
 		full_descrip: "To check if the bot is not dead. Tells you time it takes to bait you in ms",
-		hidden: false,
+		hidden: true,
 		function: function(bot, msg){
 			return "baited (" + (new Date().getTime() - msg.timestamp) / 1000 + "ms)"
 		}
 	},
 	celsiusToInferiorTemp:{
 		name: "fahrenheit",
+		aliases: ["farenheit", "c->f"],
 		short_descrip: "Convert °C to °F",
 		full_descrip: "Usage: `$c->f <°C>`",
-		hidden: false,
+		hidden: true,
 		function: function(bot, msg, args){
 			if (args.length == 0) return "Not Enough Arguments: `<°C>`"
 			var C = parseFloat(args[0])
@@ -55,9 +58,10 @@ module.exports = {
 	},
 	inferiorTempToCelsius:{
 		name: "celsius",
+		aliases: ["celcius", "f->c"],
 		short_descrip: "Convert °F to °C",
 		full_descrip: "Usage: `$f->c <°F>`",
-		hidden: false,
+		hidden: true,
 		function: function(bot, msg, args){
 			if (args.length == 0) return "Not Enough Arguments: `<°F>`"
 			var F = parseFloat(args[0])
@@ -67,9 +71,10 @@ module.exports = {
 	},
 	cmToInches:{
 		name: "inches",
+		aliases: ["cm->inch", "cm->inches", "inch"],
 		short_descrip: "Convert cm to inches",
 		full_descrip: "Usage: `$cm->inch <cm>`",
-		hidden: false,
+		hidden: true,
 		function: function(bot, msg, args){
 			if (args.length == 0) return "Not Enough Arguments: `<cm>`"
 			var cm = parseFloat(args[0])
@@ -79,9 +84,10 @@ module.exports = {
 	},
 	inchesToCm:{
 		name: "centimeters",
+		aliases: ["inch->cm", "inches->cm", "cm"],
 		short_descrip: "Convert inches to cm",
 		full_descrip: "Usage: `$inch->cm <inches>`",
-		hidden: false,
+		hidden: true,
 		function: function(bot, msg, args){
 			if (args.length == 0) return "Not Enough Arguments: `<inches>`"
 			var I = parseFloat(args[0])
@@ -92,9 +98,10 @@ module.exports = {
 	// COMMAND that adds a role to a user. Defaults to sender
 	addRole:{
 		name: "addrole",
+		aliases: ["ar"],
 		short_descrip: "Gives a user a role",
 		full_descrip: "Usage `$ar <role_id> [user_id]`\nuser_id defaults to the user that calls the command",
-		hidden: false, // T?
+		hidden: true, // T?
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
 			if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
@@ -110,9 +117,10 @@ module.exports = {
 	// COMMAND removes a role from a user. Defaults to sender
 	removeRole:{
 		name: "removerole",
+		aliases: ["rr"],
 		short_descrip: "Removes a role from a user",
 		full_descrip: "Usage `$rr <role_id> [user_id]\nuser_id defaults to the user that calls the command",
-		hidden: false, // T?
+		hidden: true,
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
 			if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
@@ -127,10 +135,11 @@ module.exports = {
 	},
 	// COMMAND adds a reaction to a given message
 	addReaction:{
-		name: "addreaction",
+		name: "react",
+		aliases: ["addReaction", "addReactions"],
 		short_descrip: "Reacts to a message",
-		full_descrip: "Usage `$react <channel_id> <message_id> <emojis...>`\nThis will reacat with multiple space separated emojis. For a list of channel names that can be used instead of `<channel_id>` use `$ls`",
-		hidden: false, // T?
+		full_descrip: "Usage `$react <channel_id> <message_id> <emojis...>`\nThis will reacat with multiple space separated emojis. For a list of channel names that can be used instead of `<channel_id>` use `$lc`",
+		hidden: true, // T?
 		function: async function(bot, msg, args){
 			if (args.length < 3) return "Not Enough Arguments: <channel_id> <message_id> <emojis...>"
 			var channel = args.shift()
@@ -161,41 +170,5 @@ module.exports = {
 		    arg = arg.substr(2, arg.length-3)
 		}
 		return arg
-	},
-	// List of command aliases
-	// [Alias, Original_Command_Name]
-	aliases:[
-		["channeladd","addChannel"],
-		["channelremove","removeChannel"],
-		["listchannels","ls"], ["getchannels","ls"],
-		["say","send"],
-		["tr","toggleReaction"], ["togglereactions","toggleReaction"],
-		["tg","toggleGames"], ["togglegame","toggleGames"],
-		["get","getsubmission"],
-		["setsm","setSubmissionMessage"], ["setsmsg","setSubmissionMessage"],
-		["setfeed","setSubmissionFeed"],
-		["startAccepting","startTask"], ["startSubmission","startTask"], ["startSubmissions", "startTask"],
-		["stopAccepting","stopTask"], ["stopSubmission","stopTask"], ["stopSubmissions", "stopTask"],
-		["clearAllSubmissions","clearSubmissions"],
-		["setRole","setSubmittedRole"],
-		["game", "games"],
-		["removesubmission", "deleteSubmission"],
-		["cm", "centimeters"], ["inch->cm", "centimeters"],
-		["celcius", "celsius"], ["f->c", "celsius"],
-		["farenheit", "fahrenheit"], ["c->f", "fahrenheit"],
-		["ar", "addrole"],
-		["rr", "removerole"],
-		["react", "addreaction"], ["addreactions", "addreaction"],
-		["addCmdAccess", "addCommandAccess"],
-		["removeCmdAccess", "removeCommandAccess"],
-		["dq", "disqualify"],
-		["undq", "undodisqualify"],
-		["ss", "secretsanta"],
-		["acset", "acadd"],
-		["acdelete", "acclear"], ["acremove", "acclear"],
-		["setTaskTime", "setTaskLength"], ["setTaskWindow", "setTaskLength"], ["setTaskTimeWindow", "setTaskLength"], ["setTaskTimeFrame", "setTaskLength"],
-		["setTaskMessage", "setTaskMsg"],
-		["ctts", "checkTimedTaskStatus"],
-		["taskPreview", "previewTask"]
-	]
+	}
 };

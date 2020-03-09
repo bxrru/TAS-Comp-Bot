@@ -61,7 +61,7 @@ module.exports = {
 
   run:{
     name: "bf",
-    short_descrip: "Compiles brainfuck code",
+    short_descrip: "Compiles brainf* code",
     full_descrip: info,
     hidden: false,
     function: async function(bot, msg, args, debug, silent){

@@ -13,11 +13,11 @@ const score = require("./score.js");
 const save = require("./save.js");
 const game = require("./game.js");
 const chat = require("./chatcommands.js");
+const announcements = require('./announcement.js')
+const bf = require("./brainfuck.js")
 const pkmn = require("./whosthatpokemon.js")
 
-const GUILDS = {"COMP":"397082495423741953","ABC":"267091686423789568"}
-
-var BOT_ACCOUNT = "532974459267710987" //"555489679475081227"; // better way to identify self?
+var BOT_ACCOUNT = ""
 const XANDER = "129045481387982848";
 const BARRY = "146958598801457152";
 
@@ -27,27 +27,16 @@ var bot = new Eris.CommandClient(process.argv[2], {}, {
 	prefix: "$"
 });
 
-bot.on("ready", () => {
-	loadSaves()
-	bot.getSelf().then((self) => {
-		BOT_ACCOUNT = self.id;
-		NAME = self.username
-		createHelpCommand(pkmn) // have the right name (move this later)
-		console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
-	})
+bot.on("ready", async() => {
+	var self = await bot.getSelf()
+	BOT_ACCOUNT = self.id
+	NAME = self.username
+	loadAllModules()
+	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
 	bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
 });
 
-function loadSaves(){
-	score.retrieveScore(bot)
-	chat.loadChannels()
-	users.load()
-	comp.load()
-	game.load()
-	announcements.load(bot)
-}
-
-function addCommand(name, func, descrip, fullDescrip, hide){
+function addCommand(name, func, descrip, fullDescrip, hide, aliases){
 	bot.registerCommand(name, (msg, args) => {
 		return func(bot, msg, args); // pass arguments to the function
 	},
@@ -57,28 +46,36 @@ function addCommand(name, func, descrip, fullDescrip, hide){
 		hidden: hide,
 		caseInsensitive: true
 	});
+	if (aliases != undefined) aliases.forEach(a => bot.registerCommandAlias(a, name))
+}
+
+function addCmdObj(cmd){
+	addCommand(cmd.name, cmd.function, cmd.short_descrip, cmd.full_descrip, cmd.hidden, cmd.aliases)
 }
 
 function loadModule(mod){
+	createHelpCommand(mod)
 	Object.keys(mod).forEach(key => {
 		var command = mod[key]
 		if (Object.prototype.toString.call(command) == "[object Object]" && command.custom === undefined){
-			addCommand(command.name, command.function, command.short_descrip, command.full_descrip, command.hidden)
+			addCmdObj(command)
 		}
 	})
 	if (mod.load != undefined) mod.load(bot) // load saves
 }
 
 function createHelpCommand(mod){
-	var msg = `**${NAME}** - ${mod.name}\n\n`
+	var msg = `**${NAME}** - ${mod.name} Module\n\n`
+	var i = 0;
 	Object.keys(mod).forEach(key => {
 		var cmd = mod[key]
 		if (Object.prototype.toString.call(cmd) == "[object Object]"){
 			msg += `\t**${cmd.name}** - ${cmd.short_descrip}\n`
+			if (++i % 5 == 0) msg += `\n` // break them up in groups of 5
 		}
 	})
 	msg += "\nType \`$help <command>\` for more info on a command."
-	addCommand(mod.short_name, function(){return msg}, `Lists ${mod.short_name} commands`, function(){return msg}, false)
+	addCommand(mod.short_name, function(){return msg}, `Lists ${mod.name} commands`, msg, false)
 }
 
 
@@ -91,7 +88,7 @@ bot.on("messageCreate", async(msg) => {
 
 	// another meme
 	if (msg.content.split(' ').includes('<@!532974459267710987>') || msg.content.split(' ').includes('<@532974459267710987>')) {
-		bot.createMessage(msg.channel.id, "What the fuck. Did you really ping me at this time for that? You did. Arrangements have been made so that I will no longer be directly pinged from you. If you need me, contact somebody else.")
+		bot.createMessage(msg.channel.id, "What the f*ck. Did you really ping me at this time for that? You did. Arrangements have been made so that I will no longer be directly pinged from you. If you need me, contact somebody else.")
 	}
 
 	score.autoUpdateScore(bot, msg);
@@ -130,37 +127,32 @@ bot.on("messageReactionAdd", (msg, emoji) => {
 
 });
 
-// Specials //
+function loadAllModules(){
+	loadModule(miscfuncs)
+	loadModule(users)
+	loadModule(chat)
+	loadModule(game)
+	loadModule(comp)
+	loadModule(announcements)
+	loadModule(pkmn)
+}
+
+// Special Commands //
 addCommand("restart", (bot, msg) => {if (users.hasCmdAccess(msg)) process.exit(42)},"","Shuts down the bot, downloads files off of github, then starts the bot back up. This will only download files from 'bot-files'", true)
-bot.registerCommand("toggleReaction", (msg, args) => {if (users.hasCmdAccess(msg)) return (echoReactions = !echoReactions) ? "Reactions enabled" : "Reactions disabled"},{description: "Toggle auto reactions (tr)",fullDescription: "Switches echoing reactions on/off"})
-bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Lists #score commands", fullDescription: score.help()});
-bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true});
 
-loadModule(miscfuncs)
-addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false);
+bot.registerCommand("tr", (msg, args) => {if (users.hasCmdAccess(msg)) return (echoReactions = !echoReactions) ? "Reactions enabled" : "Reactions disabled"},{description: "Toggle auto reactions",fullDescription: "Switches echoing reactions on/off"})
+bot.registerCommandAlias("toggleReaction", "tr")
+bot.registerCommandAlias("toggleReactions", "tr")
 
-loadModule(users)
-addCommand("mod", users.commandInfo, "Lists miscellaneous mod commands", users.commandInfo(), false)
+bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Lists #score commands", fullDescription: score.help()})
+bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true})
+
+addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false)
+
 addCommand("ban", async(bot,msg,args)=>comp.messageAdmins(bot,await users.BanCMD(bot,msg,args)), users.BanCMD.short_descrip, users.BanCMD.full_descrip, true)
 addCommand("unban", async(bot,msg,args)=>comp.messageAdmins(bot,await users.unbanCMD(bot,msg,args)), users.unbanCMD.short_descrip, users.unbanCMD.full_descrip, true)
 
-loadModule(chat)
-addCommand("chat", chat.CommandInfo, "Lists chat commands", chat.CommandInfo(), false)
-
-loadModule(game)
-addCommand("games", game.CommandInfo, "Lists game commands", game.CommandInfo(), false)
-
-loadModule(comp)
-addCommand("comp", comp.CommandInfo, "List competition commands", comp.CommandInfo(), false)
-
-var bf = require("./brainfuck.js")
-loadModule(bf)
-
-var announcements = require('./announcement.js')
-loadModule(announcements)
-addCommand("ac", announcements.CommandInfo, "Lists announcement commands", announcements.CommandInfo(), false)
-
-loadModule(pkmn)
+addCmdObj(bf.run)
 
 bot.registerCommand("unused", (msg, args) => {
 	return //'||baited||'//"\uD83D \u1F54B :kaaba:"
@@ -181,15 +173,4 @@ bot.registerCommand("attachmentTest", async function(msg, args) {
 	return "No More Attachments"
 }, {hidden: true, caseInsensitive: true})
 
-miscfuncs.aliases.forEach((alias)=>{bot.registerCommandAlias(alias[0], alias[1])})
-
 bot.connect();
-
-/* Command Template
-bot.registerCommand("", (msg, args) => {
-	if (!users.hasCmdAccess(msg)) return
-
-	// Code here:
-
-}, {hidden: true, caseInsensitive: true});
-*/

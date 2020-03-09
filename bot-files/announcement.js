@@ -9,7 +9,6 @@ var Timers = [] // {id, timer}
 // delays for repeated announcements
 var Delays = {
     once: 0,
-    ten: 10000,
 		daily: 86400000,
     weekly: 604800000,
     biweekly: 1209600000
@@ -18,9 +17,12 @@ var Delays = {
 // TODO: send missed announcements and say how much it was delayed by (in load func)
 
 module.exports = {
+  name: "Announcement",
+  short_name: "ac",
 
 	AddAnnouncement:{
 		name: "acadd",
+		aliases: ["acset"],
 		short_descrip: "Add an accouncement",
 		full_descrip: "Sets a message that will automatically be sent to the specified channel at the given time and date. Usage: `$acadd <channel> <interval> \"message\" date and time`. To use quotations within the announcement type \`\\\"\`. Otherwise, everything between the first two quotations will be used. Everything after the last quotation will be interpreted as a time and date. To see a list of intervals use `$acinterval`. To send it as a DM, put `DM` before the user id without a space. Ex: `$acadd DM532974459267710987 once \"Hi there!\" at 4:20pm est tomorrow`",
 		hidden: true,
@@ -330,7 +332,8 @@ module.exports = {
 	},
 
 	ClearAnnouncement:{
-		name: "acclear", // acdelete, acremove
+		name: "acclear",
+		aliases: ["acdelete", "acremove"],
 		short_descrip: "Remove an announcement",
 		full_descrip: "Unschedules a planned announcement given its ID. The person who added the announcement will be notified. For a list of announcement IDs, use $aclist",
 		hidden: true,
@@ -390,26 +393,6 @@ module.exports = {
 
 			return result
 		}
-	},
-
-	CommandInfo:function(){
-		var msg = "**CompBot** - Announcement Module\n"
-		msg += "\n**Announcement Commands:**\n"
-
-		var cmds = [
-			module.exports.AddAnnouncement,
-			module.exports.ClearAnnouncement,
-			module.exports.AnnouncementInfo,
-			module.exports.AnnouncementList,
-			module.exports.ListIntervals
-		]
-
-		cmds.forEach(obj => {
-				msg += `\t**${obj.name}** - ${obj.short_descrip}\n`
-		})
-
-		msg += "\nType $help <command> for more info on a command."
-		return msg
 	},
 
   // shortcut for other modules to send announcements

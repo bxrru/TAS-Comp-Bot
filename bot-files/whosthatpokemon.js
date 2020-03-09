@@ -70,7 +70,8 @@ module.exports = {
 
   // TODO: stop next one and make it go at the specified time
   SetQuizTime:{
-    name: "SetQuizTime", // alias: [SetQuizDate]
+    name: "SetQuizTime",
+    aliases: ["SetQuizDate"],
     short_descrip: "Set the daily start time",
     full_descrip: "Usage: \`$setquizdate <time and date>\`\nNo specific format is required for \`<time and date>\`. If the time has already passed it will set it to the next day at the same time.",
     hidden: true,
@@ -167,7 +168,8 @@ module.exports = {
   },
 
   SetQuestionImage:{
-    name:"SetQuestionImage", // aliases: [setquestion, setprompt]
+    name:"SetQuestionImage",
+    aliases: ["setQuestion", "setPrompt"],
     short_descrip: "Set the image for the quiz",
     full_descrip: "Usage: `$setquestionimage <attachment or url>`\nSets the image prompt that will appear at the start upcoming quiz. If no attachment is provided, it will assume the first argument is a url.",
     hidden: true,
@@ -185,7 +187,8 @@ module.exports = {
   },
 
   SetAnswerImage:{
-    name:"SetAnswerImage", // alias: [setanswer]
+    name:"SetAnswerImage",
+    aliases: ["setAnswer"],
     short_descrip: "Set the image for the answer to the quiz",
     full_descrip: "Usage: `$setanswerimage <attachment or url>`\nSets the image that will appear when the answer to the quiz is posted. If no attachment is provided, it will assume the first argument is a url.",
     hidden: true,
@@ -283,6 +286,7 @@ module.exports = {
     full_descrip: "Usage: `$guess <name>`\nSubmits a response to the quiz! Names with spaces are acceptable.",
     hidden: true,
     function: function(bot, msg, args) {
+      if (USERS.isBanned(msg.author.id)) return
       if (!QuizOpen) return `Sorry, no quiz seems to be open right now!`
       if (args.length == 0) `No response detected: \`$guess <name>\``
 
@@ -305,6 +309,7 @@ module.exports = {
     full_descrip: "Usage: \`$prompt\`\nIf there is currently an active quiz, this will show the quiz image to anyone. This will display the image if someone with command access calls this (regardless of current quiz status)",
     hidden: true,
     function:function(bot, msg, args){
+      if (USERS.isBanned(msg.author.id)) return
       if (!QuizOpen && !USERS.hasCmdAccess(msg)) return `There's no quiz running right now`
       return `Who's that Pokemon!? ${QuestionImage}`
     },
@@ -368,7 +373,8 @@ module.exports = {
   },
 
   PreviewAnswer:{
-    name: "PreviewAnswer", // aliases [previewSolution]
+    name: "PreviewAnswer",
+    aliases: ["previewSolution"],
     short_descrip: "See what the quiz answer looks like",
     full_descrip: "Usage: \`$previewanswer\`\nThis will send a DM with the message that is currently planned to be posted at the end of the next/current quiz.",
     hidden: true,

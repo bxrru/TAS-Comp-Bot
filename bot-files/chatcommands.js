@@ -23,21 +23,8 @@ function chooseChannel(string){
 }
 
 module.exports = {
-
-	CommandInfo:function(){
-		var msg = "**CompBot** - Chat Module\n"
-    msg += "\n**Chat Commands:**\n"
-    msg += "\t**$listchannels** - lists recognized channel names (ls)\n"
-    msg += "\t**$addchannel** - Adds a channel name to the list\n"
-    msg += "\t**$removechannel** - Removes a channel name from the list\n"
-    msg += "\t**$send** - Sends a message to a specified channel\n"
-    msg += "\t**$delete** - Deletes a message\n"
-    msg += "\t**$pin** - Pins a message\n"
-    msg += "\t**$unpin** - Unpins a message\n"
-    msg += "\t**$dm** - Sends a message to a user\n"
-    msg += "\nType $help <command> for more info on a command."
-		return msg
-	},
+	name: "Chat",
+	short_name: "chat",
 
 	// CHANNEL COMMANDS
 
@@ -48,6 +35,7 @@ module.exports = {
 
   addChannelAlias:{
 		name:"addChannel",
+		aliases: ["channelAdd"],
 		short_descrip: "Adds a channel name to the list",
 		full_descrip: "Usage: `$addChannel <alias> <channel_id>`\nAllows `<alais>` to be specified in place of `<channel_id>` for other commands.",
 		hidden: true,
@@ -63,6 +51,7 @@ module.exports = {
 
   removeChannelAlias:{
 		name: "removeChannel",
+		aliases: ["channelRemove"],
 		short_descrip: "Removes a channel name from the list",
 		full_descrip: "Usage: `$removeChannel <alias>`",
 		hidden: true,
@@ -77,7 +66,8 @@ module.exports = {
   },
 
   getChannelAliases:{
-		name:"ls",
+		name:"listChannels",
+		aliases: ["listChannels", "getchannels", "lc"],
 		short_descrip:"Lists recognized channel names",
 		full_descrip:"Retrieves the list of channel aliases that may replace `<channel_id>` in other commands",
 		hidden:true,
@@ -92,7 +82,7 @@ module.exports = {
 		}
   },
 
-	loadChannels:function(){
+	load:function(){
 		var json = save.readObject("channels.json");
 		Object.keys(json).forEach((key) => {
 			CHANNELS[key] = json[key];
@@ -104,8 +94,9 @@ module.exports = {
 
 	send:{
 		name: "send",
+		aliases: ["say"],
 		short_descrip: "Sends a message to a specified channel",
-		full_descrip: "Usage: `$send <channel_id> <message>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		full_descrip: "Usage: `$send <channel_id> <message>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$lc`",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -118,7 +109,7 @@ module.exports = {
 	delete:{
 		name: "delete",
 		short_descrip: "Deletes a message",
-		full_descrip: "Usage: `$delete <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		full_descrip: "Usage: `$delete <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$lc`",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -132,7 +123,7 @@ module.exports = {
 	pin:{
 		name: "pin",
 		short_descrip: "Pins a message",
-		full_descrip: "Usage: `$pin <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		full_descrip: "Usage: `$pin <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$lc`",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -146,7 +137,7 @@ module.exports = {
 	unpin:{
 		name: "unpin",
 		short_descrip: "Unpins a message",
-		full_descrip: "Usage: `$unpin <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$ls`",
+		full_descrip: "Usage: `$unpin <channel_id> <message_id>`\nFor a list of channel names that can be used instead of `<channel_id>` use `$lc`",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
