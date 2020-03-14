@@ -33,11 +33,12 @@ bot.on("ready", async() => {
 	NAME = self.username
 	loadAllModules()
 	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
-	bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
+	//bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
 });
 
 function addCommand(name, func, descrip, fullDescrip, hide, aliases){
 	bot.registerCommand(name, (msg, args) => {
+		if (users.isBanned(msg.author.id)) return // disallow banned users from using any commands
 		return func(bot, msg, args); // pass arguments to the function
 	},
 	{
@@ -149,12 +150,18 @@ bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.
 
 addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false)
 
-addCommand("ban", async(bot,msg,args)=>comp.messageAdmins(bot,await users.BanCMD(bot,msg,args)), users.BanCMD.short_descrip, users.BanCMD.full_descrip, true)
-addCommand("unban", async(bot,msg,args)=>comp.messageAdmins(bot,await users.unbanCMD(bot,msg,args)), users.unbanCMD.short_descrip, users.unbanCMD.full_descrip, true)
-
 addCmdObj(bf.run)
 
-bot.registerCommand("unused", (msg, args) => {
+bot.registerCommand("test", async(msg, args) => {
+	if (!users.hasCmdAccess(msg)) return
+	try {
+		var user = await users.getUser(bot, args[0])
+		if (user === null) user = await bot.getChannel(args[0])
+		if (user === undefined) return `No Valid ID`
+		return `\`\`\`${user}\`\`\``
+	} catch (e) {
+		return `\`\`\`${e}\`\`\``
+	}
 	return //'||baited||'//"\uD83D \u1F54B :kaaba:"
 }, {hidden: true, caseInsensitive: true});
 
