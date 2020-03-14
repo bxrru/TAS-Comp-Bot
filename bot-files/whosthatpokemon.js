@@ -18,6 +18,7 @@ var QuestionImage = "https://media.discordapp.net/attachments/196442189604192256
 var AnswerImage = "https://media.discordapp.net/attachments/196442189604192256/685615705143377973/Pikachu.png"
 
 var Responses = [] // ["user_id", "response"]
+var StartTime = new Date()
 
 module.exports = {
   name:"Who's That Pokemon!?",
@@ -34,7 +35,8 @@ module.exports = {
       description: Descrip,
       prompt: QuestionImage,
       solution: AnswerImage,
-      guesses: Responses
+      guesses: Responses,
+      start: StartTime.toString()
     }
     SAVE.saveObject(`quizinfo`, data)
   },
@@ -45,6 +47,16 @@ module.exports = {
     while (TimeAndDate - now < 0) TimeAndDate.setHours(TimeAndDate.getHours()+24)
     Length = data.length
     Channel = data.channel
+    QuizRunning = data.running
+    QuizOpen = data.open
+    while (data.skip.length) SkipDays.push(data.skip.pop())
+    Pokemon = data.name
+    Descrip = data.description
+    QuestionImage = data.prompt
+    AnswerImage = data.solution
+    while (data.guesses.length) Responses.push(data.guesses.pop())
+    StartTime = new Date()
+    if (data.start != undefined) StartTime = CHRONO.parseDate(data.start)
   },
 
   SetQuizChannel:{
@@ -215,6 +227,7 @@ module.exports = {
       return
     }
 
+    StartTime = new Date()
     QuizOpen = true
     Responses = []
     module.exports.save()
@@ -240,11 +253,10 @@ module.exports = {
     QuizOpen = false
     module.exports.save()
 
-    // AC called function but quizzes stopped
-    // I dont think this is necessary but just in case...
-    if (!QuizRunning && override == undefined) return
-
     bot.createMessage(Channel, module.exports.GetSolutionMessage()) // Assumes valid channel
+
+    // dont set the next quiz for a manually started quiz
+    if (!QuizRunning && override == undefined) return
 
     // start next quiz at the specified time the next day
     // this is complicated in case the quiz was force started / stopped (IE not just 24-Length hours from now)
@@ -276,6 +288,7 @@ module.exports = {
     function: function(bot, msg, args) {
       if (!USERS.hasCmdAccess(msg)) return
       if (!QuizOpen) return `Quiz has already stopped!`
+      AC.KillDelayedFunction("PKMN-END")
       module.exports.PostSolution(bot, true)
     }
   },
@@ -325,7 +338,7 @@ module.exports = {
       QuizRunning = true
       module.exports.save()
       AC.KillDelayedFunction("PKMN-START")
-      AC.KillDelayedFunction("PKMN-STOP")
+      AC.KillDelayedFunction("PKMN-END")
 
       var now = new Date()
       while (TimeAndDate - now < 0) TimeAndDate.setHours(TimeAndDate.getHours()+24)
@@ -347,7 +360,7 @@ module.exports = {
       QuizOpen = false
       module.exports.save()
       while (AC.KillDelayedFunction("PKMN-START")) // in case something goes horribly wrong
-      while (AC.KillDelayedFunction("PKMN-STOP")) // delete every instance of these
+      while (AC.KillDelayedFunction("PKMN-END")) // delete every instance of these
       return `Daily quizzes disabled`
     },
   },
@@ -363,7 +376,9 @@ module.exports = {
       info += `Quizzes ${QuizRunning ? 'enabled' : 'disabled'}\n`
       info += `Current status: \`${QuizOpen ? '' : 'Not'} Accepting Responses\`\n`
       info += `Next scheduled quiz: \`${TimeAndDate.toString()}\`\n`
-      info += `Quiz length: ${Length} hour${Length == 1 ? '' : 's'}\n`
+      var hours = Math.floor(Length)
+      var min = Math.floor((Length - hours)*60)
+      info += `Quiz length: ${hours} hour${hours == 1 ? '' : 's'} ${min} min (${Length} hour${Length == 1 ? '' : 's'})\n`
       info += `Channel: <#${Channel}>\n`
       info += SkipDays.length == 0 ? `No days are set to skip\n` : `Days that are skipped: \`${SkipDays.join(', ')}\`\n`
       info += `\nTo see what the answer to the quiz looks like, use \`$previewAnswer\`. `
@@ -422,5 +437,21 @@ module.exports = {
 
       return `Setup complete. Use \`$previewAnswer\` to see what the results will look like`
     }
+  },
+
+  TimeRemaining:{
+    name: "TimeRemaining",
+    short_descrip: "See how much time is left for the current quiz",
+    full_descrip: "Usage: \`$timeremaining\`\nSee how much time is left for the current quiz.",
+    hidden: true,
+    function:async function(bot, msg, args){
+      if (USERS.isBanned(msg.author.id)) return
+      if (!QuizOpen) return `There's no quiz running right now`
+      var end = CHRONO.parseDate(StartTime.toString()) // bad way to make a copy
+      end.setHours(end.getHours()+Math.floor(Length))
+      end.setMinutes(end.getMinutes()+Math.floor((Length-Math.floor(Length))*60))
+      var now = new Date()
+      return `You have ${MISC.formatSecsToStr((end - now) / 1000)} remaining to submit your response!`
+    },
   }
 }

@@ -71,13 +71,10 @@ module.exports = {
 		name: "addCommandAccess",
 		aliases: ["addCmdAccess"],
 		short_descrip: "Gives permissions to use commands",
-		full_descrip: "Usage: `$addCmdAccess [@user, #channel...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
+		full_descrip: "Usage: `$addCmdAccess [@user, #channel, <id>...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command. If an ID is given it will give access to the appropriate user or channel.",
 		hidden: true,
-		function: function(bot, msg, args){
+		function: async function(bot, msg, args){
 			if (!module.exports.hasCmdAccess(msg)) return
-
-			if (args.length && !msg.channelMentions.length && !msg.mentions.length)
-				return "Incorrect Usage: `$addCmdAccess [@user, #channel...]`"
 
 			var result = `Command access given to: `
 
@@ -96,6 +93,24 @@ module.exports = {
 				result += `<@${user.id}> `
 			})
 
+			args.forEach(async(id) => {
+				if (!id.startsWith('<')) {
+
+					var user = await module.exports.getUser(bot, id) // try to get a user
+					if (user != null) {
+						module.exports.addCmdAccessUser(user.id)
+						result += `<@${user.id}> `
+
+					} else {
+						var channel = await bot.getChannel(id) // try to get a channel
+						if (channel != undefined) {
+							module.exports.addCmdAccessChannel(channel.id)
+							result += `<#${id}> `
+						}
+					} // otherwise ignore
+				}
+			})
+
 			return result
 		}
 	},
@@ -105,17 +120,14 @@ module.exports = {
 		name: "removeCommandAccess",
 		aliases: ["removeCmdAccess"],
 		short_descrip: "Removes permissions to use commands",
-		full_descrip: "Usage: `$removeCmdAccess [@user, #channel...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
+		full_descrip: "Usage: `$removeCmdAccess [@user, #channel, <id>...]`\nDefaults to the channel the message was sent in. It will give access to any users or channels mentioned in the command",
 		hidden: true,
-		function: function(bot, msg, args){
+		function: async function(bot, msg, args){
 			if (!module.exports.hasCmdAccess(msg)) return
-
-			if (args.length && !msg.channelMentions.length && !msg.mentions.length)
-				return "Incorrect Usage: `$addCmdAccess [@user, #channel...]`"
 
 			var result = `Command access removed from: `
 
-			if (args.length == 0){ // add current channel
+			if (args.length == 0){ // remove current channel
 				module.exports.removeCmdAccessChannel(msg.channel.id)
 				result += `<#${msg.channel.id}> `
 			}
@@ -130,6 +142,24 @@ module.exports = {
 				result += `<@${user.id}> `
 			})
 
+			args.forEach(async(id) => {
+				if (!id.startsWith('<')) { // look at non-mentions
+
+					var user = await module.exports.getUser(bot, id) // try to get a user
+					if (user != null) {
+						module.exports.removeCmdAccessUser(user.id)
+						result += `<@${user.id}> `
+
+					} else {
+						var channel = await bot.getChannel(id) // try to get a channel
+						if (channel != undefined) {
+							module.exports.removeCmdAccessChannel(channel.id)
+							result += `<#${id}> `
+						}
+					} // otherwise ignore
+				}
+			})
+
 			return result
 		}
 	},
@@ -141,7 +171,7 @@ module.exports = {
 			var dm = await bot.getDMChannel(user_id)
 			return dm.recipient
 		} catch (error) {
-			console.log(error)
+			//console.log(error)
 			return null
 		}
 	},
@@ -182,7 +212,7 @@ module.exports = {
 	BanCMD:{
 		name: "ban",
 		short_descrip: "Bans a user",
-		full_descrip: "Usage: `$ban <@user or user_id> [reason]`\nPrevents the user from submitting to the competition. This will DM the user being banned. To see the current list of banned users use `$listbans`",
+		full_descrip: "Usage: `$ban <@user or user_id> [reason]`\nPrevents the specified user from interacting with this bot. This will DM the user being banned. To see the current list of banned users use `$listbans`",
 		hidden: true, custom: true,
 		function: async function(bot, msg, args){
 			if (!module.exports.hasCmdAccess(msg)) return
@@ -197,7 +227,7 @@ module.exports = {
 			if (msg.mentions.length && `<@${id}}>` == args[0]) id = args[0]
 
 			var user = await module.exports.getUser(bot, id)
-			if (user == null) return `User ID \`${id}\` Not Recognized`
+			if (user === null) return `User ID \`${id}\` Not Recognized`
 
 			if (Bans.includes(id)) return `${user.username} \`(${id})\` is already banned`
 			module.exports.addBan(id)
@@ -208,7 +238,7 @@ module.exports = {
 			var result = `${user.username} \`(${id})\` has been banned from the competition. `
 			try {
 				var dm = await bot.getDMChannel(id)
-				dm.createMessage(`You have been banned from the TAS Competition. Submissions you send in will no longer be accepted. ${reason}`)
+				dm.createMessage(`You have been banned from using this bot and can no longer use any of its commands. ${reason}`)
 			} catch (e) {
 				result += `Failed to notify user. `
 
@@ -222,7 +252,7 @@ module.exports = {
 	unbanCMD:{
 		name: "unban",
 		short_descrip: "Unbans a user",
-		full_descrip: "Usage: `$ban <@user or user_id> [reason]`\nLift a ban and allow the user to submit to the competition again. This will DM the user being unbanned. To see the current list of banned users use `$listbans`",
+		full_descrip: "Usage: `$ban <@user or user_id>`\nLift a ban and allow the specified user to interact with this bot again. This will DM the user being unbanned. To see the current list of banned users use `$listbans`",
 		hidden: true, custom: true,
 		function: async function(bot, msg, args){
 			if (!module.exports.hasCmdAccess(msg)) return
@@ -238,7 +268,7 @@ module.exports = {
 			var result = `${user.username} \`(${id})\` has been unbanned from the competition. `
 			try {
 				var dm = await bot.getDMChannel(id)
-				dm.createMessage(`You are no longer banned from the TAS Competition. Submissions you send in will now be accepted`)
+				dm.createMessage(`You are no longer banned from using this bot and can now use its commands again.`)
 			} catch (e) {
 				result +=  `Failed to notify user. `
 
