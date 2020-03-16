@@ -7,7 +7,7 @@ make bot lol
 	bot needs to give people @submitted
 		use prefix $, likely command $clear for clearing current_submissions?
 		needs to be able to grab timestamp from message
-		needs to be able to upload every files to Google Drive, likely to barrytasing@gmail.com in a shared folder?
+		needs to be able to upload every files to Google Drive, likely to **REDACTED** in a shared folder?
 		must be able to only upload latest file, or put files that aren't recent in other folder
 		needs to be able to DM:
 			(TAS Competition 2019#3160) <@397096658476728331>
