@@ -17,11 +17,10 @@ const announcements = require('./announcement.js')
 const bf = require("./brainfuck.js")
 const pkmn = require("./whosthatpokemon.js")
 
+const Info = require("../SETUP-INFO.js")
 var BOT_ACCOUNT = ""
-const XANDER = "129045481387982848";
-const BARRY = "146958598801457152";
 
-var bot = new Eris.CommandClient(process.argv[2], {}, {
+var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
 	description: "List of commands",
 	owner: "Eddio0141, Barry & Xander",
 	prefix: "$"
@@ -33,7 +32,7 @@ bot.on("ready", async() => {
 	NAME = self.username
 	loadAllModules()
 	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
-	//bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
+	bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
 });
 
 function addCommand(name, func, descrip, fullDescrip, hide, aliases){
@@ -99,14 +98,8 @@ bot.on("messageCreate", async(msg) => {
 	if (miscfuncs.isDM(msg)) {
 		var message = `[${msg.author.username} (${msg.author.id})]: ${msg.content}`
 		bot.createMessage(chat.chooseChannel('bot_dms'), message)
-		//if (msg.author.id != XANDER) bot.getDMChannel(XANDER).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
+		//if (!Info.Owner_IDs.includes(msg.author.id)) bot.getDMChannel(Info.Owner_IDs[0]).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
 	}
-
-	/*// automatically compile brainfuck code - currently very buggy
-	if (msg.content.substr(0, 3) != "$bf"){ // dont double compile commands
-		var code = await bf.run.function(bot, msg, [], false, true)
-		if (code.length) msg.channel.createMessage(code)
-	}*/
 
 });
 

@@ -5,9 +5,9 @@ var AllowUpdates = true
 var Started = false
 var CompBot
 
-const info = require('./SETUP-INFO.js')
-var username = info.Git_Username
-var password = info.Git_Password
+const Info = require('./SETUP-INFO.js')
+var username = Info.Git_Username
+var password = Info.Git_Password
 
 // Helper function
 var deleteFolderRecursive = function(path) {
@@ -70,7 +70,7 @@ var start = function() {
 
   if (Started) return
 
-  if (info.Bot_Token == ''){
+  if (Info.Bot_Token == ''){
     console.log(`${bar}No Bot Token found in SETUP-INFO.js\nUnable to start bot${bar}`)
     process.exit()
   }
@@ -78,7 +78,7 @@ var start = function() {
   console.log("Starting Bot...")
   Started = true
 
-  var CompBot = cp.exec(`node ./bot-files/main.js ${info.Bot_Token}`, (error, stdout, stderr) => {
+  var CompBot = cp.exec(`node ./bot-files/main.js`, (error, stdout, stderr) => {
     if (error) {
       Started = false
       console.error(`Error: ${error}`)

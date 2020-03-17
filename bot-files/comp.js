@@ -497,7 +497,7 @@ module.exports = {
 			try {
 				var dm = await bot.getDMChannel(user_id)
 				var warning = "You have been set as the recipient of submission updates for the SM64 TAS Competition. "
-				warning += "If you believe this to be an error please contact `ERGC | Xander`"
+				warning += "If you believe this to be an error please contact the bot's owner"
 				await dm.createMessage(warning)
 				Host_IDs.push(dm.recipient.id)
 				module.exports.save()
@@ -527,7 +527,7 @@ module.exports = {
 					try {
 						var dm = await bot.getDMChannel(id)
 						var warning = "You are no longer set as the recipient of submission updates for the SM64 TAS Competition. "
-						warning += "If you believe this to be an error please contact `ERGC | Xander`"
+						warning += "If you believe this to be an error please contact the bot's owner"
 						await dm.createMessage(warning)
 						return dm.recipient.username + " (ID `" + id + "`) will no longer recieve submission updates"
 					} catch (e) {

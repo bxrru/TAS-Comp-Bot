@@ -1,5 +1,6 @@
 const Save = require("./save.js")
-const XANDER = "129045481387982848"
+const Info = require("../SETUP-INFO.js")
+
 Bans = []
 Admin = {
 	users: [],
@@ -39,7 +40,7 @@ module.exports = {
 	},
 
 	hasCmdAccess:function(message){
-		return message.author.id == XANDER || Admin.users.includes(message.author.id) || Admin.channels.includes(message.channel.id) || message.author == "BOT"
+		return Info.Owner_IDs.includes(message.author.id) || Admin.users.includes(message.author.id) || Admin.channels.includes(message.channel.id) || message.author == "BOT"
 	},
 
 	// COMMAND returns a list of names with IDs and channel mentions that have command access
@@ -47,15 +48,29 @@ module.exports = {
 		name: "listAccess",
 		aliases: ["la"],
 		short_descrip: "List the users and channels with command access",
-		full_descrip: "Every command may be used by the people listed and from the channels listed. To give access or remove it use `$addCmdAccess` or `$removeCmdAccess` respectively",
+		full_descrip: "Every command may be used by the people listed and from the channels listed. To give access or remove it use `$addCmdAccess` or `$removeCmdAccess` respectively. The owners are hardcoded into the bot and their access cannot be changed",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (!module.exports.hasCmdAccess(msg)) return
 
-			var result = `**Users:**\n`
+			var result = `**Owners:**\n`
+			for (const id of Info.Owner_IDs) {
+				try {
+					var user = await module.exports.getUser(bot, id)
+					result += `${user.username} \`(${id})\`\n`
+				} catch (e) {
+					result += `Unknown User \`(${id})\`\n`
+				}
+			}
+
+			result += `**Users:**\n`
 			for (const id of Admin.users) {
-				var user = await module.exports.getUser(bot, id)
-				result += `${user.username} \`(${id})\`\n`
+				try {
+					var user = await module.exports.getUser(bot, id)
+					result += `${user.username} \`(${id})\`\n`
+				} catch (e) {
+					result += `Unknown User \`(${id})\`\n`
+				}
 			}
 
 			result += "**Channels:**\n"

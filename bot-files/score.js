@@ -792,7 +792,7 @@ module.exports = {
     msg += "``[]`` Denotes optional arguments\n";
     msg += "``...`` Denotes that multiple arguments may be entered\n";
     msg += "\nCommands that edit the score will be automatically sorted, and the message will be directly edited.\n"
-    msg += "\nFor more information on specific actions, contact Xander"; // actions, use ``$score help <action>`` or contact Xander
+    msg += "\nFor more information on specific actions, use ``$score help <action>`` or contact the bot's owner"
     return msg;
   }
 
