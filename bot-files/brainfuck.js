@@ -1,5 +1,6 @@
 const MEM_LENGTH = 64
 const MEM_SIZE = 256
+const TIME_LIMIT = 15000 // ms
 
 var info = "Compiles brainfuck code \`+-<>.,[]\` (See https://en.wikipedia.org/wiki/Brainfuck)."
 info += "Code that asks for input with \`,\` will take the first character of the next message it receives."
@@ -67,9 +68,11 @@ module.exports = {
     function: async function(bot, msg, args, debug, silent){
       if (Instructions.length) return // prevents executing input as code (if every message is compiled)
       Init(msg.content)
+      var start = new Date()
       while (pos < Instructions.length){
         await Apply_Command(bot, msg, Instructions[pos], silent)
         pos++
+        if (new Date() - start > TIME_LIMIT) return `Time Limit Exceded\nOutput: ${Output}\nCell: ${Cell}\nMemory: ${Mem}`
       }
       if (debug===undefined) debug = true
       if (debug) Output = `Output: ${Output}\nCell: ${Cell}\nMemory: ${Mem}`
