@@ -109,7 +109,7 @@ module.exports = {
 			id: announcement.id,
 			timer: setTimeout(async() => {
 				await module.exports.SendAnnouncement(bot, announcement) // send message
-        if (announcement.InternalCall != undefined) module.exports.ExternalFunctions(bot, announcement.InternalCall)
+        if (announcement.InternalCall != undefined) await module.exports.ExternalFunctions(bot, announcement.InternalCall)
 				module.exports.LoopAnnouncement(bot, announcement) // repeat announcement
 			}, delay)
 		}
@@ -188,10 +188,16 @@ module.exports = {
 		}
 
 		// remove the Announcement
+    var a = false
 		for (var i = 0; i<Announcements.length; i++){
 			if (Announcements[i].id == id)
-				return Announcements.splice(i, 1)
+				a = Announcements.splice(i, 1)
 		}
+
+    if (a) {
+      module.exports.save()
+      return a
+    }
 
 		// not found
 		return null
@@ -299,8 +305,8 @@ module.exports = {
         var entry = ""
         // escape internal announcement calls (if we want to delay a function call)
         if (a.InternalCall != undefined) {
-          if (args[1] != "admin") return
-          entry = `Key = ${a.InternalCall}\n`
+          if (!args.includes("admin")) return
+          entry = `${a.id} | Key = ${a.InternalCall}\n`
         } else {
 
   				var entry = `${a.id} | `
@@ -410,14 +416,26 @@ module.exports = {
   // Other bot modules can use announcements to delay function calls.
   // They pass 'msg.InternalCall = key' when calling AddAnnouncement and
   // that key is hardcoded here to do said function
-  ExternalFunctions:function(bot, key){
+  ExternalFunctions:async function(bot, key){
     key = key.toUpperCase()
     if (key == "NOTHING" || key == "_"){
       return // these keys will not be used
 
-    } else if (key.split(' ')[0] == "COMP") {
+    } else if (key == "COMP-END") { // end the whole thing
       var comp = require('./comp.js')
-      comp.endTimedTask(bot, key.split(' ')[1], true)
+      await comp.stopSubmissions.function(bot, {author:"BOT"}, [])
+
+    } else if (key.split(' ')[0] == "COMP-END") {
+      var comp = require('./comp.js')
+      await comp.endTimedTask(bot, key.split(' ')[1], true)
+
+    } else if (key == "COMP-RELEASE") {
+      var comp = require('./comp.js')
+      await comp.releaseTask(bot)
+
+    } else if (key.split(' ')[0] == "COMP-WARN") {
+      var comp = require('./comp.js')
+      await comp.timerWarning(bot, key.split(' ')[1], key.split(' ')[2]) // pass channel id, warning id
 
     } else if (key == "PKMN-END") {
       var pkmn = require('./whosthatpokemon.js')
@@ -432,14 +450,20 @@ module.exports = {
   },
 
   DelayFunction:function(bot, key, delay_hours, delay_minutes){
-    //console.log("DELAYING...")
+    if (60*delay_hours + delay_minutes < 0) return // date passed
     module.exports.AddExternalAnnouncement(bot, "", "", key, delay_hours, delay_minutes, false)
   },
 
   // search for a specific key to end that announcement
-  KillDelayedFunction:function(key){
+  KillDelayedFunction:function(key, deleteAll){
+    if (deleteAll == undefined) deleteAll = false
     for (var i = 0; i<Announcements.length; i++) {
-      if (Announcements[i].InternalCall == key) { // found
+
+      if (deleteAll && Announcements[i].InternalCall.startsWith(key)) { // startsWith instead of precisely equal
+        module.exports.RemoveAnnouncement(Announcements[i].id)
+        return module.exports.KillDelayedFunction(key, true) || 1 // recursively delete all copies
+
+      } else if (Announcements[i].InternalCall == key) { // found
         module.exports.RemoveAnnouncement(Announcements[i].id)
         return 1
       }

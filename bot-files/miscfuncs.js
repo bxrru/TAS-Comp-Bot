@@ -100,14 +100,14 @@ module.exports = {
 		name: "addrole",
 		aliases: ["ar"],
 		short_descrip: "Gives a user a role",
-		full_descrip: "Usage `$ar <role_id> [user_id]`\nuser_id defaults to the user that calls the command",
+		full_descrip: "Usage `$ar <role_id> [user_id]`\nuser_id defaults to the user that calls the command. Only works if called from the same server that has the role",
 		hidden: true, // T?
-		function: function(bot, msg, args){
+		function: async function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
 			if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
-			var member = args[1] == undefined ? msg.member.id : args[1]
+			var member = args[1] == undefined ? msg.author.id : args[1]
 			try {
-				msg.channel.guild.addMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
+				await bot.addGuildMemberRole(msg.channel.guild.id, member, args[0], `Command Call by ${msg.author.username}`)
 				return `Gave user ${member} role ${args[0]}`
 			} catch (e) {
 				return "Failed to assign role```"+e+"```"
@@ -119,14 +119,14 @@ module.exports = {
 		name: "removerole",
 		aliases: ["rr"],
 		short_descrip: "Removes a role from a user",
-		full_descrip: "Usage `$rr <role_id> [user_id]\nuser_id defaults to the user that calls the command",
+		full_descrip: "Usage `$rr <role_id> [user_id]\nuser_id defaults to the user that calls the command. Only works if called from the same server that has the role",
 		hidden: true,
-		function: function(bot, msg, args){
+		function: async function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
 			if (args.length == 0) return "Not Enough Arguments: `<role_id> [user_id]`"
-			var member = args[1] == undefined ? msg.member.id : args[1]
+			var member = args[1] == undefined ? msg.author.id : args[1]
 			try {
-				msg.channel.guild.removeMemberRole(member, args[0], `Command Call by ${msg.author.username}`)
+				await bot.removeGuildMemberRole(msg.channel.guild.id, member, args[0], `Command Call by ${msg.author.username}`)
 				return `Removed role ${args[0]} from user ${member}`
 			} catch (e) {
 				return "Failed to remove role```"+e+"```"

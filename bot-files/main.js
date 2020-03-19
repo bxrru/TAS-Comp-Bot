@@ -15,7 +15,7 @@ const game = require("./game.js");
 const chat = require("./chatcommands.js");
 const announcements = require('./announcement.js')
 const bf = require("./brainfuck.js")
-const pkmn = require("./whosthatpokemon.js")
+//const pkmn = require("./whosthatpokemon.js")
 
 const Info = require("../SETUP-INFO.js")
 var BOT_ACCOUNT = ""
@@ -128,7 +128,7 @@ function loadAllModules(){
 	loadModule(game)
 	loadModule(comp)
 	loadModule(announcements)
-	loadModule(pkmn)
+	//loadModule(pkmn)
 }
 
 // Special Commands //
@@ -144,33 +144,5 @@ bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.
 addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false)
 
 addCmdObj(bf.run)
-
-bot.registerCommand("test", async(msg, args) => {
-	if (!users.hasCmdAccess(msg)) return
-	try {
-		var user = await users.getUser(bot, args[0])
-		if (user === null) user = await bot.getChannel(args[0])
-		if (user === undefined) return `No Valid ID`
-		return `\`\`\`${user}\`\`\``
-	} catch (e) {
-		return `\`\`\`${e}\`\`\``
-	}
-	return //'||baited||'//"\uD83D \u1F54B :kaaba:"
-}, {hidden: true, caseInsensitive: true});
-
-bot.registerCommand("attachmentTest", async function(msg, args) {
-	if (msg.attachments.length == 0) return "No Attachments"
-	//console.log(msg.attachments)
-	for (var i = 0; i < msg.attachments.length; i++) {
-		var result = `${i}:\`\`\``
-		Object.keys(msg.attachments[i]).forEach(key => {
-			//console.log(key)
-			result += `${key}: ${msg.attachments[i][key]}\n`
-		})
-		result += "```"
-		await bot.createMessage(msg.channel.id, result)
-	}
-	return "No More Attachments"
-}, {hidden: true, caseInsensitive: true})
 
 bot.connect();
