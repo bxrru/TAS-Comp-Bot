@@ -3,6 +3,8 @@ A discord bot intended to help run daily "Who's That Pokémon?" style quizzes!
 
 To setup the bot, put your token and user id in `STUP-INFO.js`. The GitHub username and password fields are optional - originally, they were needed for the `$restart` command to automatically download the latest files (now that this repository is public you might not need it).
 
+To run the bot, use `node start.js`
+
 ### Quizzes
 1. Before starting any quiz you need to set how long it will last with `$SetQuizLength` and which channel to send the messages to with `$SetQuizChannel` (These only need to be done once)
 
