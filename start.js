@@ -6,8 +6,6 @@ var Started = false
 var CompBot
 
 const Info = require('./SETUP-INFO.js')
-var username = Info.Git_Username
-var password = Info.Git_Password
 
 // Helper function
 var deleteFolderRecursive = function(path) {
@@ -45,7 +43,7 @@ var updateFiles = function() {
 
     // download new files
     deleteFolderRecursive('./TAS-Comp-Bot') // just incase it's leftover
-    cp.execSync(`git clone "https://${username}:${password}@github.com/Barryyyyyy/TAS-Comp-Bot"`)
+    cp.execSync(`git clone -b "PokeQuizBot" "https://github.com/Barryyyyyy/TAS-Comp-Bot"`)
 
     // delete old files
     deleteFolderRecursive('./bot-files/')
@@ -106,13 +104,7 @@ var start = function() {
 var gitTest = function(){
   try {
     var git = cp.execSync('git --version')
-    if (username == '' || password == '') {
-      AllowUpdates = false
-      console.log(`${bar}WARNING: No username or password entered. Updates Disabled${bar}`)
-      return
-    } else {
-      console.log("git installed. Auto-updates enabled")
-    }
+    console.log("git installed. Auto-updates enabled")
   } catch (e) {
     AllowUpdates = false
     console.log(`${bar}WARNING: git is not installed. Auto-updates disabled${bar}`)
