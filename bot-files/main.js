@@ -1,4 +1,4 @@
-process.title = "CompBOT";
+process.title = "PokéQuizBOT";
 console.log("Starting main.js...");
 var NAME = "BOT"
 
@@ -8,21 +8,19 @@ const Eris = require("eris-additions")(require("eris"));
 
 const miscfuncs = require("./miscfuncs.js");
 const users = require("./users.js");
-const comp = require("./comp.js");
-const score = require("./score.js");
 const save = require("./save.js");
 const game = require("./game.js");
 const chat = require("./chatcommands.js");
 const announcements = require('./announcement.js')
 const bf = require("./brainfuck.js")
-//const pkmn = require("./whosthatpokemon.js")
+const pkmn = require("./whosthatpokemon.js")
 
 const Info = require("../SETUP-INFO.js")
 var BOT_ACCOUNT = ""
 
 var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
 	description: "List of commands",
-	owner: "Eddio0141, Barry & Xander",
+	owner: "ERGC | Xander",
 	prefix: "$"
 });
 
@@ -82,17 +80,7 @@ function createHelpCommand(mod){
 // message handle
 bot.on("messageCreate", async(msg) => {
 
-	if (msg.content.indexOf("😃") != -1) bot.addMessageReaction(msg.channel.id, msg.id, "✈") // it's a meme
-
 	if (msg.author.id == BOT_ACCOUNT) return // ignore it's own messages
-
-	// another meme
-	if (msg.content.split(' ').includes('<@!532974459267710987>') || msg.content.split(' ').includes('<@532974459267710987>')) {
-		bot.createMessage(msg.channel.id, "What the f*ck. Did you really ping me at this time for that? You did. Arrangements have been made so that I will no longer be directly pinged from you. If you need me, contact somebody else.")
-	}
-
-	score.autoUpdateScore(bot, msg);
-	comp.filterSubmissions(bot, msg);
 
  	// Redirect Direct Messages that are sent to the bot
 	if (miscfuncs.isDM(msg)) {
@@ -115,10 +103,6 @@ bot.on("messageReactionAdd", (msg, emoji) => {
 	}
 	bot.addMessageReaction(msg.channel.id, msg.id, reaction)
 
-	if (emoji.name == "😃"){ // auto add planes to smileys
-		bot.addMessageReaction(msg.channel.id, msg.id, "✈");
-	}
-
 });
 
 function loadAllModules(){
@@ -126,9 +110,8 @@ function loadAllModules(){
 	loadModule(users)
 	loadModule(chat)
 	loadModule(game)
-	loadModule(comp)
 	loadModule(announcements)
-	//loadModule(pkmn)
+	loadModule(pkmn)
 }
 
 // Special Commands //
@@ -138,7 +121,6 @@ bot.registerCommand("tr", (msg, args) => {if (users.hasCmdAccess(msg)) return (e
 bot.registerCommandAlias("toggleReaction", "tr")
 bot.registerCommandAlias("toggleReactions", "tr")
 
-bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Lists #score commands", fullDescription: score.help()})
 bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true})
 
 addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false)

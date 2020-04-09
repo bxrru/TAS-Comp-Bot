@@ -2,16 +2,7 @@ const users = require("./users.js");
 const save = require("./save.js");
 var announcements = [];
 var ac_1_default = ""
-var CHANNELS = {"GENERAL": "397488794531528704",
-		"BOT": "554820730043367445",
-		"BOT_DMS": "555543392671760390",
-		"SCORE": "529816535204888596",
-		"RESULTS": "529816480016236554",
-		"CURRENT_SUBMISSIONS": "397096356985962508",
-		"OTHER": "267091686423789568",
-		"MARIO_GENERAL": "267091914027696129",
-		"TASBOTTESTS": "562818543494889491",
-		"ANNOUNCEMENTS": "397841779535118347"}
+var CHANNELS = {"BOT_DMS": ""}
 
 function chooseChannel(string){
 	string = string.toUpperCase()

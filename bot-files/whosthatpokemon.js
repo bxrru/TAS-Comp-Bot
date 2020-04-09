@@ -136,7 +136,7 @@ module.exports = {
       if (!USERS.hasCmdAccess(msg)) return
       if (args.length == 0) return `Missing Argument: \`$setpokemon <name>\``
 
-      Pokemon = args[0]
+      Pokemon = args.join(' ')
       module.exports.save()
 
       return `It's **${Pokemon}**!`

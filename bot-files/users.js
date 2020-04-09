@@ -216,7 +216,7 @@ module.exports = {
 	listBansCMD:{
 		name: "listBans",
 		short_descrip: "List the banned users",
-		full_descrip: "Users listed are not allowed to submit to the competition. To add a ban or remove one use `$ban` or `$unban` respectively",
+		full_descrip: "Users listed are not allowed to interact with this bot. To add a ban or remove one use `$ban` or `$unban` respectively",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (!module.exports.hasCmdAccess(msg)) return

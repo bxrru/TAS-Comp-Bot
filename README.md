@@ -1,66 +1,28 @@
-# TAS-Comp-Bot
-Active development of the upcoming bot for the TAS Competition server. (Server ID: 397082495423741953)
+# PokéQuizBOT
+A discord bot intended to help run daily "Who's That Pokémon?" style quizzes!
 
-TODO:
-make bot lol
+To setup the bot, put your token and user id in `STUP-INFO.js`. The GitHub username and password fields are optional - originally, they were needed for the `$restart` command to automatically download the latest files (now that this repository is public you might not need it).
 
-	bot needs to give people @submitted
-		use prefix $, likely command $clear for clearing current_submissions?
-		needs to be able to grab timestamp from message
-		needs to be able to upload every files to Google Drive, likely to **REDACTED** in a shared folder?
-		must be able to only upload latest file, or put files that aren't recent in other folder
-		needs to be able to DM:
-			(TAS Competition 2019#3160) <@397096658476728331>
+### Quizzes
+1. Before starting any quiz you need to set how long it will last with `$SetQuizLength` and which channel to send the messages to with `$SetQuizChannel` (These only need to be done once)
 
-		The roles for this bot are:
+2. To setup the information for a specific quiz you can use `$SetupQuiz`. This is a shortcut for using `$SetQuestionImage`, `$SetPokemon`, `$SetDescription`, and `$SetAnswerImage` in that order. These 4 commands (in any order) will need to be used before a new quiz (assuming you don't want to use the same quiz twice in a row).
+   - For the images you can either give it a url or upload an attachment to discord
+   - To see what the answer will look like once it's posted use `$PreviewAnswer`. To keep the answer a secret, the bot will DM you this information.
 
-			Server:
-		[TAS Competition 2019] <397082495423741953>
-			Role:
-		(@Submit To Me) <@&397101287872921600
+3. To start a quiz, use `$StartQuiz` and it will begin immediately.
+   - Alternatively, you can use `$SetQuizTime` and `$StartDailyQuizzes` to set a time that quizzes will automatically start at every day. It will post whatever information it has so it's on you (the quiz host) to update that information before it starts.
+	    - If you do this, you can use `$SetSkipDays` to choose days that it will *not* automatically post quizzes on
 
-			Server:
-		[SM64 TASing and ABC] <267091686423789568>
-			Role:
-		(@SUBMIT HERE) <@&407725901577584640>
+4. People can then make their guesses with `$Guess`. It is recommended that people to use this command in DMs with the bot.
+   - `$prompt` will show the image they're trying to guess the Pokémon for
+   - `$TimeRemaining` will show how much time they have left to guess
+	    - **Note:** this is definitely not as accurate as it shows. Only trust it give or take a minute.
 
-			Channels of note:
-		#current_submissions <#397096356985962508>
-		#bot <#554820730043367445>
---
+5. The quiz will end after the time is up, or you can use `$StopQuiz` to end it manually (it will post the answer)
+   - To stop daily quizzes use `$StopDailyQuizzes` (as the name might suggest)
 
-	Intended drive folder structure:
-			(root) -> Task Number -> Folder containing .m64 and .st files
-		OR
-			(root) -> Task Number -> Username -> Folder containing .m64 and .st files
 
---
-Competition Information For Admins
+One big idea I had for the future: Maybe (eventually) create a database that it can use with images and descriptions from different generations.
 
-	This message covers the main functions that you will need to use. For a full list of competition commands use `$comp` and for help about how to use any command use `$help command_name`.
-
-	To start the competition, you first need to use `$startsubmissions`. To confirm that it is accepting submissions use `$compinfo` and it should say `"Accepting submissions"`. Otherwise it will not save any files that are sent to it.
-
-	To end the competition, use `$stopsubmissions` and it will no longer update any files.
-
-	To see someone's files, use `$get <submission_number>`. To get the <submission_number> refer to the number beside the corresponding name on the 'current_submissions' list. You can find a link to the current_submissions message by using `$compinfo` or you can directly show the list using `$listsubmissions`. As a warning this will post the links to the files in whatever channel you call the command so dont use this in a public channel.
-
-	To download all of the files at once use `$get all`. This will send a batch file which you can run by simply opening the file. It will sort the files nicely into folder. You will likely be warned multiple times that it is a virus and if you dont trust me you can use `$get` and download each submission individually. Batch scripts will only work natively on Windows computers.
-
-	If someone sends you the files and you want to try adding it to the bot's database you can do that by going `$addsubmission <user_id>` then `$submitfile <submission_number> <url>`. To get the <user_id> you will need to have developer mode enabled (discord settings > appearance) then right click on the user and copy id. To get the <url> copy the url from the file they send you.
-
-	If you have DQd someone and want to remove them from #current_submissions, use `$deletesubmission <submission_number>`. This will also delete their files.
-
-	If someone is abusing `$setname` to put profanities in #current_submissions or the like, you can use `$lockname <submission_number> <new name>`. The new name can contain spaces (Ex `$lockname 1 ERGC | Xander`). To give them the permissions back use `$unlockname <submission_number>`
-
-	At the end of the competition when you want to save a fresh set a files use `$clearsubmissions`. This will delete files, remove the submitted role from everyone who has submitted, and delete the #current_submissions message
-
-Q: What kind of updates will the bot send the admins?
-
-	A: A message will be sent out to the list of "hosts" notifying them of a couple of things including:
-		- When a new submission is added (and by who)
-		- When a new file is uploaded (by who, with links to the file)
-		- When files are deleted (with links to the files)
-		- When the bot starts/stops accepting submissions
-		- When the @Submitted role could not be assigned (likely due to the person not being in the server)
-		- When they are added/removed from the list of "hosts"/people who receive the updates
+Anyways, I have left in a lot of other commands for fun/just because (`$slots` is a personal favourite and always a crowd pleaser). Most things should be properly documented - use `$help <command>` for more information on how to use them. All commands are *not* case sensitive.

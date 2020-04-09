@@ -46,28 +46,6 @@ module.exports = {
     }
   },
 
-  // expected input:
-  // "$giveaway
-  // 1. User
-  // 2....."
-  giveaway:{
-    name: "giveaway",
-    short_descrip: "Randomly selects from a list",
-    full_descrip: "Randomly selects a winner from line separated entries for a giveaway. Make sure that a space follows `$giveaway ` before the new lines otherwise the command will not be recognized",
-    hidden: true,
-    function: function(bot, msg, args){
-      if (disabled(msg.channel.guild.id)){return;}
-
-      var participants = msg.content.split('\n');
-
-      participants.splice(0, 1); // remove first line "$giveaway"
-
-      var rand = randInt(participants.length);
-
-      return "And the winner is... ``" + participants[rand] + "`` Congratulations!"
-    }
-  },
-
   slots:{
     name: "slots",
     short_descrip: "Spin to Win",
@@ -108,56 +86,6 @@ module.exports = {
 
   		bot.createMessage(msg.channel.id, result);
   	  bot.createMessage(msg.channel.id, win ? "WINNER!" : "Please Play Again");
-    }
-  },
-
-  // COMMAND: for every user @mentioned in the command, the bot will
-  // DM each one a different name on the list (meant for secret santa deligation)
-  assign_random:{
-    name: "secretsanta",
-		aliases: ["ss"],
-    short_descrip: "Chooses your Secret Santa",
-    full_descrip: "Sends a DM to everyone @ mentioned in the command, with a name of another person on the list. No 2 users will get each other, and nobody will get themself.",
-    hidden: true,
-    function: async function(bot, msg, args){
-
-      var users = []
-      msg.mentions.forEach((person)=>{
-        users.push({username:person.username, id:person.id, bans:[person.id]})
-      })
-
-      if (users.length == 2)
-        return "Minimum of 3 people required"
-
-      users.forEach(async(recipient)=>{
-
-        //console.log(`Recipient: ${recipient.username}`)
-
-        var rando = users[randInt(users.length)] // choose a random person
-
-        // bans include self and users already picked
-        while (recipient.bans.includes(rando.id)){
-          var rando = users[randInt(users.length)]
-        }
-
-
-        for (var i = 0; i < users.length; i++){
-          // Make sure nobody else can get this user again
-          users[i].bans.push(rando.id)
-
-          // Make sure no two people get each other
-          if (users[i].id == rando.id){
-            users[i].bans.push(recipient.id)
-          }
-
-        }
-
-        //console.log(`Name getting sent: ${rando.username}`)
-
-        // send the DM
-        let dm = await bot.getDMChannel(recipient.id).catch((e) => {return "DM Failed ``"+e+"``";})
-  		  dm.createMessage(rando.username)
-      })
     }
   },
 

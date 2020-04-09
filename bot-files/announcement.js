@@ -421,22 +421,6 @@ module.exports = {
     if (key == "NOTHING" || key == "_"){
       return // these keys will not be used
 
-    } else if (key == "COMP-END") { // end the whole thing
-      var comp = require('./comp.js')
-      await comp.stopSubmissions.function(bot, {author:"BOT"}, [])
-
-    } else if (key.split(' ')[0] == "COMP-END") {
-      var comp = require('./comp.js')
-      await comp.endTimedTask(bot, key.split(' ')[1], true)
-
-    } else if (key == "COMP-RELEASE") {
-      var comp = require('./comp.js')
-      await comp.releaseTask(bot)
-
-    } else if (key.split(' ')[0] == "COMP-WARN") {
-      var comp = require('./comp.js')
-      await comp.timerWarning(bot, key.split(' ')[1], key.split(' ')[2]) // pass channel id, warning id
-
     } else if (key == "PKMN-END") {
       var pkmn = require('./whosthatpokemon.js')
       pkmn.PostSolution(bot)
