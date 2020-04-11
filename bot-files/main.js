@@ -15,7 +15,6 @@ const game = require("./game.js");
 const chat = require("./chatcommands.js");
 const announcements = require('./announcement.js')
 const bf = require("./brainfuck.js")
-//const pkmn = require("./whosthatpokemon.js")
 
 const Info = require("../SETUP-INFO.js")
 var BOT_ACCOUNT = ""
@@ -128,7 +127,6 @@ function loadAllModules(){
 	loadModule(game)
 	loadModule(comp)
 	loadModule(announcements)
-	//loadModule(pkmn)
 }
 
 // Special Commands //
