@@ -423,7 +423,7 @@ module.exports = {
 
     } else if (key == "COMP-END") { // end the whole thing
       var comp = require('./comp.js')
-      await comp.stopSubmissions.function(bot, {author:"BOT"}, [])
+      await comp.stopSubmissions.function(bot, {author:"BOT"}, [true])
 
     } else if (key.split(' ')[0] == "COMP-END") {
       var comp = require('./comp.js')
@@ -436,14 +436,6 @@ module.exports = {
     } else if (key.split(' ')[0] == "COMP-WARN") {
       var comp = require('./comp.js')
       await comp.timerWarning(bot, key.split(' ')[1], key.split(' ')[2]) // pass channel id, warning id
-
-    } else if (key == "PKMN-END") {
-      var pkmn = require('./whosthatpokemon.js')
-      pkmn.PostSolution(bot)
-
-    } else if (key == "PKMN-START") {
-      var pkmn = require('./whosthatpokemon.js')
-      pkmn.StartQuiz(bot)
 
     }
 

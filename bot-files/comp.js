@@ -15,7 +15,7 @@ var SubmissionsChannel = ""
 var Channel_ID = ""
 var Message_ID = ""
 var DQs = []
-var Submissions = [] // {number, name, id, m64, m64_size, st, st_size, namelocked, dq}
+var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, dq}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
 
 var TimedTask = false
@@ -38,15 +38,16 @@ var SubmittedRole = ""
 function SubmissionsToMessage(showInfo){
 	var message = "**__Current Submissions:__**\n\n"
 	if (Submissions.length == 0) message += "No Submissions (Yet)\n"
-	Submissions.forEach((player) => {
-		message += `${player.number}. ${player.name}`
-		message += showInfo ? ` (${player.id})\n` : `\n`
-	})
+	for (var i = 0; i < Submissions.length; i++) {
+		var player = Submissions[i]
+		message += `${i + 1}. ${player.name}${showInfo ? ` (${player.id})` : ``}\n`
+	}
 
 	if (showInfo) {
-		DQs.forEach((player) => {
-			message += `DQ${player.number}: ${player.name} (${player.id})\n`
-		})
+		for (var i = 0; i < DQs.length; i++) {
+			var player = DQs[i]
+			message += `DQ${i + 1}: ${player.name} (${player.id})\n`
+		}
 	}
 	return message
 }
@@ -57,6 +58,10 @@ function notAllowed(msg){
 }
 
 // send updates to everyone in the list
+// They recieve messages for all comp command calls that change task info
+// EXCEPT when warning for timed tasks are changed,
+//        when the current submissions message was changed,
+//        when hosts are added/removed
 function notifyHosts(bot, message, prefix){
 	if (prefix == undefined) prefix = `Update`
 	var dm = async function(id) {
@@ -176,30 +181,17 @@ module.exports = {
 		name: "stopTask",
 		aliases: ["stopAccepting", "stopSubmission", "stopSubmissions"],
 		short_descrip: "Stops accepting submissions",
-		full_descrip: "Usage: \`$stoptask [user_id]\`\nIf a \`user_id\` is specified, this will stop that user's timer for timed tasks. If none is given, this will DM everyone who's timer is still counting down for timed tasks, prevent the scheduled release of timed tasks, and stop accepting any submissions via DMs. This also sends a message to the Task Channel saying that the task is over. ",
+		full_descrip: "Usage: \`$stoptask [send_message?]\`\nThis will DM everyone who's timer is still counting down for timed tasks, cancel the scheduled release of timed tasks, and stop accepting any submissions via DMs. If any argument is given, this will send a message to the Task Channel saying that the task is over. This command works regarless of whether submissions are currently being accepted or not. ",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			if (args.length > 0) {
-				var result =
-				module.exports.endTimedTask(bot, args[0], true, `Timer stopped by ${msg.author.username}`)
-				Announcement.KillDelayedFunction(`COMP-END ${args[0]}`, true)
-				try {
-					var dm = await bot.getDMChannel(args[0])
-					Announcement.KillDelayedFunction(`COMP-WARN ${dm.id}`, true)
-					var user = await Users.getUser(bot, args[0])
-					return `Timer Successfully stopped for ${user.username} \`(${user.id})\``
-				} catch (e) {
-					return `Timer stopped for user \`${args[0]}\`. \`\`\`${e}\`\`\``
-				}
-			}
-
 			TimedTask = false
 			AllowSubmissions = false
+			Task += 1 // increment task
 			module.exports.save()
 
-			var result = `No longer accepting submissions for Task ${Task}. `
+			var result = `No longer accepting submissions for Task ${Task - 1}. `
 
 			if (Announcement.KillDelayedFunction("COMP-RELEASE", true)) {
 				result += `Public release has been cancelled. `
@@ -218,16 +210,43 @@ module.exports = {
 				module.exports.endTimedTask(bot, id, false)
 			})
 
-			if (TaskChannel != ``) {
+			if (args.length > 0 && TaskChannel != ``) {
 				try {
-					bot.createMessage(TaskChannel, `Task ${Task} is complete! Thank you for participating!`)
+					bot.createMessage(TaskChannel, `Task ${Task - 1} is complete! Thank you for participating!`)
 				} catch (e) {
 					result += `Failed to send Time's Up! message to the Task Channel. `
 				}
 			}
 
-			notifyHosts(bot, result)
+			notifyHosts(bot, result + `Ready for Task ${Task}!`)
 			return result
+		}
+	},
+
+	stopTimedTask:{
+		name: "stopTimedTask",
+		aliases: ["stt"],
+		short_descrip: "Stops a user's timer for timed tasks",
+		full_descrip: "Usage: \`$stoptimedtask <user_id>\`\nThis will stop the given user's timer for timed tasks. This DMs the user that their time is up. For a list of who has timers currently running and their IDs use `$ctts`. Unknown effects if called when someone's timer is not currently running.",
+		hidden: true,
+		function: async function(bot, msg, args){
+			if (notAllowed(msg)) return
+			if (args.length == 0) return `Missing Argument: \`$stoptimedtask <user_id>\``
+
+			var id = args[0]
+			if (!TimedTaskStatus.started.includes(id)) return `Invalid Argument: ID \`${args[0]}\` has not started the task`
+
+			module.exports.endTimedTask(bot, args[0], true, `Timer stopped by ${msg.author.username}`)
+			Announcement.KillDelayedFunction(`COMP-END ${args[0]}`, true)
+			try {
+				var dm = await bot.getDMChannel(args[0])
+				Announcement.KillDelayedFunction(`COMP-WARN ${dm.id}`, true)
+				var user = await Users.getUser(bot, args[0])
+				return `Timer Successfully stopped for ${user.username} \`(${user.id})\``
+			} catch (e) {
+				return `Timer stopped for user \`${args[0]}\`. \`\`\`${e}\`\`\``
+			}
+
 		}
 	},
 
@@ -269,8 +288,8 @@ module.exports = {
 
 			// check if they've already submitted
 			if (module.exports.hasSubmitted(user_id)){
-				var user = module.exports.getSubmission(user_id);
-				return user.name + " ("+user.number+") has already submitted"
+				var user = module.exports.getSubmission(user_id).submission
+				return `${user.name} has already submitted`
 			}
 
 			// get the user
@@ -295,28 +314,19 @@ module.exports = {
 		name: "deleteSubmission",
 		aliases: ["removesubmission"],
 		short_descrip: "Deletes a submission",
-		full_descrip: "Usage: `$deletesubmission <Submission_Number>`\nRemoves/deletes a specific submission. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$deletesubmission <Submission_Number>`\nRemoves/deletes a specific submission (including all files associated to it). This will DM the user who's submission is being deleted, remove their submitted role, and update the current submissions message. To see the list of Submission Numbers use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
-			if (Submissions.length == 0) return "There are no submissions to edit"
+			if (Submissions.length == 0 && DQs.length == 0) return "There are no submissions to edit"
 			if (args.length == 0) return "Not Enough Arguments: `<submission_number>`"
 
 			var num = getSubmissionNumber(args[0])
 			if (num.message.length) return num.message
 
-			// reset the numbers
-			if (num.dq){
-				var deleted = DQs.splice(num.number - 1, 1)[0]
-				for (var i = 0; i < DQs.length; i++){
-					DQs[i].number = i+1
-				}
-			} else {
-				var deleted = Submissions.splice(num.number - 1, 1)[0]
-				for (var i = 0; i < Submissions.length; i++){
-					Submissions[i].number = i+1
-				}
-			}
+			// remove the submission
+			var deleted = num.dq ? DQs.splice(num.number - 1, 1)[0] : Submissions.splice(num.number - 1, 1)[0]
+
 			module.exports.save()
 			module.exports.updateSubmissionMessage(bot)
 
@@ -350,7 +360,7 @@ module.exports = {
 	setSubmissionFile:{
 		name: "submitFile",
 		short_descrip: "Change a user's files",
-		full_descrip: "Usage: `$submitfile <submission_number> <url>`\nSets the stored file (m64 or st) to the url provided. The user will be notified that their files are changed.",
+		full_descrip: "Usage: `$submitfile <submission_number> <url>`\nSets the stored file (m64 or st) to the url provided. The user will be notified that their files are changed. To upload files for someone new, use `$addSubmission` first.",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
@@ -363,7 +373,7 @@ module.exports = {
 			var user = Submissions[num.number - 1]
 
 			async function notifyUserAndHost(filetype){
-				var modupdate = user.name + " (" + user.number + ") " + filetype + " changed [by " + msg.author.username + "] " + args[0]
+				var modupdate = user.name + " (" + num.number + ") " + filetype + " changed [by " + msg.author.username + "] " + args[0]
 				try {
 					var dm = await bot.getDMChannel(user.id)
 					dm.createMessage(filetype + " submitted on your behalf by Moderators " + args[0])
@@ -430,6 +440,7 @@ module.exports = {
 			if (isNaN(parseInt(args[0]))) return "Task must be an integer"
 			Task = parseInt(args[0])
 			module.exports.save()
+			notifyHosts(bot, `Task number set to ${Task}`)
 			return "Task number set to " + Task
 		}
 	},
@@ -437,14 +448,15 @@ module.exports = {
 	setFilePrefixCMD:{
 		name: "setFilePrefix",
 		short_descrip: "Sets the prefix for submission filenames",
-		full_descrip: "Usage: `$setfileprefix <filePrefix>`\nChanges the prefix for files. IE the `TASCompetition` from `TASCompetitionTask#ByName`. `<filePrefix>` cannot contain spaces and will be used as: `<filePrefix>Task#by<name>.st/m64`. This changes the filenames of all submissions when downloaded using `$get all`.",
+		full_descrip: "Usage: `$setfileprefix <filePrefix>`\nChanges the prefix for files. IE the `TASCompetitionTask` from `TASCompetitionTask#ByName`. `<filePrefix>` cannot contain spaces and will be used as: `<filePrefix>#by<name>.st/m64`. This changes the filenames of all submissions when downloaded using `$get all`.",
 		hidden: true,
 		function: function(bot,msg,args){
 			if (notAllowed(msg)) return
 			if (args.length == 0) return "Not Enough Arguments: `$setfileprefix <fileprefix>`"
 			FilePrefix = args[0]
 			module.exports.save()
-			return `Files will now be named \`${FilePrefix}Task${Task}By<Name>.st/m64\``
+			notifyHosts(bot, `Files will now be named \`${FilePrefix}${Task}By<Name>.st/m64\``)
+			return `Files will now be named \`${FilePrefix}${Task}By<Name>.st/m64\``
 		}
 	},
 
@@ -469,6 +481,7 @@ module.exports = {
 
 			Guild = guild_id;
 			module.exports.save();
+			notifyHosts(bot, `Server has been set to \`${guild_id}\``)
 			return "Set Guild to ``" + guild_id + "``"
 		}
 	},
@@ -493,7 +506,7 @@ module.exports = {
 				await bot.addGuildMemberRole(Guild, self.id, role, reason);
 				await bot.removeGuildMemberRole(Guild, self.id, role, reason);
 				result += "Role set to `" + role + "`"
-
+				notifyHosts(bot, `Submitted role has been set to \`${role}\``)
 			} catch (e) {
 				role = ""
 				result += "Invalid Role: Role does not exist or does not match the server. "
@@ -526,6 +539,7 @@ module.exports = {
 			SubmissionsChannel = channel
 			module.exports.save()
 
+			notifyHosts(bot, result)
 			return result
 		}
 	},
@@ -678,45 +692,36 @@ module.exports = {
 		name: "disqualify",
 		aliases: ["dq"],
 		short_descrip: "DQs a user",
-		full_descrip: "Usage: `$dq <submission_number> [reason]`\nDisqualifies a submission given a number. This prevents the user from resubmitting to the current task and excludes their name from #current_submissions. This will not remove their files. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$dq <user_id> [reason]`\nDisqualifies a submission given a user id. This prevents the user from resubmitting to the current task and excludes their name from #current_submissions. This will not remove their files. It will send them a DM telling them that they've been DQ'd. To see the list of users and IDs of those who have already submitted use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			if (args.length == 0) return "Not Enough Arguments: `<user_id or @user> [reason]`>"
+			if (args.length == 0) return "Not Enough Arguments: `<user_id> [reason]`"
 
-			// use mention if the message contains one
-			var id = msg.mentions.length ? msg.mentions[0].id : args[0]
-
-			// if the mention isnt the first argument, assume the first argument is the id
-			// this is in case an @mention is used in the reason
-			if (msg.mentions.length && `<@${id}}>` == args[0]) id = args[0]
-
+			var id = args[0]
 			var user = await Users.getUser(bot, id)
-			if (user == null) return `User ID \`${id}\` Not Recognized`
+			if (user === null) return `User ID \`${id}\` Not Recognized`
 
-			// exit if they're already DQ'd
-			if (DQs.filter(dq => dq.id == id).length) return `${user.username} is already disqualified`
-
-			// Move their submission to the DQ list if they've submitted
-			if (module.exports.hasSubmitted(id)){
-				var submission = module.exports.getSubmission(id)
-				var dq = Submissions.splice(submission.number-1,1)[0]
-				dq.number = DQs.length + 1
-				module.exports.updateSubmissionMessage(bot)
-
-			} else { // "Create" A DQ submission for them
-				var submission = {
-					number: DQs.length + 1,
-					name: user.username,
-					id: id,
-					m64: '', m64_size: 0,
-					st: '', st_size: 0,
-					namelocked: false
+			var submission = false
+			for (var i = 0; i < Submissions.length; i++) {
+				if (Submissions[i].id == user.id) {
+					submission = Submissions.splice(i, 1)[0] // remove them if they've submitted
 				}
 			}
+			if (!submission) {
+				submission = {
+					name: user.username,
+					id: user.id,
+					m64: '', m64_size: 0,
+					st: '', st_size: 0,
+					namelocked: true
+				}
+			}
+
 			DQs.push(submission)
 			module.exports.save()
+			module.exports.updateSubmissionMessage(bot)
 
 			var result = `${user.username} \`(${id})\` has been disqualified from Task ${Task}. `
 
@@ -724,13 +729,19 @@ module.exports = {
 			try {
 				args.shift()
 				var reason = args.length ? "Provided Reason: " + args.join(" ") : "No reason has been provided"
+				var notif = `You have been disqualified from Task ${Task}. `
+				if (AllowSubmissions && !TimedTaskStatus.completed.includes(id)) {
+					notif += `Submissions you send in for this task will no longer be accepted. `
+				}
+
 				var dm = await bot.getDMChannel(id)
-				dm.createMessage(`You have been disqualified from Task ${Task}. Submissions you send in for this task will no longer be accepted. ${reason}`)
+				dm.createMessage(notif + reason)
+
 			} catch (e) {
 				result += `Failed to notify user. `
 
 			} finally {
-				notifyHosts(bot, result + `[disqualified by ${msg.author.username}]`)
+				notifyHosts(bot, result + `[disqualified by ${msg.author.username}]`, `DQ`)
 				return result
 			}
 		}
@@ -740,42 +751,46 @@ module.exports = {
 		name: "undoDisqualify",
 		aliases: ["undq"],
 		short_descrip: "Revokes a DQ",
-		full_descrip: "Usage: `$undq <submission_number>`\nUndoes the effects of a DQ given a submission given a number. Allows the user to resubmit to the current task. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$undq <user_id>`\nUndoes the effects of a DQ given a user id. This DMs the user telling them they're no longer DQ'd and allows the user to resubmit to the current task. To see the list of DQs with user IDs use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			if (args.length == 0) return "Not Enough Arguments: `<user_id or @user>`>"
+			if (args.length == 0) return "Not Enough Arguments: `<user_id>`"
 
-			var id = msg.mentions.length ? msg.mentions[0].id : args[0]
-
+			var id = args[0]
 			var user = await Users.getUser(bot, id)
-			if (user == null) return `User ID \`${id}\` Not Recognized`
+			if (user === null) return `User ID \`${id}\` Not Recognized`
 
-			var result = `${user.username} \`(${id})\` is no longer disqualified from Task ${Task}. `
-
-			if (!DQs.filter(user => user.id == id).length) return `${user.username} \`(${id})\` was not disqualified`
-			var dq = DQs.filter(user => user.id == id)[0]
-			dq = DQs.splice(dq.number-1, 1)[0]
+			var dq = false
+			for (var i = 0; i < DQs.length; i++) {
+				if (DQs[i].id == user.id) {
+					dq = DQs.splice(i, 1)[0] // remove DQ
+				}
+			}
+			if (!dq) return `${user.username} \`(${user.id})\` was not disqualified`
 
 			// Move their submission out of DQs if they have one
 			if (dq.m64_size || dq.st_size){
-				dq.number = Submissions.length + 1
 				Submissions.push(dq)
 				module.exports.updateSubmissionMessage(bot)
 			}
 			module.exports.save()
 
+			var result = `${user.username} \`(${user.id})\` is no longer disqualified from Task ${Task}. `
+
 			// DM the person to tell them
 			try {
 				var dm = await bot.getDMChannel(id)
 				var notif = `You are no longer disqualified from Task ${Task}. `
-				notif += Users.isBanned(id) ? `However, you are still banned and may not submit` : `Submissions you send in will now be accepted`
+				if (AllowSubmissions && !TimedTaskStatus.completed.includes(id)) {
+					notif += `Submissions you send in will now be accepted`
+				}
 				dm.createMessage(notif)
 			} catch (e) {
 				result += `Failed to notify user. `
 			} finally {
-				notifyHosts(bot, result + `[undisqualified by ${msg.author.username}]`)
+				notifyHosts(bot, result + `[undisqualified by ${msg.author.username}]`, `DQ`)
 				if (Users.isBanned(id)) result += `WARNING: ${user.username} is still banned and cannot submit.`
 				return result
 			}
@@ -800,7 +815,7 @@ module.exports = {
 
 				var dm = await bot.getDMChannel(msg.author.id)
 				if (args[0].toLowerCase() == "all"){
-					bot.createMessage(dm.id, "Creating script...")
+					bot.createMessage(msg.channel.id, "Script will be sent in DMs")
 					module.exports.getAllSubmissions(bot, dm)
 					return
 				}
@@ -809,7 +824,7 @@ module.exports = {
 				if (num.message.length) return num.message
 
 				var submission = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
-				dm.createMessage((num.dq?`DQ`:``) + `${submission.number}. ${submission.name}\nID: ${submission.id}\nm64: ${submission.m64}\nst: ${submission.st}`)
+				dm.createMessage((num.dq?`DQ`:``) + `${num.number}. ${submission.name}\nID: ${submission.id}\nm64: ${submission.m64}\nst: ${submission.st}`)
 				return 'Submission info sent via DMs'
 
 			} catch (e) {
@@ -825,22 +840,28 @@ module.exports = {
 		text += 'md "Task ' + Task + '"\n'
 		text += 'cd "Task ' + Task + '"\n'
 
-		Submissions.forEach((submission) => {
-
+		var addSubmission = function(submission, dq) {
 			// make folder // go into folder
 			var name = module.exports.fileSafeName(submission.name)
-			text += 'md "' + name + '"\n'
-			text += 'cd "' + name + '"\n'
+			if (dq) {
+				text += 'md "DQ_' + name + '"\n'
+				text += 'cd "DQ_' + name + '"\n'
+			} else {
+				text += 'md "' + name + '"\n'
+				text += 'cd "' + name + '"\n'
+			}
 
 			// download m64 + st
 			var filename = module.exports.properFileName(name)
-			text += 'powershell -Command "Invoke-WebRequest ' + submission.m64 + ' -OutFile ' + filename + '.m64"\n'
-			text += 'powershell -Command "Invoke-WebRequest ' + submission.st + ' -OutFile ' + filename + '.st"\n'
+			if (submission.m64) text += 'powershell -Command "Invoke-WebRequest ' + submission.m64 + ' -OutFile ' + filename + '.m64"\n'
+			if (submission.st) text += 'powershell -Command "Invoke-WebRequest ' + submission.st + ' -OutFile ' + filename + '.st"\n'
 
 			// go back to main folder
 			text += 'cd ".."\n'
+		}
 
-		});
+		Submissions.forEach(s => addSubmission(s, false))
+		DQs.forEach(s => addSubmission(s, true))
 
 		return text
 
@@ -857,7 +878,7 @@ module.exports = {
 			}
 			var file = {
 				file: fs.readFileSync("download.bat"),
-				name: `Task${Task}Download.bat`
+				name: `${FilePrefix}${Task}Download.bat`
 			}
 			channel.createMessage("** **", file)
 		})
@@ -887,7 +908,7 @@ module.exports = {
 
 			info += `**General Info**\n`
       info += `Current status: \`${AllowSubmissions ? '' : 'Not '}Accepting Submissions${TimedTask ? ' (Timed Task)' : ''}\`\n`
-			info += `Filenames: \`${FilePrefix}Task${Task}By<Name>.m64\`\n`
+			info += `Filenames: \`${FilePrefix}${Task}By<Name>.m64\`\n`
 			info += `Default Submissions Channel: ${SubmissionsChannel == `` ? `\`disabled\`` : `<#${SubmissionsChannel}>`}\n`
 			try {
 				var message = await bot.getMessage(Channel_ID, Message_ID)
@@ -937,7 +958,7 @@ module.exports = {
 				return "You must submit files before changing your name"
 			}
 
-			if (module.exports.getSubmission(user_id).namelocked || DQs.filter(user => user.id == user_id).length){
+			if (module.exports.getSubmission(user_id).submission.namelocked || DQs.filter(user => user.id == user_id).length){
 				return "Missing Permissions"
 			}
 
@@ -978,12 +999,13 @@ module.exports = {
 			if (isNaN(args[0]) || isNaN(args[1]) || Number(args[0]) < 0 || Number(args[1]) < 0)
 				return "Invalid Arguments: Arguments must be positive numbers"
 
-			if (args[0] == 0 && args[1] < 15) return "Invalid Arguments: Time must be 15 minutes minimum"
+			if (args[0] == 0 && args[1] < 5) return "Invalid Arguments: Time must be 5 minutes minimum"
 
 			Hours = Math.floor(args[0])
 			Minutes = Math.floor(args[1])
 			module.exports.save()
 
+			notifyHosts(bot, `Timed tasks will now be ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes`)
 			return `Task length set to ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes`
 		}
 	},
@@ -997,15 +1019,19 @@ module.exports = {
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
 
+			var result = ""
+
 			if (args.join(' ') == '') {
 				TaskMessage = "No Task Available"
-				module.exports.save()
-				return "No task message found. Task message has been cleared."
+				result = "Task message has been cleared"
 			} else {
 				TaskMessage = args.join(' ')
-				module.exports.save()
-				return "Task message has been set. Use `$previewTask` to see what it looks like"
+				result = "Task message has been updated. Use `$previewTask` to view it"
 			}
+
+			module.exports.save()
+			notifyHosts(bot, result)
+			return result
 		}
 	},
 
@@ -1065,7 +1091,7 @@ module.exports = {
 			Announcement.DelayFunction(bot, `COMP-END ${msg.author.id}`, Hours, Minutes)
 
 			// send messages
-			notifyHosts(bot, `${msg.author.username} \`(${msg.author.id})\` has started Task ${Task}`)
+			notifyHosts(bot, `${msg.author.username} \`(${msg.author.id})\` has started Task ${Task}`, `Start`)
 			bot.createMessage(msg.channel.id, TaskMessage)
 			bot.createMessage(msg.channel.id, `You have started Task ${Task}. You have ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes to submit.`)
 		}
@@ -1095,14 +1121,13 @@ module.exports = {
 		if (RoleStyle == "TASK-END") module.exports.giveRole(bot, id, user.username)
 
 		if (additionalMessage == undefined) additionalMessage = ``
-		if (notify) notifyHosts(bot, `Time's up for ${user.username}! ${additionalMessage}`)
+		if (notify) notifyHosts(bot, `Time's up for ${user.username}! ${additionalMessage}`, `Finish`)
 	},
 
 	// creates a submission object
 	addSubmission:function(user_id, name, m64_url, m64_filesize, st_url, st_filesize){
 
 		var submission = {
-			number: Submissions.length + 1,
 			name: name,
 			id: user_id,
 			m64: m64_url,
@@ -1114,7 +1139,7 @@ module.exports = {
 
 		Submissions.push(submission);
 		module.exports.save();
-		console.log("Added submission: ", name, submission.number);
+		console.log("Added submission: ", name, Submissions.length);
 	},
 
 	// short hand for initializing a submission
@@ -1124,25 +1149,34 @@ module.exports = {
 
 	// changes the m64 of a submission
 	update_m64:function(user_id, new_m64, filesize){
-		var index = module.exports.getSubmission(user_id).number - 1;
-		Submissions[index].m64 = new_m64;
-		Submissions[index].m64_size = filesize;
-		module.exports.save();
+		for (var i = 0; i < Submissions.length; i++) {
+			if (Submissions[i].id == user_id) {
+				Submissions[i].m64 = new_m64
+				Submissions[i].m64_size = filesize
+			}
+		}
+		module.exports.save()
 	},
 
 	// changes the st of a submission
 	update_st:function(user_id, new_st, filesize){
-		var index = module.exports.getSubmission(user_id).number - 1;
-		Submissions[index].st = new_st;
-		Submissions[index].st_size = filesize;
-		module.exports.save();
+		for (var i = 0; i < Submissions.length; i++) {
+			if (Submissions[i].id == user_id) {
+				Submissions[i].st = new_st
+				Submissions[i].st_size = filesize
+			}
+		}
+		module.exports.save()
 	},
 
 	// changes the name of a submission
 	update_name:function(user_id, new_name){
-		var index = module.exports.getSubmission(user_id).number - 1;
-		Submissions[index].name = new_name;
-		module.exports.save();
+		for (var i = 0; i < Submissions.length; i++) {
+			if (Submissions[i].id == user_id) {
+				Submissions[i].name = new_name
+			}
+		}
+		module.exports.save()
 	},
 
 	// returns whether an m64 and/or st have been submitted by a user
@@ -1151,7 +1185,7 @@ module.exports = {
 			var m64 = false
 			var st = false
 		} else {
-			var submission = module.exports.getSubmission(user_id);
+			var submission = module.exports.getSubmission(user_id).submission
 			var m64 = submission.m64.length != 0;
 			var st = submission.st.length != 0;
 		}
@@ -1172,11 +1206,19 @@ module.exports = {
 		return Submissions.filter(user => user.id == user_id).length || DQs.filter(user => user.id == user_id).length
 	},
 
-	// returns the submission object given an id
+	// returns the submission object and it's ID given an id
 	getSubmission:function(user_id){
-		if (!module.exports.hasSubmitted(user_id)) return null // ensure the submission exists
-		var check = Submissions.filter(user => user.id == user_id)
-		return check.length ? check[0] : DQs.filter(user => user.id == user_id)[0]
+		for (var i = 0; i < Submissions.length; i++) {
+			if (Submissions[i].id == user_id) {
+				return {submission: Submissions[i], id: i + 1}
+			}
+		}
+		for (var i = 0; i < DQs.length; i++) {
+			if (DQs[i].id == user_id) {
+				return {submission: DQs[i], id: `DQ${i + 1}`}
+			}
+		}
+		return null
 	},
 
 	// creates submissions.json to store relevant information
@@ -1265,7 +1307,7 @@ module.exports = {
 
 	// returns a a string that conforms to the competition standards
 	properFileName:function(username){
-		return FilePrefix + "Task" + Task + "By" + module.exports.fileSafeName(username)
+		return FilePrefix + Task + "By" + module.exports.fileSafeName(username)
 	},
 
 	// removes the roles from everyone that submitted
@@ -1305,7 +1347,7 @@ module.exports = {
 			notifyHosts(bot, `${msg.author.username} (${Submissions.length}) \`(${msg.author.id})\``, `New Submission`)
 		}
 
-		var name = module.exports.getSubmission(msg.author.id).name
+		var name = module.exports.getSubmission(msg.author.id).submission.name
 		filename = module.exports.properFileName(name) + filename
 
 		// begin downloading the file
@@ -1384,7 +1426,7 @@ module.exports = {
 				Message_ID = message.id
 			} catch (e) {
 				console.log("Failed to send submission message")
-				notifyHosts(bot, "Failed to send submission update to <#" + SubmissionsChannel + ">")
+				notifyHosts(bot, `Failed to send submission update to <#${SubmissionsChannel}> \`(${SubmissionsChannel})\``)
 				return
 			}
 		}
@@ -1420,9 +1462,10 @@ module.exports = {
 		var hasM64orSt = msg.attachments.filter(module.exports.isM64).length || msg.attachments.filter(module.exports.isSt).length
 		if (!hasM64orSt) return
 
+		if (Users.isBanned(msg.author.id)) return
+
 		if (!AllowSubmissions) return bot.createMessage(msg.channel.id, `I am not accepting submissions at this time. `)
 
-		if (Users.isBanned(msg.author.id)) return
 		if (DQs.filter(user => user.id == msg.author.id).length) return
 
 		// dont let people who have finished submit when the task is released publicly
@@ -1458,8 +1501,9 @@ module.exports = {
 
 		if (!module.exports.hasSubmitted(user_id)) return console.log("SOMETHING WENT WRONG: COULD NOT FORWARD SUBMISSION")
 
+		// need a better way to get the ID of the submission
 		var submission = module.exports.getSubmission(user_id)
-		var result = submission.name + " (" + submission.number + ") "
+		var result = submission.submission.name + " (" + submission.id + ") "
 
 		if (module.exports.isM64({filename: filename})){
 			result += "uploaded m64 " + url
@@ -1475,21 +1519,26 @@ module.exports = {
 		name: "setTaskChannel",
 		aliases: ["stc"],
 		short_descrip: "Set the channel to post Tasks in",
-		full_descrip: "Usage: \`$settaskchannel [channel]\`\nSets the channel that timed tasks will automatically be released in. This will send and immediately delete a message in the specified channel to make sure the bot can use it. If no channel id is specified, it will use the channel the command is called from.",
+		full_descrip: "Usage: \`$settaskchannel [channel]\`\nSets the channel that timed tasks will automatically be released in. This will send and immediately delete a message in the specified channel to make sure the bot can use it. If no channel id is specified, it will use the channel the command is called from. If an invalid channel is specified it will disable it's use for other functions",
 		hidden:true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
       var id = msg.channel.id
       if (args.length > 0) id = miscfuncs.getChannelID(args[0])
+			var result = `Task channel has been changed from `
+			result += TaskChannel == `` ? `\`disabled\`` : `<#${TaskChannel}> \`(${TaskChannel})\``
       try {
         await bot.createMessage(id, "Testing...").then((msg) => msg.delete())
-        TaskChannel = id
-        module.exports.save()
-        return `Channel set to <#${TaskChannel}>`
+        result += ` to <#${id}> \`(${id})\``
       } catch (e) {
-        return `Invalid Argument: Could not send message to channel <#${id}> \`\`\`${e}\`\`\``
+				id = ``
+				result += ` to \`disabled\` (Unknown Channel)`
       }
+			TaskChannel = id
+			module.exports.save()
+			notifyHosts(bot, result)
+			return result
 		}
 	},
 
@@ -1517,6 +1566,7 @@ module.exports = {
 				result += `The current release time has been adjusted. `
 			}
 
+			notifyHosts(bot, result)
 			return result
 		}
 	},
@@ -1616,6 +1666,7 @@ module.exports = {
 
 			module.exports.save()
 
+			notifyHosts(bot, `Role Style updated to \`${RoleStyle}\``)
 			return `Role Style updated to \`${RoleStyle}\``
 		}
 	}
