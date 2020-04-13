@@ -1360,7 +1360,8 @@ module.exports = {
 				console.log("Could not remove role from ", user.name, user.id);
 			}
 		}
-		Submissions.forEach(clear);
+		Submissions.forEach(clear)
+		DQs.forEach(clear)
 		return "Cleared roles. "
 	},
 
@@ -1810,7 +1811,7 @@ module.exports = {
 		name: `IgnoreUpdate`,
 		aliases: [`ignoreupdates`, `toggleupdates`, `toggleupdate`],
 		short_descrip: `Disable specific comp notifications`,
-		full_descrip: `Usage: \`$ignoreupdate <update>\`\nThis will toggle `,
+		full_descrip: `Usage: \`$ignoreupdate <update>\`\nThis will toggle on/off different notifications from the bot. \`update\` is not case sensitive and must be one of:\n• ${UPDATES.join(`\n• `)}`,
 		hidden: true,
 		function:function(bot, msg, args) {
 			if (notAllowed(msg)) return
