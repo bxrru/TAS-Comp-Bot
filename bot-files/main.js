@@ -77,6 +77,15 @@ function createHelpCommand(mod){
 	addCommand(mod.short_name, function(){return msg}, `Lists ${mod.name} commands`, msg, false)
 }
 
+function loadAllModules(){
+	loadModule(miscfuncs)
+	loadModule(users)
+	loadModule(chat)
+	loadModule(game)
+	loadModule(comp)
+	loadModule(announcements)
+}
+
 
 // message handle
 bot.on("messageCreate", async(msg) => {
@@ -103,10 +112,10 @@ bot.on("messageCreate", async(msg) => {
 });
 
 // add any reaction added to any message
-var echoReactions = true;
+var ReactionDisabledServers = save.readObject(`reactions.json`)
 bot.on("messageReactionAdd", (msg, emoji) => {
 
-	if (!echoReactions){return;}
+	if (ReactionDisabledServers.includes(msg.channel.guild.id)) return
 
 	reaction = emoji.name;
 	if (emoji.id != null){
@@ -120,21 +129,25 @@ bot.on("messageReactionAdd", (msg, emoji) => {
 
 });
 
-function loadAllModules(){
-	loadModule(miscfuncs)
-	loadModule(users)
-	loadModule(chat)
-	loadModule(game)
-	loadModule(comp)
-	loadModule(announcements)
-}
 
 // Special Commands //
-addCommand("restart", (bot, msg) => {if (users.hasCmdAccess(msg)) process.exit(42)},"","Shuts down the bot, downloads files off of github, then starts the bot back up. This will only download files from 'bot-files'", true)
+var toggleReactions = function(bot, msg, args) {
+	if (!users.hasCmdAccess(msg)) return
+	if (miscfuncs.isDM(msg)) return `Command must be called from a server`
+	var result = ``
+	if (ReactionDisabledServers.includes(msg.channel.guild.id)) {
+		ReactionDisabledServers = ReactionDisabledServers.filter(id => id != msg.channel.guild.id)
+		result = `Reactions enabled`
+	} else {
+		ReactionDisabledServers.push(msg.channel.guild.id)
+		result = `Reactions disabled`
+	}
+	save.saveObject(`reactions.json`, ReactionDisabledServers)
+	return result
+}
 
-bot.registerCommand("tr", (msg, args) => {if (users.hasCmdAccess(msg)) return (echoReactions = !echoReactions) ? "Reactions enabled" : "Reactions disabled"},{description: "Toggle auto reactions",fullDescription: "Switches echoing reactions on/off"})
-bot.registerCommandAlias("toggleReaction", "tr")
-bot.registerCommandAlias("toggleReactions", "tr")
+addCommand("restart", (bot, msg) => {if (users.hasCmdAccess(msg)) process.exit(42)},"","Shuts down the bot, downloads files off of github, then starts the bot back up. This will only download files from 'bot-files'", true)
+addCommand("tre", toggleReactions, `Toggle auto reactions`, `Switches echoing reactions on/off for the current server`, false, [`toggleReaction`, `toggleReactions`])
 
 bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Lists #score commands", fullDescription: score.help()})
 bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true})
