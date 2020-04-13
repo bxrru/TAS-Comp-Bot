@@ -109,7 +109,7 @@ function getTimeString(VIs) {
 	if (VIs == null) return `N/A`
 	var min = Math.floor(VIs / 60 / 60)
 	var sec = Math.floor(VIs / 60) - min * 60
-	var ms = Math.round((VIs - min * 60 * 60 - sec * 60) * 100) / 100
+	var ms = Math.round((VIs - min * 60 * 60 - sec * 60) * 100 / 60)
   if (sec < 10 && min > 0) sec = `0${sec}`
   if (ms < 10) ms = `0${ms}`
   return min > 0 ? `${min}'${sec}"${ms}` : `${sec}"${ms}`
