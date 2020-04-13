@@ -33,6 +33,9 @@ var RoleStyle = "DISABLED"
 var Guild = ""
 var SubmittedRole = ""
 
+const UPDATES = [`UPDATE`,`WARNING`,`ERROR`,`NEW SUBMISSION`,`DQ`,`TIMER`,`FILE`,`TIMING`]
+var IgnoreUpdates = {} // id: []
+
 // TODO: Implement a confirmation of request feature that makes people
 // resend a task request with some number to actually start the task
 
@@ -66,6 +69,7 @@ function notAllowed(msg){
 function notifyHosts(bot, message, prefix){
 	if (prefix == undefined) prefix = `Update`
 	var dm = async function(id) {
+		if (IgnoreUpdates[id] && IgnoreUpdates[id].includes(prefix.toUpperCase())) return
 		try {
 			var dm = await bot.getDMChannel(id)
 			dm.createMessage(`**[${prefix}]** ${message}`)
@@ -626,6 +630,7 @@ module.exports = {
 				if (Host_IDs[i] == user_id){
 
 					var id = Host_IDs.splice(i,1)[0]
+					delete IgnoreUpdates[id]
 					module.exports.save()
 
 					try {
@@ -1117,7 +1122,7 @@ module.exports = {
 			Announcement.DelayFunction(bot, `COMP-END ${msg.author.id}`, Hours, Minutes)
 
 			// send messages
-			notifyHosts(bot, `${msg.author.username} \`(${msg.author.id})\` has started Task ${Task}`, `Start`)
+			notifyHosts(bot, `${msg.author.username} \`(${msg.author.id})\` has started Task ${Task}`, `Timer`)
 			bot.createMessage(msg.channel.id, TaskMessage)
 			bot.createMessage(msg.channel.id, `You have started Task ${Task}. You have ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes to submit.`)
 		}
@@ -1147,7 +1152,7 @@ module.exports = {
 		if (RoleStyle == "TASK-END") module.exports.giveRole(bot, id, user.username)
 
 		if (additionalMessage == undefined) additionalMessage = ``
-		if (notify) notifyHosts(bot, `Time's up for ${user.username}! ${additionalMessage}`, `Finish`)
+		if (notify) notifyHosts(bot, `Time's up for ${user.username}! ${additionalMessage}`, `Timer`)
 	},
 
 	// creates a submission object
@@ -1273,7 +1278,8 @@ module.exports = {
 			taskchannel: TaskChannel,
 			releasedate: ReleaseDate.toString(),
 			warnings: TimeRemainingWarnings,
-			roletype: RoleStyle
+			roletype: RoleStyle,
+			ignoredupdates: IgnoreUpdates
 		}
 		Save.saveObject("submissions.json", data)
 	},
@@ -1311,6 +1317,10 @@ module.exports = {
 		TimeRemainingWarnings = []
 		while (data.warnings.length > 0) TimeRemainingWarnings.push(data.warnings.shift())
 		RoleStyle = data.roletype
+		Object.keys(data.ignoredupdates).forEach(id => {
+			IgnoreUpdates[id] = []
+			while (data.ignoredupdates[id].length) IgnoreUpdates[id].push(data.ignoredupdates[id].pop())
+		})
 	},
 
 	// return whether an attachment is an m64 or not
@@ -1750,7 +1760,7 @@ module.exports = {
 		short_descrip: `Get the results for the task`,
 		full_descrip: `Usage: \`$getresults [num_bold]\`\nGets the results for a task. \`num_bold\` is the number of players who will be highlighted in the results. This uses the information provided from \`$settime\`. And produces the format: 1. Name Ti"me info, DQ: name (reason). If anyone's time has not been added to the database, they will be put at the top of the list. `,
 		hidden: true,
-		function:function(bot, msg, args) {
+		function:async function(bot, msg, args) {
 			if (notAllowed(msg)) return
 
 			var num_bold = 0
@@ -1766,18 +1776,63 @@ module.exports = {
 
 			for (var i = 0; i < Results.length; i++) {
 				var s = Results[i]
-				if (num_bold > 0) result += `**`
-				result += `${i + 1}. ${s.name} ${getTimeString(s.time)} ${s.info}`
-				result += num_bold-- > 0 ? `**\n` : `\n`
+				var line = `${i + 1}. ${s.name} ${getTimeString(s.time)} ${s.info}`
+				if (num_bold-- > 0) line = `**${line}**`
+
+				// split up messages
+				if (result.length + line.length > 1900) {
+					await bot.createMessage(msg.channel.id, result + `\`\`\``)
+					result = `\`\`\``
+				}
+				result += line + `\n`
 			}
 
 			result += `\n`
 			for (var i = 0; i < DQs.length; i++) {
 				var s = DQs[i]
-				result += `DQ: ${s.name} (${s.reason})\n`
+				var line = `DQ: ${s.name} `
+				if (s.time) line += s.time + ` `
+				if (s.info) line += s.info + ` `
+				line += `(${s.reason})`
+
+				if (result.length + line.length > 1900) {
+					await bot.createMessage(msg.channel.id, result + `\`\`\``)
+					result = `\`\`\``
+				}
+				result += line + `\n`
 			}
 
 			return result + `\`\`\``
+		}
+	},
+
+	IgnoreUpdate:{
+		name: `IgnoreUpdate`,
+		aliases: [`ignoreupdates`, `toggleupdates`, `toggleupdate`],
+		short_descrip: `Disable specific comp notifications`,
+		full_descrip: `Usage: \`$ignoreupdate <update>\`\nThis will toggle `,
+		hidden: true,
+		function:function(bot, msg, args) {
+			if (notAllowed(msg)) return
+
+			if (!Host_IDs.includes(msg.author.id)) return `Only Hosts set to receive updates can use this command. `
+			if (args.length < 1) return `Missing Argument: \`$ignoreupdate <update>\``
+
+			var update = args.join(` `).toUpperCase()
+			if (!UPDATES.includes(update)) return `Invalid Argument: Update must be one of: ${UPDATES.join(`, `)}`
+
+			if (!IgnoreUpdates[msg.author.id]) IgnoreUpdates[msg.author.id] = []
+
+			if (IgnoreUpdates[msg.author.id].includes(update)) {
+				IgnoreUpdates[msg.author.id] = IgnoreUpdates[msg.author.id].filter(u => u != update)
+				module.exports.save()
+				return `You will now receive [${update}] updates. `
+
+			} else {
+				IgnoreUpdates[msg.author.id].push(update)
+				module.exports.save()
+				return `You will no longer receive [${update}] updates. `
+			}
 		}
 	}
 }
