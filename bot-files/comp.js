@@ -14,9 +14,10 @@ var Host_IDs = []
 var SubmissionsChannel = ""
 var Channel_ID = ""
 var Message_ID = ""
-var DQs = []
-var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, dq}
+var DQs = [] // same as Submissions but with 'Reason' field as well
+var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, time, info}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
+// time is saved in VIs, info is additional info for results (rerecords, A presses, etc.)
 
 var TimedTask = false
 var Hours = 1
@@ -102,6 +103,16 @@ function getSubmissionNumber(arg){
 		}
 	}
 	return {number:num, dq:dq, message:msg}
+}
+
+function getTimeString(VIs) {
+	if (VIs == null) return `N/A`
+	var min = Math.floor(VIs / 60 / 60)
+	var sec = Math.floor(VIs / 60) - min * 60
+	var ms = Math.round((VIs - min * 60 * 60 - sec * 60) * 100) / 100
+  if (sec < 10 && min > 0) sec = `0${sec}`
+  if (ms < 10) ms = `0${ms}`
+  return min > 0 ? `${min}'${sec}"${ms}` : `${sec}"${ms}`
 }
 
 module.exports = {
@@ -370,7 +381,7 @@ module.exports = {
 			var num = getSubmissionNumber(args.shift())
 			if (num.message.length) return num.message
 
-			var user = Submissions[num.number - 1]
+			var user = num.dq ? DQs[num.number - 1] : Submissions[num.number - 1]
 
 			async function notifyUserAndHost(filetype){
 				var modupdate = user.name + " (" + num.number + ") " + filetype + " changed [by " + msg.author.username + "] " + args[0]
@@ -692,14 +703,16 @@ module.exports = {
 		name: "disqualify",
 		aliases: ["dq"],
 		short_descrip: "DQs a user",
-		full_descrip: "Usage: `$dq <user_id> [reason]`\nDisqualifies a submission given a user id. This prevents the user from resubmitting to the current task and excludes their name from #current_submissions. This will not remove their files. It will send them a DM telling them that they've been DQ'd. To see the list of users and IDs of those who have already submitted use `$listsubmissions`",
+		full_descrip: "Usage: `$dq <user_id> [reason]`\nDisqualifies a submission given a user id. This prevents the user from resubmitting to the current task and excludes their name from #current_submissions. This will not remove their files. It will send them a DM telling them that they've been DQ'd. If they are partifipating in a timed task their timer will be stopped. To see the list of users and IDs of those who have already submitted use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
 			if (args.length == 0) return "Not Enough Arguments: `<user_id> [reason]`"
 
-			var id = args[0]
+			var id = args.shift()
+			var reason = args.length ? args.join(` `) : ``
+
 			var user = await Users.getUser(bot, id)
 			if (user === null) return `User ID \`${id}\` Not Recognized`
 
@@ -707,6 +720,8 @@ module.exports = {
 			for (var i = 0; i < Submissions.length; i++) {
 				if (Submissions[i].id == user.id) {
 					submission = Submissions.splice(i, 1)[0] // remove them if they've submitted
+					submission.reason = reason
+					break
 				}
 			}
 			if (!submission) {
@@ -715,7 +730,8 @@ module.exports = {
 					id: user.id,
 					m64: '', m64_size: 0,
 					st: '', st_size: 0,
-					namelocked: true
+					namelocked: true,
+					reason: reason
 				}
 			}
 
@@ -727,15 +743,19 @@ module.exports = {
 
 			// DM the person to tell them
 			try {
-				args.shift()
-				var reason = args.length ? "Provided Reason: " + args.join(" ") : "No reason has been provided"
+				Announcement.KillDelayedFunction(`COMP-END ${id}`, true)
 				var notif = `You have been disqualified from Task ${Task}. `
 				if (AllowSubmissions && !TimedTaskStatus.completed.includes(id)) {
 					notif += `Submissions you send in for this task will no longer be accepted. `
 				}
-
+				if (reason.length) {
+					notif += `Provided Reason: ${reason}`
+				} else {
+					notif += `No reason has been provided`
+				}
 				var dm = await bot.getDMChannel(id)
-				dm.createMessage(notif + reason)
+				Announcement.KillDelayedFunction(`COMP-WARN ${dm.id}`, true)
+				dm.createMessage(notif)
 
 			} catch (e) {
 				result += `Failed to notify user. `
@@ -772,6 +792,7 @@ module.exports = {
 
 			// Move their submission out of DQs if they have one
 			if (dq.m64_size || dq.st_size){
+				delete dq.reason
 				Submissions.push(dq)
 				module.exports.updateSubmissionMessage(bot)
 			}
@@ -815,7 +836,7 @@ module.exports = {
 
 				var dm = await bot.getDMChannel(msg.author.id)
 				if (args[0].toLowerCase() == "all"){
-					bot.createMessage(msg.channel.id, "Script will be sent in DMs")
+					if (!miscfuncs.isDM(msg)) bot.createMessage(msg.channel.id, "Script will be sent in DMs")
 					module.exports.getAllSubmissions(bot, dm)
 					return
 				}
@@ -823,9 +844,14 @@ module.exports = {
 				var num = getSubmissionNumber(args[0])
 				if (num.message.length) return num.message
 
-				var submission = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
-				dm.createMessage((num.dq?`DQ`:``) + `${num.number}. ${submission.name}\nID: ${submission.id}\nm64: ${submission.m64}\nst: ${submission.st}`)
-				return 'Submission info sent via DMs'
+				var s = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
+				var result = (num.dq?`DQ`:``) + `${num.number}. ${s.name}\nID: ${s.id}\nTime: ${getTimeString(s.time)} (${s.time}) ${s.info}\nm64: ${s.m64}\nst: ${s.st}`
+				if (miscfuncs.isDM(msg)) {
+					return result
+				} else {
+					dm.createMessage(result)
+					return 'Submission info sent via DMs'
+				}
 
 			} catch (e) {
 				return "Failed to send DM```"+e+"```"
@@ -1134,7 +1160,9 @@ module.exports = {
 			m64_size: m64_filesize,
 			st: st_url,
 			st_size: st_filesize,
-			namelocked: false
+			namelocked: false,
+			time: null,
+			info: ''
 		}
 
 		Submissions.push(submission);
@@ -1191,7 +1219,9 @@ module.exports = {
 		}
 
 		if (m64 && st){
-			return "Submission Status: `2/2` Submission complete.\nm64: "+submission.m64+"\nst: "+submission.st
+			var msg = `"Submission Status: \`2/2\` Submission complete.\nm64: ${submission.m64}\nst: ${submission.st}`
+			msg += submission.time == null ? `\nTime: No Time Available Yet` : `Time: ${getTimeString(submission.time)} ${submission.info}`
+			return msg
 		} else if (m64 && !st){
 			return "Submission Status: `1/2` No st received.\nm64: "+submission.m64
 		} else if (!m64 && st){
@@ -1669,5 +1699,85 @@ module.exports = {
 			notifyHosts(bot, `Role Style updated to \`${RoleStyle}\``)
 			return `Role Style updated to \`${RoleStyle}\``
 		}
+	},
+
+	SetTime:{
+		name: `SetTime`,
+		aliases: [`SetResult`, `SetResults`],
+		short_descrip: `Sets a user's time for their submission`,
+		full_descrip: `Usage: \`$settime <submission_number> <VIs> [additional info]\`\nSets the time (in VIs) for a user's run. To see the results, use \`$getresults\`. This will DM the user telling them the information that is set with this command. To see a list of submission numbers use \`$listsubmissions\`. The \`additional info\` field is for rerecords, A press count, or any other relevant information to be displayed in the results. `,
+		hidden: true,
+		function:async function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			if (args.length < 2) return `Missing Arguments: \`$settime <submission_number> <VIs> [additional info]\``
+
+			var num = getSubmissionNumber(args.shift())
+			var VIs = args.shift()
+			var info = args.join(` `)
+
+			if (num.message.length) return num.message
+			if (isNaN(VIs)) return `Invalid Argument: VIs must be a number`
+
+			if (num.dq) {
+				DQs[num.number - 1].time = VIs
+				DQs[num.number - 1].info = info
+				var submission = DQs[num.number - 1]
+			} else {
+				Submissions[num.number - 1].time = VIs
+				Submissions[num.number - 1].info = info
+				var submission = Submissions[num.number - 1]
+			}
+			module.exports.save()
+
+			var result = `${submission.name} (${num.dq ? `DQ` : ``}${num.number}): ${getTimeString(VIs)} (${VIs})`
+			result += info.length ? ` ${info}. ` : `. `
+			result += `Updated by ${msg.author.username}`
+
+			try {
+				var dm = await bot.getDMChannel(submission.id)
+				dm.createMessage(`Your time has been updated: ${getTimeString(VIs)} ${info}`)
+			} catch (e) {
+				result += `. **Warning:** Failed to notify user of their time update. `
+			}
+
+			notifyHosts(bot, result, `Timing`)
+			return result
+		}
+	},
+
+	GetResults:{
+		name: `GetResults`,
+		short_descrip: `Get the results for the task`,
+		full_descrip: `Usage: \`$getresults [num_bold]\`\nGets the results for a task. \`num_bold\` is the number of players who will be highlighted in the results. This uses the information provided from \`$settime\`. And produces the format: 1. Name Ti"me info, DQ: name (reason). If anyone's time has not been added to the database, they will be put at the top of the list. `,
+		hidden: true,
+		function:function(bot, msg, args) {
+			if (notAllowed(msg)) return
+
+			var num_bold = 0
+			if (args.length > 0 && !isNaN(args[0])) num_bold = args[0]
+
+			var result = `\`\`\`**__Task ${Task} Results:__**\n\n`
+
+			var Results = [...Submissions].sort((a,b) => {
+				if (a.time == null) return -1
+				if (b.time == null) return 1
+				return a.time - b.time
+			})
+
+			for (var i = 0; i < Results.length; i++) {
+				var s = Results[i]
+				if (num_bold > 0) result += `**`
+				result += `${i + 1}. ${s.name} ${getTimeString(s.time)} ${s.info}`
+				result += num_bold-- > 0 ? `**\n` : `\n`
+			}
+
+			result += `\n`
+			for (var i = 0; i < DQs.length; i++) {
+				var s = DQs[i]
+				result += `DQ: ${s.name} (${s.reason})\n`
+			}
+
+			return result + `\`\`\``
+		}
 	}
-};
+}

@@ -64,17 +64,38 @@ function loadModule(mod){
 }
 
 function createHelpCommand(mod){
-	var msg = `**${NAME}** - ${mod.name} Module\n\n`
-	var i = 0;
+	var header = `**${NAME}** - ${mod.name} Module\n\n`
+	var footer = `\nType \`$help <command>\` for more info on a command. `
+	var footer2 = ``
+	var msg = ``
+	var i = 0
+	var cmd_number = 1
 	Object.keys(mod).forEach(key => {
 		var cmd = mod[key]
 		if (Object.prototype.toString.call(cmd) == "[object Object]"){
 			msg += `\t**${cmd.name}** - ${cmd.short_descrip}\n`
 			if (++i % 5 == 0) msg += `\n` // break them up in groups of 5
 		}
+
+		// split up to prevent passing the discord limit and having walls of text
+		if (msg.length > 1000) {
+			footer2 = `Use \`$${mod.short_name}${cmd_number + 1}\` for more commands. `
+			var message = header + msg + footer + footer2
+			if (cmd_number == 1) {
+				addCommand(mod.short_name, () => message, `Lists ${mod.name} commands`, message, false)
+			} else {
+				addCommand(`${mod.short_name}${cmd_number}`, () => message, `Lists ${mod.name} commands`, message, true)
+			}
+			cmd_number++
+			msg = ``
+		}
 	})
-	msg += "\nType \`$help <command>\` for more info on a command."
-	addCommand(mod.short_name, function(){return msg}, `Lists ${mod.name} commands`, msg, false)
+	var message = header + msg + footer
+	if (cmd_number == 1) {
+		addCommand(mod.short_name, () => message, `Lists ${mod.name} commands`, message, false)
+	} else {
+		addCommand(`${mod.short_name}${cmd_number}`, () => message, `Lists ${mod.name} commands`, message, true)
+	}
 }
 
 function loadAllModules(){
@@ -147,7 +168,7 @@ var toggleReactions = function(bot, msg, args) {
 }
 
 addCommand("restart", (bot, msg) => {if (users.hasCmdAccess(msg)) process.exit(42)},"","Shuts down the bot, downloads files off of github, then starts the bot back up. This will only download files from 'bot-files'", true)
-addCommand("tre", toggleReactions, `Toggle auto reactions`, `Switches echoing reactions on/off for the current server`, false, [`toggleReaction`, `toggleReactions`])
+addCommand("tr", toggleReactions, `Toggle auto reactions`, `Switches echoing reactions on/off for the current server`, false, [`toggleReaction`, `toggleReactions`])
 
 bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Lists #score commands", fullDescription: score.help()})
 bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.log(args.join(" "))},{hidden: true})
