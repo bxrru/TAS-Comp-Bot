@@ -157,10 +157,7 @@ module.exports = {
 		return `<#${channel_id}>`
 	},
 	getChannelID:function(arg){
-		if (arg.startsWith('<#') && arg.endsWith('>')){
-		    arg = arg.substr(2, arg.length-3)
-		}
-		return arg
+		return chat.chooseChannel(arg)
 	},
 	mentionUser:function(user_id){
 		return `<@${user_id}>`

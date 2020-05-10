@@ -167,7 +167,18 @@ var toggleReactions = function(bot, msg, args) {
 	return result
 }
 
-addCommand("restart", (bot, msg) => {if (users.hasCmdAccess(msg)) process.exit(42)},"","Shuts down the bot, downloads files off of github, then starts the bot back up. This will only download files from 'bot-files'", true)
+async function restart(bot, msg, args) {
+	if (!users.hasCmdAccess(msg)) return
+	try {
+		msg.channel.createMessage(args.length ? `Restarting... Downloading updated files` : `Restarting`)
+	} catch (e) {
+		console.log(`Error: Failed to send message`)
+	} finally {
+		process.exit(args.length ? 42 : 0)
+	}
+}
+
+addCommand("restart", restart,"Restart the bot", "Shuts down the bot, and starts it up again. If this is called with any arguments (ex \`$restart 1\`) it will download the latest files off of github, and then start the bot back up. This will only download files from 'bot-files'", true)
 addCommand("tr", toggleReactions, `Toggle auto reactions`, `Switches echoing reactions on/off for the current server`, false, [`toggleReaction`, `toggleReactions`])
 
 bot.registerCommand("score", (msg, args) => {return score.processCommand(bot, msg, args)},{description: "Lists #score commands", fullDescription: score.help()})

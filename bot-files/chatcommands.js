@@ -15,10 +15,11 @@ var CHANNELS = {"GENERAL": "397488794531528704",
 
 function chooseChannel(string){
 	string = string.toUpperCase()
-	if (CHANNELS[string] === undefined) {
-		return string;
+	if (CHANNELS[string]) {
+		return CHANNELS[string]
 	} else {
-		return CHANNELS[string];
+		if (string.startsWith('<#') && string.endsWith('>')) string = string.substr(2, string.length-3) // detect channel mentions
+		return string
 	}
 }
 

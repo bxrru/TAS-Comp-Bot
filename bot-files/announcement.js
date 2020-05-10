@@ -2,19 +2,27 @@ const users = require("./users.js")
 const miscfuncs = require("./miscfuncs.js")
 const chrono = require("chrono-node")
 const save = require("./save.js")
+const chat = require("./chatcommands.js")
+const INFO = require("../SETUP-INFO.js")
 
 var Announcements = [] // {id, channel, interval, time, message, user}
 var Timers = [] // {id, timer}
 
 // delays for repeated announcements
-var Delays = {
+var Delays = {}
+var DefaultDelays = {
     once: 0,
 		daily: 86400000,
     weekly: 604800000,
     biweekly: 1209600000
 }
 
-// TODO: send missed announcements and say how much it was delayed by (in load func)
+// gets a new unique ID
+function NewID() {
+  var id = Announcements.length // arbitrary start point
+  while (Announcements.filter(a => a.id == id).length) id++ // slow
+  return id
+}
 
 module.exports = {
   name: "Announcement",
@@ -46,8 +54,8 @@ module.exports = {
 			var date = chrono.parseDate(text[1])
 
 			var announcement = {
-				id: Announcements.length,
-				channel: miscfuncs.getChannelID(args[0]),
+				id: NewID(),
+				channel: chat.chooseChannel(args[0]),
 				interval: Delays[args[1]],
 				time: `${date}`,
 				message: text[0],
@@ -61,7 +69,7 @@ module.exports = {
 				return `Specified time \`${date.toString()}\` has already passed (\`${now.toString()}\`). Try a more specific date and time.`
       }
 
-      if (msg.InternalCall != undefined) announcement.InternalCall = msg.InternalCall
+      if (msg.InternalCall) announcement.InternalCall = msg.InternalCall
 
 			Announcements.push(announcement)
 			module.exports.SetAnnouncement(bot, announcement, delay)
@@ -109,7 +117,7 @@ module.exports = {
 			id: announcement.id,
 			timer: setTimeout(async() => {
 				await module.exports.SendAnnouncement(bot, announcement) // send message
-        if (announcement.InternalCall != undefined) await module.exports.ExternalFunctions(bot, announcement.InternalCall)
+        if (announcement.InternalCall) await module.exports.ExternalFunctions(bot, announcement.InternalCall)
 				module.exports.LoopAnnouncement(bot, announcement) // repeat announcement
 			}, delay)
 		}
@@ -157,9 +165,10 @@ module.exports = {
 
 		} else {
 
-			for (var i = 0; i<Timers.length; i++){
+      // adjust timer
+			for (var i = 0; i<Timers.length; i++) {
 
-				if (Timers[i].id == announcement.id){
+				if (Timers[i].id == announcement.id) {
 
 					// clear the current one
 					clearTimeout(Timers[i].timer)
@@ -171,6 +180,15 @@ module.exports = {
 
 				}
 			}
+
+      // adjust time listed in announcement
+      for (var i = 0; i<Announcements.length; i++) {
+        if (Announcements[i].id == announcement.id) {
+          var new_time = new Date(Announcements[i].time).getTime()
+          Announcements[i].time = new Date(new_time).toUTCString()
+        }
+      }
+
 		}
 
 		module.exports.save()
@@ -190,8 +208,7 @@ module.exports = {
 		// remove the Announcement
     var a = false
 		for (var i = 0; i<Announcements.length; i++){
-			if (Announcements[i].id == id)
-				a = Announcements.splice(i, 1)
+			if (Announcements[i].id == id) a = Announcements.splice(i, 1)[0]
 		}
 
     if (a) {
@@ -204,41 +221,62 @@ module.exports = {
 	},
 
 	save:function(){
-		save.saveObject("announcements.json", Announcements)
+    var data = {ACs:Announcements, Intervals:Delays}
+		save.saveObject("announcements.json", data)
 	},
 
 	load:async function(bot){
 		var data = save.readObject("announcements.json")
 
+    if (data.Intervals) {
+      Object.keys(data.Intervals).forEach(i => Delays[i] = data.Intervals[i])
+    } else {
+      Delays = DefaultDelays
+    }
+
 		var recoverAnnouncement = async function(announcement){
 
 			var date = chrono.parseDate(announcement.time)
 			var now = new Date()
-			var delay = date - now
+			var delay = date.getTime() - now.getTime()
 
-			if (delay < 0 && announcement.interval == 0){
+      if (delay < 0 && announcement.InternalCall) {
+        await module.exports.ExternalFunctions(bot, announcement.InternalCall, delay)
+        await INFO.Owner_IDs.forEach(async(id) => {
+          try {
+            var dm = await bot.getDMChannel(id)
+            dm.createMessage(`**[ERROR]** Internal announcement call missed: \`\`\`key = \"${announcement.InternalCall}\"\ntime: ${announcement.time}\`\`\``)
+          } catch (e) {
+            console.log("Could not notify OWNER: " + id)
+          }
+        })
+
+      } else if (delay < 0 && announcement.interval == 0) {
 
 				console.log("Announcement Missed", announcement)
-
-        if (!announcement.user == "BOT") { // dont try to DM internal announcements
-  				try { // message the user to tell them that the announcement was missed
-  					var dm = await bot.getDMChannel(announcement.user.id)
-  					dm.createMessage(`Announcement Missed \`\`\`Channel: ${announcement.channel}\nTime: ${announcement.time}\nMessage: ${announcement.message}\`\`\``)
-  				} catch (e) {
-  					console.log(`Failed to notify user ${announcement.user.username} (${announcement.user.id})`)
-  				}
-        }
+  			try { // message the user to tell them that the announcement was missed
+  				var dm = await bot.getDMChannel(announcement.user.id)
+  				dm.createMessage(`Announcement Missed \`\`\`Channel: #${bot.getChannel(announcement.channel).name} (${announcement.channel})\nTime: ${announcement.time}\nMessage: ${announcement.message}\`\`\``)
+  			} catch (e) {
+  				console.log(`Failed to notify user ${announcement.user.username} (${announcement.user.id})`)
+  			}
 
 			} else {
 				// if it passed but happens regularly, shift it to the next time
-				while (delay < 0) delay += announcement.interval
+        if (announcement.interval) delay = delay % announcement.interval
+        if (delay < 0) delay += announcement.interval
+        announcement.time = new Date(now.getTime() + delay).toUTCString()
 				module.exports.SetAnnouncement(bot, announcement, delay)
 				Announcements.push(announcement) // save it in memory
 			}
 
 		}
 
-		await data.forEach(async(a) => await recoverAnnouncement(a))
+    if (data.ACs) {
+      await data.ACs.forEach(async(a) => await recoverAnnouncement(a))
+    } else {
+      Announcements = []
+    }
 		module.exports.save() // in case any announcements were skipped
 
 	},
@@ -256,40 +294,44 @@ module.exports = {
 
 			var result = ""
 
-			Announcements.forEach(a => {
+      var a = Announcements.filter(ac => ac.id == args[0])
+      if (a.length == 0) return `ID \`${args[0]}\` Not Found. For a list of announcement IDs, use $aclist`
+      a = a[0]
 
-				if (a.id == args[0]){
+      if (a.InternalCall) {
+        result = `\`\`\`Announcement Info (ID ${a.id})\n`
+        result += `\tadded by: BOT (internal call)\n`
+        result += `\tkey = \"${a.InternalCall}\"\n`
+        result += `\ttime: ${a.time}\`\`\``
+        return result
+      }
 
-					result += `\`\`\`Announcement Info (ID ${a.id})\n`
-					result += `\tadded by: ${a.user.username} (${a.user.id})\n`
-          if (a.channel.substr(0,2).toUpperCase() == "DM") {
-            result += `\tUser ID (DM): ${a.channel}\n`
-          } else {
-            result += `\tchannel: #${bot.getChannel(a.channel).name} (${a.channel})\n`
-          }
-					result += `\tinterval: ${a.interval} `
-					result += a.interval == 0 ? `(Once)\n` : `ms (repeated)\n`
-					result += `\ttime: ${a.time}\n`
-					result += `\tmessage: ${a.message}`
+			result = `\`\`\`Announcement Info (ID ${a.id})\n`
+			result += `\tadded by: ${a.user.username} (${a.user.id})\n`
+      if (a.channel.substr(0,2).toUpperCase() == "DM") {
+        result += `\tUser ID (DM): ${a.channel}\n`
+      } else {
+        result += `\tchannel: #${bot.getChannel(a.channel).name} (${a.channel})\n`
+      }
+			result += `\tinterval: ${a.interval} `
+			result += a.interval == 0 ? `(Once)\n` : `ms (repeated)\n`
+			result += `\ttime: ${a.time}\n`
+			result += `\tmessage: ${a.message}`
 
-					// make sure it fits in a discord message
-					if (result.length > 2000 - 7){
-						while (result.length > 2000 - 7) result = result.substr(0, result.length-1)
-						result += "..."
-					}
+			// make sure it fits in a discord message
+			if (result.length > 2000 - 7){
+				while (result.length > 2000 - 7) result = result.substr(0, result.length-1)
+				result += "..."
+			}
 
-					result += "```"
-				}
-			})
-
-			return result.length == 0 ? `ID \`${args[0]}\` Not Found. For a list of announcement IDs, use $aclist` : result
+			return result + "```"
 		}
 	},
 
 	AnnouncementList:{
 		name: "aclist",
 		short_descrip: "Lists all the announcements",
-		full_descrip: "Lists some information about scheduled announcements. Usage: \`$aclist [page]\`. For more information on a specific announcement, use $acinfo. Passing the keyword \`admin\` will show internall delayed functions.",
+		full_descrip: "Usage: \`$aclist [page]\`\nLists some information about scheduled announcements. For more information on a specific announcement, use \`$acinfo\`. Announcement's labelled with `key = ...` are internally delayed function calls.",
 		hidden: true,
 		function:function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -305,7 +347,6 @@ module.exports = {
         var entry = ""
         // escape internal announcement calls (if we want to delay a function call)
         if (a.InternalCall != undefined) {
-          if (!args.includes("admin")) return
           entry = `${a.id} | Key = ${a.InternalCall}\n`
         } else {
 
@@ -341,7 +382,7 @@ module.exports = {
 		name: "acclear",
 		aliases: ["acdelete", "acremove"],
 		short_descrip: "Remove an announcement",
-		full_descrip: "Unschedules a planned announcement given its ID. The person who added the announcement will be notified. For a list of announcement IDs, use $aclist",
+		full_descrip: "Usage: \`$acclear <id>\`\nUnschedules a planned announcement given its ID. The person who added the announcement will be notified. For a list of announcement IDs, use \`$aclist\`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -349,13 +390,21 @@ module.exports = {
 			if (Announcements.length == 0) return `No scheduled announcements at this time.`
 			if (args.length == 0) return "Missing Arguments: \`$acclear <id>\`"
 
-			var a = module.exports.RemoveAnnouncement(args[0])
+			var a = module.exports.RemoveAnnouncement(args[0]) // this saves when it removes
 
 			if (a == null) return `ID \`${args[0]}\` Not Found. For a list of announcement IDs, use $aclist`
 
-			module.exports.save()
+			var result = ``
 
-			var result = `Announcement Removed by ${msg.author.username} (${msg.author.id})`
+      if (a.InternalCall) {
+        result = `\`\`\`Announcement Info (ID ${a.id})\n`
+        result += `\tadded by: BOT (internal call)\n`
+        result += `\tkey = \"${a.InternalCall}\"\n`
+        result += `\ttime: ${a.time}\`\`\``
+        return result
+      }
+
+      result = `Announcement Removed by ${msg.author.username} \`(${msg.author.id})\`\n`
 			result += `\`\`\`Announcement Info (ID ${a.id})\n`
 			result += `\tadded by: ${a.user.username} (${a.user.id})\n`
 			result += `\tchannel: #${bot.getChannel(a.channel).name} (${a.channel})\n`
@@ -364,14 +413,15 @@ module.exports = {
 			result += `\ttime: ${a.time}\n`
 			result += `\tmessage: ${a.message}`
 			if (result.length > 2000 - 7){
-				while (result.length > 2000 - 7) result = result.substr(0, result.length-1)
+        result = result.substr(0, 2000 - 7)
 				result += "..."
 			}
 			result += "```"
 
-			console.log(result)
-
 			// DM the person who added the announcement
+      // if theyre the one that stopped it, dont DM
+      if (msg.author.id == a.user.id) return result
+
 			try {
 				var dm = await bot.getDMChannel(a.user.id)
 				dm.createMessage(result)
@@ -385,19 +435,60 @@ module.exports = {
 	},
 
 	ListIntervals:{
-		name: "acinterval",
+		name: "acListIntervals",
+    aliases: ["acinterval", "acintervals", "aclistinterval"],
 		short_descrip: "List the supported announcement intervals",
 		full_descrip: "Shows the different interval keywords that can be used when adding an announcement, and how long (in ms) before the announcement will be sent again.",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
 
-			var result = "Currently supported intervals are:\n"
+			var result = "Currently supported intervals (in ms) are:\n"
 			Object.keys(Delays).forEach(k => {
 				result += `\t${k}: ${Delays[k]}\n`
 			})
 
 			return result
+		}
+	},
+
+  addInterval:{
+		name: "acAddInterval",
+		short_descrip: "add an announcement interval",
+		full_descrip: "Usage: \`$acAddInterval <name> <time>\`\nThe given name/alias can be used in place of an interval when adding announcements. The time given must be in milliseconds. This will overwrite preexisting intervals.",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+
+      if (args.length < 2) return `Missing Arguments: \`$acAddInterval <name> <time>\``
+      if (isNaN(args[1])) return `Invalid Argument: time must be a number`
+
+			Delays[args[0]] = args[1]
+      console.log(Delays)
+      module.exports.save()
+
+			return `Interval \`${args[0]}\` now set to ${args[1]}ms`
+		}
+	},
+
+  deleteInterval:{
+		name: "acDeleteInterval",
+    aliases: ["acRemoveInterval"],
+		short_descrip: "add an announcement interval",
+		full_descrip: "Usage: \`$acDeleteInterval <name>\`\nDeletes an interval/alias that can be used for announcements. To see the current list of intervals use \`$acListIntervals\`",
+		hidden: true,
+		function: function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
+
+      if (args.length < 1) return `Missing Arguments: \`$acDeleteInterval <name>\``
+
+			if (Delays[args[0]] == undefined) return `Interval name \`${args[0]}\` did not exist`
+
+      var interval = Delays[args[0]]
+      delete Delays[args[0]]
+      module.exports.save()
+
+			return `Interval name \`${args[0]} (${interval}ms)\` was deleted`
 		}
 	},
 
@@ -416,8 +507,10 @@ module.exports = {
   // Other bot modules can use announcements to delay function calls.
   // They pass 'msg.InternalCall = key' when calling AddAnnouncement and
   // that key is hardcoded here to do said function
-  ExternalFunctions:async function(bot, key){
+  // Late is passed if the internal call was missed
+  ExternalFunctions:async function(bot, key, late){
     key = key.toUpperCase()
+    if (late) return // currently: do NOT call the functions late
     if (key == "NOTHING" || key == "_"){
       return // these keys will not be used
 

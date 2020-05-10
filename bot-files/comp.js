@@ -211,8 +211,8 @@ module.exports = {
 			if (Announcement.KillDelayedFunction("COMP-RELEASE", true)) {
 				result += `Public release has been cancelled. `
 			}
-			if (Announcement.KillDelayedFunction(`COMP-WARN ${TaskChannel}`)) {
-				result += `Public time remaining warning has been cancelled. `
+			if (Announcement.KillDelayedFunction(`COMP-WARN ${TaskChannel}`, true)) {
+				result += `Public time remaining warnings have been cancelled. `
 			}
 			if (Announcement.KillDelayedFunction(`COMP-WARN`, true)) {
 				result += `User time remaining warnings have been cancelled. `
@@ -512,21 +512,21 @@ module.exports = {
 			if (args.length == 0) args = [""]
 
 			var role = args[0];
-			var reason = "Testing role permissions, command call by " + msg.author.username;
+			var reason = "Testing role permissions, command call by " + msg.author.username
 
 			var result = ""
 
 			try {
 				var self = await bot.getSelf()
-				await bot.addGuildMemberRole(Guild, self.id, role, reason);
-				await bot.removeGuildMemberRole(Guild, self.id, role, reason);
+				await msg.channel.guild.addMemberRole(self.id, role, reason)
+				await msg.channel.guild.removeMemberRole(self.id, role, reason)
 				result += "Role set to `" + role + "`"
 				notifyHosts(bot, `Submitted role has been set to \`${role}\``)
 			} catch (e) {
-				role = ""
-				result += "Invalid Role: Role does not exist or does not match the server. "
+				result += "Invalid Role: Role \`"+role+"\`does not exist or does not match the server. "
 				result += "Use `$setServer <id>` to set the server that contains the role. "
-				result += "**No role will be given out**"
+				result += "**No role will be given out** \`\`\`"+e+"\`\`\`"
+				role = ""
 			}
 
 			SubmittedRole = role;
@@ -864,7 +864,7 @@ module.exports = {
 		}
 	},
 
-	// gets the text for a batch script that will download every submission file
+	// gets the text for a batch script that will download every submission file `$get all`
 	getDownloadScript:function(){
 
 		var text = ''
@@ -884,8 +884,8 @@ module.exports = {
 
 			// download m64 + st
 			var filename = module.exports.properFileName(name)
-			if (submission.m64) text += 'powershell -Command "Invoke-WebRequest ' + submission.m64 + ' -OutFile ' + filename + '.m64"\n'
-			if (submission.st) text += 'powershell -Command "Invoke-WebRequest ' + submission.st + ' -OutFile ' + filename + '.st"\n'
+			if (submission.m64) text += `powershell -Command "Invoke-WebRequest ${submission.m64} -OutFile '${filename}.m64'\n`
+			if (submission.st) text += `powershell -Command "Invoke-WebRequest ${submission.st} -OutFile '${filename}.st'\n`
 
 			// go back to main folder
 			text += 'cd ".."\n'
