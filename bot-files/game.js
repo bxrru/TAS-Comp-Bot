@@ -2,6 +2,8 @@ const users = require("./users.js")
 const miscfuncs = require("./miscfuncs.js")
 const Save = require("./save.js")
 
+// 35 default emoji
+var DefaultEmoji = ["smiley","smile","grin","sweat_smile","joy","innocent","slight_smile","upside_down","wink","heart_eyes","kissing_heart","stuck_out_tongue","smirk","sunglasses","pensive","weary","cry","rage","flushed","scream","thinking","grimacing","frowning","open_mouth","cowboy","smiling_imp","clown","robot","thumbsup","thumbsdown","clap","ok_hand","wave","pray","eyes"]
 var DisabledServers = [];
 var BoundSlots = true;
 
@@ -46,6 +48,19 @@ module.exports = {
     }
   },
 
+  bound:{
+    name: "bound",
+		aliases: ["unbound"],
+    short_descrip: "Bound/Unbound slots",
+    full_descrip: "A global switch to bound/unbound slots. Bounded means that it limits $slots to 1 message. If it's unbounded it will send as many messages as it takes to send all the requested emoji (**WARNING** Walls of emoji may cause discord to lag)",
+    hidden: true,
+    function: function(bot, msg, args){
+      if (!users.hasCmdAccess(msg)) return
+      BoundSlots = !BoundSlots
+      return `Bounded = ${BoundSlots ? `True` : `False`}`
+    }
+  },
+
   // expected input:
   // "$giveaway
   // 1. User
@@ -68,46 +83,94 @@ module.exports = {
     }
   },
 
-  slots:{
+  slots:{ // TODO: Add timeout (?)
     name: "slots",
     short_descrip: "Spin to Win",
-    full_descrip: "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message",
+    full_descrip: "Chooses a number of random emojis. This number is specified by the user and defaults to 3. The limit is as many characters as can fit in one message. This will use the server's custom emoji. If it has none, or this is used in DMs this will use a selection of 35 default emoji",
     hidden: true,
     function: function(bot, msg, args){
 
-      // TODO: Add timeout (?), use default emojis
-      if (disabled(msg.channel.guild.id)) return
+      if (!miscfuncs.isDM(msg) && disabled(msg.channel.guild.id)) return
 
   		var numEmoji = args[0];
   		if (isNaN(numEmoji) || numEmoji < 2){
-  			numEmoji = 3;
+  			numEmoji = 3
   		}
 
-  		var emojis = msg.channel.guild.emojis;
-  		var emoji = getRandomEmoji(emojis);
-  		var lastID = emoji.id;
-  		var win = true;
-  		var result = printEmoji(emoji)+" ";
+      var emojis = []
+      if (miscfuncs.isDM(msg) || msg.channel.guild.emojis.length == 0) {
+        emojis = DefaultEmoji
+      } else {
+        emojis = msg.channel.guild.emojis
+      }
 
-  		for (var i = 0; i < numEmoji-1; i++){
-  			emoji = getRandomEmoji(emojis);
+  		var emoji = getRandomEmoji(emojis)
+  		var last = miscfuncs.isDM(msg) ? emoji : emoji.id
+  		var win = true
+  		var result = printEmoji(emoji)
 
-  			if (lastID != emoji.id){win = false;}
-  			lastId = emoji.id;
+  		for (var i = 0; i < numEmoji - 1; i++) {
+  			emoji = getRandomEmoji(emojis)
+
+  			if (miscfuncs.isDM(msg) && last != emoji || last != emoji.id) win = false
+  			last = miscfuncs.isDM(msg) ? emoji : emoji.id
 
   			if (result.length + printEmoji(emoji).length > 2000){
           if (BoundSlots){
-            break;
+            break
           } else {
-            bot.createMessage(msg.channel.id, result); result = ""
+            bot.createMessage(msg.channel.id, result)
+            result = ""
           }
   			}
 
-  			result += printEmoji(emoji)+" ";
+  			result += printEmoji(emoji)
   		}
 
-  		bot.createMessage(msg.channel.id, result);
-  	  bot.createMessage(msg.channel.id, win ? "WINNER!" : "Please Play Again");
+  		bot.createMessage(msg.channel.id, result)
+  	  bot.createMessage(msg.channel.id, win ? `WINNER! ` + msg.author.mention : "Please Play Again")
+    }
+  },
+
+  spin:{
+    name: "spin",
+    short_descrip: "Spin to Win 2: Electric Boogaloo",
+    full_descrip: "Spin the classic slot machine to choose 9 random emoji. Win by getting 3 in a row in any row, column, or diagonal! This will use the server's custom emoji. If it has none, or this is used in DMs this will use a selection of 35 default emoji",
+    hidden: true,
+    function: function(bot, msg, args){
+
+      if (!miscfuncs.isDM(msg) && disabled(msg.channel.guild.id)) return
+
+      var emojis = []
+      if (miscfuncs.isDM(msg) || msg.channel.guild.emojis.length == 0) {
+        emojis = DefaultEmoji
+      } else {
+        emojis = msg.channel.guild.emojis
+      }
+
+      var roll = []
+      for (var i = 0; i < 9; i++) roll.push(getRandomEmoji(emojis))
+
+      var combinations = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]]
+
+      var win = false
+      var result = ``
+      for (var i = 0; i < combinations.length; i++) {
+        var c = combinations[i]
+        if (roll[c[0]] == roll[c[1]] && roll[c[1]] == roll[c[2]]) {
+          win = true
+          break
+        }
+      }
+
+      var result = ``
+      for (var i = 0; i < 9; i++) {
+        result += printEmoji(roll[i])
+        if (i % 3 == 2) result += `\n`
+      }
+
+      bot.createMessage(msg.channel.id, result)
+      bot.createMessage(msg.channel.id, win ? `WINNER! ` + msg.author.mention : "Please Play Again")
     }
   },
 
@@ -182,9 +245,34 @@ function randInt(exclusiveUpperBound){
 }
 
 function canUseEmoji(emoji){
-	return !emoji.roles.length && !emoji.animated;
+	return !emoji.id || !emoji.roles.length // !emoji.id is used to detect default emoji
 }
 
 function printEmoji(emoji){
-	return "<:"+emoji.name+":"+emoji.id+">";
+  if (emoji.animated) {
+    return `<a:${emoji.name}:${emoji.id}> `
+  } else if (emoji.name) {
+    return `<:${emoji.name}:${emoji.id}> `
+  } else {
+    return `:${emoji}: `
+  }
+}
+
+// easier to make this separate than edit the previous code
+function DMSlots(channel, num) {
+  var win = true
+  var last = DefaultEmoji[randInt(DefaultEmoji.length)]
+  var result = `:${last}: `
+  for (var i = 1; i < num; i++) {
+    var emoji = DefaultEmoji[randInt(DefaultEmoji.length)]
+    if (emoji != last) win = false
+    if (result.length + emoji.length > 2000 - 3) {
+      if (BoundSlots) break
+      channel.createMessage(result)
+      result = ""
+    }
+    result += `:${last = emoji}: `
+  }
+  channel.createMessage(result)
+  channel.createMessage(win ? `WINNER!` : "Please Play Again")
 }
