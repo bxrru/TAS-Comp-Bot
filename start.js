@@ -5,7 +5,12 @@ var AllowUpdates = true
 var Started = false
 var CompBot
 
-const Info = require('./SETUP-INFO.js')
+if (process.argv.length < 3) {
+  console.log(`Error: Missing Argument. You must specify a bot ex: node .\\start.js .\\my_bot.js`)
+  process.exit(0)
+}
+process.argv[2] = process.argv[2].replace(/\\/, `/`)
+const Info = require(process.argv[2])
 
 // Helper function
 var deleteFolderRecursive = function(path) {
@@ -46,10 +51,10 @@ var updateFiles = function() {
     cp.execSync(`git clone "https://github.com/Barryyyyyy/TAS-Comp-Bot"`)
 
     // delete old files
-    deleteFolderRecursive('./bot-files/')
+    deleteFolderRecursive(Info.Bot_Files_Path)
 
     // copy new files
-    copyFolderRecursive('./TAS-Comp-Bot/bot-files/', './bot-files/')
+    copyFolderRecursive('./TAS-Comp-Bot/bot-files/', Info.Bot_Files_Path)
 
     // delete temp download
     deleteFolderRecursive('./TAS-Comp-Bot/')
@@ -69,14 +74,14 @@ var start = function() {
   if (Started) return
 
   if (Info.Bot_Token == ''){
-    console.log(`${bar}No Bot Token found in SETUP-INFO.js\nUnable to start bot${bar}`)
+    console.log(`${bar}No Bot Token found in ${process.argv[2]}\nUnable to start bot${bar}`)
     process.exit()
   }
 
   console.log("Starting Bot...")
   Started = true
 
-  var CompBot = cp.exec(`node ./bot-files/main.js`, (error, stdout, stderr) => {
+  var CompBot = cp.exec(`node ${Info.Bot_Files_Path}/main.js ${process.argv[2]}`, (error, stdout, stderr) => {
     if (error) {
       Started = false
       console.error(`Error: ${error}`)

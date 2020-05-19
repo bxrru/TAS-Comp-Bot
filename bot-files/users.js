@@ -1,6 +1,6 @@
 const Save = require("./save.js")
-const Info = require("../SETUP-INFO.js")
 
+OWNER_IDS = []
 Bans = []
 Admin = {
 	users: [],
@@ -15,6 +15,15 @@ module.exports = {
 		Bans = Save.readObject("bans.json")
 		if (Admin == null) Admin = {users:[],channels:[]}
 		if (Bans == null) Bans = []
+	},
+
+	setOwners:function(IDs) {
+		if (IDs == undefined) return
+		while (IDs.length) OWNER_IDS.push(IDs.pop())
+	},
+
+	getOwners:function() {
+		return OWNER_IDS
 	},
 
 	addCmdAccessUser:function(user_id){
@@ -40,7 +49,7 @@ module.exports = {
 	},
 
 	hasCmdAccess:function(message){
-		return message.author == "BOT" || Info.Owner_IDs.includes(message.author.id) || Admin.users.includes(message.author.id) || Admin.channels.includes(message.channel.id)
+		return message.author == "BOT" || OWNER_IDS.includes(message.author.id) || Admin.users.includes(message.author.id) || Admin.channels.includes(message.channel.id)
 	},
 
 	// COMMAND returns a list of names with IDs and channel mentions that have command access
@@ -54,7 +63,7 @@ module.exports = {
 			if (!module.exports.hasCmdAccess(msg)) return
 
 			var result = `**Owners:**\n`
-			for (const id of Info.Owner_IDs) {
+			for (const id of OWNER_IDS) {
 				try {
 					var user = await module.exports.getUser(bot, id)
 					result += `${user.username} \`(${id})\`\n`

@@ -1,4 +1,13 @@
 # TAS-Comp-Bot
+I will eventually get around to writing a proper readme dont worry. For now, all you need to do is put your token in bot.js and run:
+
+node .\start.js .\bot.js
+
+Filepaths are hardcoded for linux. To enable updates on windows: on line 19 & 34 in start.js use "\\" instead of "/".
+Im not sure how this was originally setup which is why the node files are included. To run multiple bots simply create a new file with the same format as bot.js but with a different token, bot-files path, and saves path, then run the same command as above replacing .\bot.js appropriately
+
+
+
 Active development of the upcoming bot for the TAS Competition server. (Server ID: 397082495423741953)
 
 TODO:

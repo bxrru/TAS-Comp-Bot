@@ -16,7 +16,10 @@ const chat = require("./chatcommands.js");
 const announcements = require('./announcement.js')
 const bf = require("./brainfuck.js")
 
-const Info = require("../SETUP-INFO.js")
+const Info = require("." + process.argv[2]) // use the info passed to it
+users.setOwners(Info.Owner_IDs)
+save.setSavePath(Info.Saves_Path)
+
 var BOT_ACCOUNT = ""
 
 var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
@@ -170,7 +173,7 @@ var toggleReactions = function(bot, msg, args) {
 async function restart(bot, msg, args) {
 	if (!users.hasCmdAccess(msg)) return
 	try {
-		msg.channel.createMessage(args.length ? `Restarting... Downloading updated files` : `Restarting`)
+		await bot.createMessage(msg.channel.id, args.length ? `Restarting... Downloading updated files` : `Restarting`)
 	} catch (e) {
 		console.log(`Error: Failed to send message`)
 	} finally {

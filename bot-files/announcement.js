@@ -3,7 +3,6 @@ const miscfuncs = require("./miscfuncs.js")
 const chrono = require("chrono-node")
 const save = require("./save.js")
 const chat = require("./chatcommands.js")
-const INFO = require("../SETUP-INFO.js")
 
 var Announcements = [] // {id, channel, interval, time, message, user}
 var Timers = [] // {id, timer}
@@ -242,7 +241,7 @@ module.exports = {
 
       if (delay < 0 && announcement.InternalCall) {
         await module.exports.ExternalFunctions(bot, announcement.InternalCall, delay)
-        await INFO.Owner_IDs.forEach(async(id) => {
+        await users.getOwners().forEach(async(id) => {
           try {
             var dm = await bot.getDMChannel(id)
             dm.createMessage(`**[ERROR]** Internal announcement call missed: \`\`\`key = \"${announcement.InternalCall}\"\ntime: ${announcement.time}\`\`\``)
