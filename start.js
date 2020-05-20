@@ -10,6 +10,7 @@ if (process.argv.length < 3) {
   process.exit(0)
 }
 process.argv[2] = process.argv[2].replace(/\\/, `/`)
+if (!process.argv[2].startsWith(`./`)) process.argv[2] = `./` + process.argv[2]
 const Info = require(process.argv[2])
 
 // Helper function

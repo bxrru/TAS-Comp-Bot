@@ -1392,7 +1392,7 @@ module.exports = {
 		filename = module.exports.properFileName(name) + filename
 
 		// begin downloading the file
-		Save.downloadFromUrl(attachment.url, "./saves/" + filename)
+		Save.downloadFromUrl(attachment.url, Save.getSavePath() + "/" + filename)
 
 		module.exports.uploadFile(bot, filename, attachment.size, msg)
 		if (RoleStyle == `ON-SUBMISSION`) module.exports.giveRole(bot, msg.author.id, msg.author.username)
@@ -1436,7 +1436,7 @@ module.exports = {
 
 		try {
 			var file = {
-				file: fs.readFileSync("./saves/" + filename),
+				file: fs.readFileSync(Save.getSavePath() + "/" + filename),
 				name: filename
 			}
 		} catch (e) {
@@ -1450,7 +1450,7 @@ module.exports = {
 		} else {
 			// upload the file then delete it locally
 			await module.exports.storeFile(bot, file, msg)
-			fs.unlinkSync("./saves/" + filename)
+			fs.unlinkSync(Save.getSavePath() + "/" + filename)
 		}
 
 

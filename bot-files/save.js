@@ -17,6 +17,9 @@ module.exports = {
 		if (path == undefined) path = "./saves"
 		SAVE_PATH = path
 	},
+	getSavePath:function() {
+		return SAVE_PATH
+	},
 	makeFolderIfNotExist:function(path) {
 		if (!fs.existsSync(path)){
 			fs.mkdirSync(path);
