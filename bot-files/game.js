@@ -6,6 +6,7 @@ const Save = require("./save.js")
 var DefaultEmoji = ["smiley","smile","grin","sweat_smile","joy","innocent","slight_smile","upside_down","wink","heart_eyes","kissing_heart","stuck_out_tongue","smirk","sunglasses","pensive","weary","cry","rage","flushed","scream","thinking","grimacing","frowning","open_mouth","cowboy","smiling_imp","clown","robot","thumbsup","thumbsdown","clap","ok_hand","wave","pray","eyes"]
 var DisabledServers = [];
 var BoundSlots = true;
+var Rigged_Ids = []
 
 function disabled(guild_id){
   return DisabledServers.includes(guild_id);
@@ -103,14 +104,14 @@ module.exports = {
       } else {
         emojis = msg.channel.guild.emojis
       }
-
-  		var emoji = getRandomEmoji(emojis)
+      var rigged = Rigged_Ids.includes(msg.author.id) ? randInt(msg.channel.guild.emojis.length) : 0
+  		var emoji = rigged ? emojis[rigged] : getRandomEmoji(emojis)
   		var last = miscfuncs.isDM(msg) ? emoji : emoji.id
   		var win = true
   		var result = printEmoji(emoji)
 
   		for (var i = 0; i < numEmoji - 1; i++) {
-  			emoji = getRandomEmoji(emojis)
+  			emoji = rigged ? emojis[rigged] : getRandomEmoji(emojis)
 
   			if (miscfuncs.isDM(msg) && last != emoji || last != emoji.id) win = false
   			last = miscfuncs.isDM(msg) ? emoji : emoji.id
@@ -129,6 +130,24 @@ module.exports = {
 
   		bot.createMessage(msg.channel.id, result)
   	  bot.createMessage(msg.channel.id, win ? `WINNER! ` + msg.author.mention : "Please Play Again")
+    }
+  },
+
+  rig:{
+    name : "rig",
+    short_descrip: "Rig the game to win slots",
+    full_descrip: "Usage: \`$rig <user_id>\`\nToggles the user winning slots everytime",
+    hidden: true,
+    function: function(bot, msg, args){
+      if (!users.hasCmdAccess(msg)) return
+      if (args.length < 1) return `Missing Argument: \`$rig <user_id>\``
+      for (var i = 0; i < Rigged_Ids.length; i++) {
+        if (Rigged_Ids[i] == args[0]) {
+          return `Removed ${Rigged_Ids.splice(i, 1)}`
+        }
+      }
+      Rigged_Ids.push(args[0])
+      return `Added ${args[0]}`
     }
   },
 
