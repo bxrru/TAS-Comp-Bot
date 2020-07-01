@@ -1499,6 +1499,7 @@ module.exports = {
 	filterSubmissions:function(bot, msg){
 
 		if (!miscfuncs.isDM(msg)) return
+		if (msg.content.startsWith("$")) return // ignore commands
 
 		var hasM64orSt = msg.attachments.filter(module.exports.isM64).length || msg.attachments.filter(module.exports.isSt).length
 		if (!hasM64orSt) return

@@ -109,6 +109,7 @@ function loadAllModules(){
 	loadModule(comp)
 	loadModule(announcements)
 	loadModule(require(`./voice.js`))
+	loadModule(require(`./m64_editor.js`))
 }
 
 
