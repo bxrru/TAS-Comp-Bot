@@ -19,7 +19,7 @@ class ShardManager extends Collection {
     }
 
     connect(shard) {
-        if(this.lastConnect <= Date.now() - 5000 && !this.find((shard) => shard.connecting)) {
+        if(shard.sessionID || (this.lastConnect <= Date.now() - 5000 && !this.find((shard) => shard.connecting))) {
             shard.connect();
             this.lastConnect = Date.now() + 7500;
         } else {
@@ -57,8 +57,8 @@ class ShardManager extends Collection {
                 if(this._client.ready) {
                     return;
                 }
-                for(const other of this) {
-                    if(!other[1].ready) {
+                for(const other of this.values()) {
+                    if(!other.ready) {
                         return;
                     }
                 }
@@ -79,8 +79,8 @@ class ShardManager extends Collection {
                 if(this._client.ready) {
                     return;
                 }
-                for(const other of this) {
-                    if(!other[1].ready) {
+                for(const other of this.values()) {
+                    if(!other.ready) {
                         return;
                     }
                 }
@@ -95,8 +95,8 @@ class ShardManager extends Collection {
                 * @prop {Number} id The ID of the shard
                 */
                 this._client.emit("shardDisconnect", error, shard.id);
-                for(const other of this) {
-                    if(other[1].ready) {
+                for(const other of this.values()) {
+                    if(other.ready) {
                         return;
                     }
                 }
@@ -114,18 +114,17 @@ class ShardManager extends Collection {
         }
     }
 
-    toJSON() {
-        const base = {};
-        for(const key in this) {
-            if(this.hasOwnProperty(key) && !key.startsWith("_")) {
-                if(this[key] && typeof this[key].toJSON === "function") {
-                    base[key] = this[key].toJSON();
-                } else {
-                    base[key] = this[key];
-                }
-            }
-        }
-        return base;
+    toString() {
+        return `[ShardManager ${this.size}]`;
+    }
+
+    toJSON(props = []) {
+        return super.toJSON([
+            "connectQueue",
+            "lastConnect",
+            "connectionTimeout",
+            ...props
+        ]);
     }
 }
 

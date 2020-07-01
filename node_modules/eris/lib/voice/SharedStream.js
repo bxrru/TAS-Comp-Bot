@@ -3,22 +3,13 @@
 const Piper = require("./Piper");
 const VoiceConnection = require("./VoiceConnection");
 const Collection = require("../util/Collection");
+const {createOpus} = require("../util/Opus");
 
 let EventEmitter;
 try {
     EventEmitter = require("eventemitter3");
 } catch(err) {
     EventEmitter = require("events").EventEmitter;
-}
-let NodeOpus;
-try {
-    NodeOpus = require("node-opus");
-} catch(err) { // eslint-disable no-empty
-}
-let OpusScript;
-try {
-    OpusScript = require("opusscript");
-} catch(err) { // eslint-disable no-empty
 }
 
 /**
@@ -36,25 +27,12 @@ class SharedStream extends EventEmitter {
 
         this.voiceConnections = new Collection(VoiceConnection);
 
-        if(NodeOpus) {
-            this.opus = new NodeOpus.OpusEncoder(this.samplingRate, this.channels);
-        } else if(OpusScript) {
-            this.emit("debug", "node-opus not found, falling back to opusscript");
-            this.opus = new OpusScript(this.samplingRate, this.channels, OpusScript.Application.AUDIO);
-            if(this.opus.setBitrate) {
-                this.opus.setBitrate(this.bitrate);
-            } else if(this.opus.encoderCTL) {
-                this.opus.encoderCTL(4002, this.bitrate);
-            }
-        } else {
-            this.emit("warn", new Error("No opus encoder found, playing non-opus audio will not work."));
-        }
 
         if(!VoiceConnection._converterCommand.cmd) {
             VoiceConnection._converterCommand.pickCommand();
         }
 
-        this.piper = new Piper(VoiceConnection._converterCommand.cmd, this.opus);
+        this.piper = new Piper(VoiceConnection._converterCommand.cmd, () => createOpus(this.samplingRate, this.channels, this.bitrate));
         this.piper.on("error", (e) => this.emit("error", e));
         if(!VoiceConnection._converterCommand.libopus) {
             this.piper.libopus = false;
@@ -165,8 +143,8 @@ class SharedStream extends EventEmitter {
                 this.current.bufferingTicks = 0;
                 this.setSpeaking(true);
             }
-        } else if(this.current.options.voiceDataTimeout === -1 || this.current.bufferingTicks < this.current.options.voiceDataTimeout / this.current.options.frameDuration) { // wait for data
-            if(++this.current.bufferingTicks <= 0) {
+        } else if(this.current.options.voiceDataTimeout === -1 || this.current.bufferingTicks < this.current.options.voiceDataTimeout / (4 * this.current.options.frameDuration)) { // wait for data
+            if(++this.current.bufferingTicks === 1) {
                 this.setSpeaking(false);
             } else {
                 this.current.pausedTime += 4 * this.current.options.frameDuration;

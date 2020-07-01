@@ -2,6 +2,7 @@
 
 const Base = require("./Base");
 const Invite = require("./Invite");
+const {AuditLogActions} = require("../Constants");
 
 /**
 * Represents a guild audit log entry describing a moderation action
@@ -11,7 +12,7 @@ const Invite = require("./Invite");
 * @prop {String?} reason The reason for the action
 * @prop {User} user The user that performed the action
 * @prop {String} targetID The ID of the action target
-* @prop {(CategoryChannel | Guild | Member | Invite | Role | Object | TextChannel | VoiceChannel)?} target The object of the action target
+* @prop {(CategoryChannel | Guild | Member | Invite | Role | Object | TextChannel | VoiceChannel | NewsChannel)?} target The object of the action target
 * If the item is not cached, this property will be null
 * If the action targets a guild, this could be a Guild object
 * If the action targets a guild channel, this could be a CategoryChannel, TextChannel, or VoiceChannel object
@@ -90,6 +91,9 @@ class GuildAuditLogEntry extends Base {
         } else if(this.actionType < 20) { // Channel
             return this.guild && this.guild.channels.get(this.targetID);
         } else if(this.actionType < 30) { // Member
+            if(this.actionType === AuditLogActions.MEMBER_MOVE || this.actionType === AuditLogActions.MEMBER_DISCONNECT) { // MEMBER_MOVE / MEMBER_DISCONNECT
+                return null;
+            }
             return this.guild && this.guild.members.get(this.targetID);
         } else if(this.actionType < 40) { // Role
             return this.guild && this.guild.roles.get(this.targetID);
@@ -110,19 +114,29 @@ class GuildAuditLogEntry extends Base {
             return this.guild && this.guild.emojis.find((emoji) => emoji.id === this.targetID);
         } else if(this.actionType < 80) { // Message
             return this.guild && this.guild.shard.client.users.get(this.targetID);
+        } else if(this.actionType < 90) { // Integrations
+            return null;
         } else {
             throw new Error("Unrecognized action type: " + this.actionType);
         }
     }
 
-    toJSON() {
-        const base = super.toJSON(true);
-        for(const prop of ["actionType", "after", "before", "channel", "count", "deleteMemberDays", "member", "membersRemoved", "reason", "role", "targetID", "user"]) {
-            if(this[prop] !== undefined) {
-                base[prop] = this[prop] && this[prop].toJSON ? this[prop].toJSON() : this[prop];
-            }
-        }
-        return base;
+    toJSON(props = []) {
+        return super.toJSON([
+            "actionType",
+            "after",
+            "before",
+            "channel",
+            "count",
+            "deleteMemberDays",
+            "member",
+            "membersRemoved",
+            "reason",
+            "role",
+            "targetID",
+            "user",
+            ...props
+        ]);
     }
 }
 

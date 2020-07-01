@@ -1,10 +1,10 @@
 # TAS-Comp-Bot
-I will eventually get around to writing a proper readme dont worry. For now, all you need to do is put your token in bot.js and run:
+I will eventually get around to writing a proper readme don't worry. To run the bot, first download the repository and install the dependencies with `npm i`. If you have build errors try downloading the Visual Studio Community 2017 Node.js build tools and running `npm i --msvs_version=2017`. Next, put your token in bot.js and run `node .\start.js .\bot.js` to start the bot!
 
-node .\start.js .\bot.js
+For voice support you need ffmpeg somewhere on your PATH environment variable.
 
 Filepaths are hardcoded for linux. To enable updates on windows: on line 19 & 34 in start.js use "\\" instead of "/".
-Im not sure how this was originally setup which is why the node files are included. To run multiple bots simply create a new file with the same format as bot.js but with a different token, bot-files path, and saves path, then run the same command as above replacing .\bot.js appropriately
+I'm not sure how this was originally setup which is why the node files are included. To run multiple bots simply create a new file with the same format as bot.js but with a different token, bot-files path, and saves path, then run the same command as above replacing .\bot.js appropriately
 
 
 

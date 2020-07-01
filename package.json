@@ -1,29 +1,42 @@
 {
-  "name": "CompBOT",
-  "version": "a0.081",
-  "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry, hosted on https://github.com/Barryyyyyy/TAS-Comp-Bot",
-  "main": "./bot-files/main.js",
+  "name": "compbot",
+  "version": "1.0.0",
+  "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry",
+  "main": "start.js",
+  "dependencies": {
+    "@discordjs/opus": "^0.3.2",
+    "bufferutil": "^4.0.1",
+    "chrono-node": "^1.4.6",
+    "eris": "^0.13.1",
+    "eris-additions": "^1.4.1",
+    "erlpack": "github:abalabahaha/erlpack",
+    "eventemitter3": "^4.0.4",
+    "ffmpeg": "^0.0.4",
+    "fluent-ffmpeg": "^2.1.2",
+    "node-gyp": "^5.1.1",
+    "request": "^2.88.2",
+    "sodium-native": "^3.1.1",
+    "utf-8-validate": "^5.0.2",
+    "ytdl-core": "^2.1.5",
+    "zlib-sync": "^0.1.7"
+  },
+  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "engines": {
-    "node": "9.8.0",
-    "npm": "5.6.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Barryyyyyy/TAS-Comp-Bot.git"
   },
   "keywords": [
-    "bot"
+    "bot",
+    "SM64",
+    "discord"
   ],
-  "author": "Eddio0141 / Barry / Xander",
+  "author": "ERGC Xander / Eddio0141 / Barry",
   "license": "ISC",
-  "dependencies": {
-    "bufferutil": "^3.0.5",
-    "eris": "github:abalabahaha/eris#dev",
-    "erlpack": "github:abalabahaha/erlpack",
-    "eventemitter3": "^3.1.0",
-    "node-opus": "^0.2.9",
-    "pako": "^1.0.6",
-    "uws": "^9.148.0",
-    "zlib-sync": "^0.1.4",
-    "eris-additions": "github:minemidnight/eris-additions"
-  }
+  "bugs": {
+    "url": "https://github.com/Barryyyyyy/TAS-Comp-Bot/issues"
+  },
+  "homepage": "https://github.com/Barryyyyyy/TAS-Comp-Bot#readme"
 }

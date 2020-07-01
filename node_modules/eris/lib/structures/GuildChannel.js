@@ -3,11 +3,11 @@
 const Channel = require("./Channel");
 const Collection = require("../util/Collection");
 const Permission = require("./Permission");
-const Permissions = require("../Constants").Permissions;
+const {Permissions} = require("../Constants");
 const PermissionOverwrite = require("./PermissionOverwrite");
 
 /**
-* Represents a guild channel. You also probably want to look at CategoryChannel, TextChannel, and VoiceChannel.
+* Represents a guild channel. You also probably want to look at CategoryChannel, NewsChannel, StoreChannel, TextChannel, and VoiceChannel.
 * @extends Channel
 * @prop {String} id The ID of the channel
 * @prop {String} mention A string that mentions the channel
@@ -20,23 +20,28 @@ const PermissionOverwrite = require("./PermissionOverwrite");
 * @prop {Collection<PermissionOverwrite>} permissionOverwrites Collection of PermissionOverwrites in this channel
 */
 class GuildChannel extends Channel {
-    constructor(data, guild) {
-        super(data);
-        if (!guild && data.guild_id) {
-            this.guild = {
-                id: data.guild_id
-            };
-        } else {
-            this.guild = guild;
-        }
+    constructor(data, client) {
+        super(data, client);
+        this.guild = client.guilds.get(data.guild_id) || {
+            id: data.guild_id
+        };
 
         this.update(data);
     }
 
     update(data) {
-        this.name = data.name !== undefined ? data.name : this.name;
-        this.position = data.position !== undefined ? data.position : this.position;
-        this.parentID = data.parent_id !== undefined ? data.parent_id : this.parentID;
+        if(data.type !== undefined) {
+            this.type = data.type;
+        }
+        if(data.name !== undefined) {
+            this.name = data.name;
+        }
+        if(data.position !== undefined) {
+            this.position = data.position;
+        }
+        if(data.parent_id !== undefined) {
+            this.parentID = data.parent_id;
+        }
         this.nsfw = (this.name.length === 4 ? this.name === "nsfw" : this.name.startsWith("nsfw-")) || data.nsfw;
         if(data.permission_overwrites) {
             this.permissionOverwrites = new Collection(PermissionOverwrite);
@@ -84,12 +89,14 @@ class GuildChannel extends Channel {
     * @arg {String} [options.topic] The topic of the channel (guild text channels only)
     * @arg {Number} [options.bitrate] The bitrate of the channel (guild voice channels only)
     * @arg {Number} [options.userLimit] The channel user limit (guild voice channels only)
+    * @arg {Number} [options.rateLimitPerUser] The time in seconds a user has to wait before sending another message (does not affect bots or users with manageMessages/manageChannel permissions) (guild text channels only)
+    * @arg {Boolean} [options.nsfw] The nsfw status of the channel
     * @arg {Number?} [options.parentID] The ID of the parent channel category for this channel (guild text/voice channels only)
     * @arg {String} [reason] The reason to be displayed in audit logs
-    * @returns {Promise<CategoryChannel | TextChannel | VoiceChannel>}
+    * @returns {Promise<CategoryChannel | TextChannel | VoiceChannel | NewsChannel>}
     */
     edit(options, reason) {
-        return this.guild.shard.client.editChannel.call(this.guild.shard.client, this.id, options, reason);
+        return this.client.editChannel.call(this.client, this.id, options, reason);
     }
 
     /**
@@ -98,7 +105,7 @@ class GuildChannel extends Channel {
     * @returns {Promise}
     */
     editPosition(position) {
-        return this.guild.shard.client.editChannelPosition.call(this.guild.shard.client, this.id, position);
+        return this.client.editChannelPosition.call(this.client, this.id, position);
     }
 
     /**
@@ -107,7 +114,7 @@ class GuildChannel extends Channel {
     * @returns {Promise}
     */
     delete(reason) {
-        return this.guild.shard.client.deleteChannel.call(this.guild.shard.client, this.id, reason);
+        return this.client.deleteChannel.call(this.client, this.id, reason);
     }
 
     /**
@@ -120,7 +127,7 @@ class GuildChannel extends Channel {
     * @returns {Promise<PermissionOverwrite>}
     */
     editPermission(overwriteID, allow, deny, type, reason) {
-        return this.guild.shard.client.editChannelPermission.call(this.guild.shard.client, this.id, overwriteID, allow, deny, type, reason);
+        return this.client.editChannelPermission.call(this.client, this.id, overwriteID, allow, deny, type, reason);
     }
 
     /**
@@ -130,17 +137,18 @@ class GuildChannel extends Channel {
     * @returns {Promise}
     */
     deletePermission(overwriteID, reason) {
-        return this.guild.shard.client.deleteChannelPermission.call(this.guild.shard.client, this.id, overwriteID, reason);
+        return this.client.deleteChannelPermission.call(this.client, this.id, overwriteID, reason);
     }
 
-    toJSON() {
-        const base = super.toJSON(true);
-        for(const prop of ["name", "nsfw", "parentID", "permissionOverwrites", "position"]) {
-            if(this[prop] !== undefined) {
-                base[prop] = this[prop] && this[prop].toJSON ? this[prop].toJSON() : this[prop];
-            }
-        }
-        return base;
+    toJSON(props = []) {
+        return super.toJSON([
+            "name",
+            "nsfw",
+            "parentID",
+            "permissionOverwrites",
+            "position",
+            ...props
+        ]);
     }
 }
 

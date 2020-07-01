@@ -3,16 +3,14 @@
     - 11/05
     - 06/2005
 */
-var moment = require('moment');
 var Parser = require('../parser').Parser;
 var ParsedResult = require('../../result').ParsedResult;
 
 var PATTERN = new RegExp('(^|[^\\d/]\\s+|[^\\w\\s])' +
     '([0-9]|0[1-9]|1[012])/([0-9]{4})' + 
-    '([^\\d/]|$)', 'i');
+    '(?=[^\\d/]|$)', 'i');
 
 var OPENNING_GROUP = 1;
-var ENDING_GROUP = 4;
 
 var MONTH_GROUP = 2;
 var YEAR_GROUP = 3;
@@ -24,7 +22,7 @@ exports.Parser = function ENSlashMonthFormatParser(argument) {
     this.extract = function(text, ref, match, opt){
         
         var index = match.index + match[OPENNING_GROUP].length;
-        var text = match[0].substr(match[OPENNING_GROUP].length, match[0].length - (1 + match[ENDING_GROUP].length)).trim();
+        var text = match[0].substr(match[OPENNING_GROUP].length, match[0].length).trim();
 
         var result = new ParsedResult({
             text: text,
@@ -32,7 +30,6 @@ exports.Parser = function ENSlashMonthFormatParser(argument) {
             ref: ref,
         });
 
-        var date = null;
         var year = match[YEAR_GROUP] ;
         var month = match[MONTH_GROUP];
         var day   = 1;

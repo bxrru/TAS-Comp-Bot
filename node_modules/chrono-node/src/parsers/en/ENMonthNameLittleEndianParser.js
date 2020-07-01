@@ -1,11 +1,4 @@
-/*
-
-
-*/
-
-var moment = require('moment');
-
-var Parser = require('../parser').Parser;
+const parser = require('../parser');
 var ParsedResult = require('../../result').ParsedResult;
 var util  = require('../../utils/EN');
 
@@ -23,7 +16,8 @@ var PATTERN = new RegExp('(\\W|^)' +
             '(?:-|\/|,?\\s*)' +
             '((?:' + 
                 '[1-9][0-9]{0,3}\\s*(?:BE|AD|BC)|' +
-                '[1-2][0-9]{3}' + 
+                '[1-2][0-9]{3}|' +
+                '[5-9][0-9]' +
             ')(?![^\\s]\\d))' +
         ')?' +
         '(?=\\W|$)', 'i'
@@ -38,7 +32,7 @@ var MONTH_NAME_GROUP = 7;
 var YEAR_GROUP = 8;
 
 exports.Parser = function ENMonthNameLittleEndianParser(){
-    Parser.apply(this, arguments);
+    parser.Parser.apply(this, arguments);
 
     this.pattern = function() { return PATTERN; }
 
@@ -75,7 +69,11 @@ exports.Parser = function ENMonthNameLittleEndianParser(){
             } else {
                 year = parseInt(year);
                 if (year < 100){
-                    year = year + 2000;
+                    if (year > 50) {
+                        year = year + 1900;
+                    } else {
+                        year = year + 2000;
+                    }
                 }
             }
         }
@@ -85,25 +83,10 @@ exports.Parser = function ENMonthNameLittleEndianParser(){
             result.start.assign('month', month);
             result.start.assign('year', year);
         } else {
-
-            //Find the most appropriated year
-            var refMoment = moment(ref);
-            refMoment.month(month - 1);
-            refMoment.date(day);
-            refMoment.year(moment(ref).year());
-
-            var nextYear = refMoment.clone().add(1, 'y');
-            var lastYear = refMoment.clone().add(-1, 'y');
-            if( Math.abs(nextYear.diff(moment(ref))) < Math.abs(refMoment.diff(moment(ref))) ){
-                refMoment = nextYear;
-            }
-            else if( Math.abs(lastYear.diff(moment(ref))) < Math.abs(refMoment.diff(moment(ref))) ){
-                refMoment = lastYear;
-            }
-
+            year = parser.findYearClosestToRef(ref, day, month);
             result.start.assign('day', day);
             result.start.assign('month', month);
-            result.start.imply('year', refMoment.year());
+            result.start.imply('year', year);
         }
 
         // Weekday component

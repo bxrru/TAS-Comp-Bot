@@ -1,5 +1,6 @@
 "use strict";
 
+const Base = require("../structures/Base");
 const Collection = require("../util/Collection");
 
 class VoiceConnectionManager extends Collection {
@@ -79,29 +80,39 @@ class VoiceConnectionManager extends Collection {
         this.pendingGuilds[data.guild_id].waiting = true;
         const disconnectHandler = () => {
             connection = this.get(data.guild_id);
-            if(!this.pendingGuilds[data.guild_id]) {
-                if(connection) {
-                    connection.removeListener("ready", readyHandler);
-                }
-                return;
+            if(connection) {
+                connection.removeListener("ready", readyHandler);
+                connection.removeListener("error", errorHandler);
             }
-            connection.removeListener("ready", readyHandler);
-            this.pendingGuilds[data.guild_id].rej(new Error("Disconnected"));
-            delete this.pendingGuilds[data.guild_id];
+            if(this.pendingGuilds[data.guild_id]) {
+                this.pendingGuilds[data.guild_id].rej(new Error("Disconnected"));
+                delete this.pendingGuilds[data.guild_id];
+            }
         };
         const readyHandler = () => {
             connection = this.get(data.guild_id);
-            if(!this.pendingGuilds[data.guild_id]) {
-                if(connection) {
-                    connection.removeListener("disconnect", disconnectHandler);
-                }
-                return;
+            if(connection) {
+                connection.removeListener("disconnect", disconnectHandler);
+                connection.removeListener("error", errorHandler);
             }
-            connection.removeListener("disconnect", disconnectHandler);
-            this.pendingGuilds[data.guild_id].res(connection);
-            delete this.pendingGuilds[data.guild_id];
+            if(this.pendingGuilds[data.guild_id]) {
+                this.pendingGuilds[data.guild_id].res(connection);
+                delete this.pendingGuilds[data.guild_id];
+            }
         };
-        connection.once("ready", readyHandler).once("disconnect", disconnectHandler);
+        const errorHandler = (err) => {
+            connection = this.get(data.guild_id);
+            if(connection) {
+                connection.removeListener("disconnect", disconnectHandler);
+                connection.removeListener("ready", readyHandler);
+                connection.disconnect();
+            }
+            if(this.pendingGuilds[data.guild_id]) {
+                this.pendingGuilds[data.guild_id].rej(err);
+                delete this.pendingGuilds[data.guild_id];
+            }
+        };
+        connection.once("ready", readyHandler).once("disconnect", disconnectHandler).once("error", errorHandler);
     }
 
     leave(guildID) {
@@ -122,18 +133,15 @@ class VoiceConnectionManager extends Collection {
         connection.switch(channelID);
     }
 
-    toJSON() {
-        const base = {};
-        for(const key in this) {
-            if(this.hasOwnProperty(key) && !key.startsWith("_")) {
-                if(this[key] && typeof this[key].toJSON === "function") {
-                    base[key] = this[key].toJSON();
-                } else {
-                    base[key] = this[key];
-                }
-            }
-        }
-        return base;
+    toString() {
+        return "[VoiceConnectionManager]";
+    }
+
+    toJSON(props = []) {
+        return Base.prototype.toJSON.call(this, [
+            "pendingGuilds",
+            ...props
+        ]);
     }
 }
 

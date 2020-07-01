@@ -1,7 +1,0 @@
-.DS_Store
-docgen
-docs
-node_modules
-test
-npm-debug.log
-package-lock.json

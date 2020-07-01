@@ -1,9 +1,4 @@
-/*
-
-
-*/
-
-var moment = require('moment');
+const dayjs = require('dayjs');
 var Parser = require('../parser').Parser;
 var ParsedResult = require('../../result').ParsedResult;
 var ParsedComponents = require('../../result').ParsedComponents;
@@ -47,7 +42,7 @@ exports.Parser = function FRTimeExpressionParser(){
 
         // This pattern can be overlaped Ex. [12] AM, 1[2] AM
         if (match.index > 0 && text[match.index-1].match(/\w/)) return null;
-        var refMoment = moment(ref);
+        var refMoment = dayjs(ref);
         var result = new ParsedResult();
         result.ref = ref;
         result.index = match.index + match[1].length;
@@ -185,7 +180,8 @@ exports.Parser = function FRTimeExpressionParser(){
 
             if (hour > 12) return null;
 
-            if(match[AM_PM_HOUR_GROUP][0].toLowerCase() == "a"){
+            var ampm = match[AM_PM_HOUR_GROUP][0].toLowerCase();
+            if(ampm == "a"){
                 meridiem = 0;
                 if(hour == 12) {
                     hour = 0;
@@ -195,7 +191,7 @@ exports.Parser = function FRTimeExpressionParser(){
                 }
             }
 
-            if(match[AM_PM_HOUR_GROUP][0].toLowerCase() == "p"){
+            if(ampm == "p"){
                 meridiem = 1;
                 if(hour != 12) hour += 12;
             }
@@ -218,9 +214,6 @@ exports.Parser = function FRTimeExpressionParser(){
                     }
                 }
             }
-
-        } else if(hour >= 12) {
-            meridiem = 1;
         }
 
         result.text = result.text + match[0];
@@ -228,6 +221,15 @@ exports.Parser = function FRTimeExpressionParser(){
         result.end.assign('minute', minute);
         if (meridiem >= 0) {
             result.end.assign('meridiem', meridiem);
+        } else {
+            var startAtPM = result.start.isCertain('meridiem') && result.start.get('meridiem') == 1;
+            if (startAtPM && result.start.get('hour') > hour) {
+                // 10pm - 1 (am)
+                result.end.imply('meridiem', 0);
+
+            } else if (hour > 12) {
+                result.end.imply('meridiem', 1);
+            }
         }
 
         if (result.end.date().getTime() < result.start.date().getTime()) {
