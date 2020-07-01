@@ -117,9 +117,8 @@ module.exports = {
 	// COMMAND removes a role from a user. Defaults to sender
 	removeRole:{
 		name: "removerole",
-		aliases: ["rr"],
 		short_descrip: "Removes a role from a user",
-		full_descrip: "Usage `$rr <role_id> [user_id]\nuser_id defaults to the user that calls the command. Only works if called from the same server that has the role",
+		full_descrip: "Usage `$removerole <role_id> [user_id]\nuser_id defaults to the user that calls the command. Only works if called from the same server that has the role",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (!users.hasCmdAccess(msg)) return
@@ -141,6 +140,7 @@ module.exports = {
 		full_descrip: "Usage `$react <channel_id> <message_id> <emojis...>`\nThis will reacat with multiple space separated emojis. For a list of channel names that can be used instead of `<channel_id>` use `$lc`",
 		hidden: true, // T?
 		function: async function(bot, msg, args){
+			if (!users.hasCmdAccess(msg)) return
 			if (args.length < 3) return "Not Enough Arguments: <channel_id> <message_id> <emojis...>"
 			var channel = args.shift()
 			var message = args.shift()

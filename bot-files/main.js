@@ -108,6 +108,7 @@ function loadAllModules(){
 	loadModule(game)
 	loadModule(comp)
 	loadModule(announcements)
+	loadModule(require(`./voice.js`))
 }
 
 
@@ -137,7 +138,13 @@ bot.on("messageCreate", async(msg) => {
 
 // add any reaction added to any message
 var ReactionDisabledServers = save.readObject(`reactions.json`)
-bot.on("messageReactionAdd", (msg, emoji) => {
+var flagcodes = ["🇦", "🇧", "🇨", "🇩", "🇪", "🇫", "🇬", "🇭", "🇮", "🇯", "🇰", "🇱", "🇲", "🇳", "🇴", "🇵", "🇶", "🇷", "🇸", "🇹", "🇺", "🇻", "🇼", "🇽", "🇾", "🇿"]
+bot.on("messageReactionAdd", async(msg, emoji, userID) => {
+	if (emoji.name.length == 4 && flagcodes.includes(emoji.name.substr(0, 2)) && flagcodes.includes(emoji.name.substr(2, 4))) {
+		var user = await users.getUser(bot, userID)
+		var url = `https://discordapp.com/channels/${msg.channel.guild.id}/${msg.channel.id}/${msg.id}`
+		if (chat.chooseChannel(`flaglog`) != `flaglog`) bot.createMessage(chat.chooseChannel(`flaglog`), `${user ? `${user.username}#${user.discriminator} (\`${userID}\`)` : `Unknown User`} reacted with ${emoji.name} in ${msg.channel.mention}\n> ${msg.content}\n${url}`)
+	}
 
 	if (ReactionDisabledServers.includes(msg.channel.guild.id)) return
 
