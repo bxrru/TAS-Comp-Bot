@@ -14,7 +14,7 @@ module.exports = {
   // points = 15x^6 + 10x^4 + 5x^2 + 14x + 6
   alg:function(k,n) {
     var points = [-1, 600, 569, 539, 510, 482, 455, 429, 404, 380, 357, 335, 314, 294, 275, 257, 240, 224, 209, 195, 182, 170, 159, 149, 140, 132, 125, 119, 114, 110, 107, 105, 104]
-    return k >= 33 ? 75 : points[n]
+    return k >= 33 ? 75 : points[k]
     // old scoring system
     x = (n-k+1) / n;
     points = 15*x*x*x*x*x*x + 10*x*x*x*x + 5*x*x + 14*x + 6;
@@ -240,7 +240,7 @@ module.exports = {
 
       msg += ". " + name + ": " + points.toString();
 
-      if (points.toString().substr(-2,1) != ".") msg += ".0"
+      //if (points.toString().substr(-2,1) != ".") msg += ".0"
       if (place < 4) msg += "**"
 
       msg += "\n";
