@@ -39,7 +39,7 @@ bot.on("ready", async() => {
 
 function addCommand(name, func, descrip, fullDescrip, hide, aliases){
 	bot.registerCommand(name, (msg, args) => {
-		if (users.isBanned(msg.author.id)) return // disallow banned users from using any commands
+		if (users.isBanned(msg.author.id) && !users.hasCmdAccess(msg)) return // disallow banned users from using any commands
 		return func(bot, msg, args); // pass arguments to the function
 	},
 	{
