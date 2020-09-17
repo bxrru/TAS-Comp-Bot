@@ -30,7 +30,7 @@ module.exports = {
 	AddAnnouncement:{
 		name: "acadd",
 		aliases: ["acset"],
-		short_descrip: "Add an accouncement",
+		short_descrip: "Add an announcement",
 		full_descrip: "Sets a message that will automatically be sent to the specified channel at the given time and date. Usage: `$acadd <channel> <interval> \"message\" date and time`. To use quotations within the announcement type \`\\\"\`. Otherwise, everything between the first two quotations will be used. Everything after the last quotation will be interpreted as a time and date. To see a list of intervals use `$acinterval`. To send it as a DM, put `DM` before the user id without a space. Ex: `$acadd DM532974459267710987 once \"Hi there!\" at 4:20pm est tomorrow`",
 		hidden: true,
 		function: async function(bot, msg, args){

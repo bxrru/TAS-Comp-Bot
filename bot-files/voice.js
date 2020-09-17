@@ -122,11 +122,22 @@ module.exports = {
 					result += `${k}: ${info[k]}\n`
 				})
 				return result + "```"*/
-        VoiceConnection.play(info.formats[0].url)//.once("end", () => {
+				for (var i = 0; i < info.formats.length; i++) {
+					//bot.createMessage(msg.channel.id, info.formats[i])
+					if (info.formats[i].codecs.includes('opus')) {
+						//bot.createMessage(msg.channel.id, `\`\`\`${JSON.stringify(info.formats[i])}\`\`\``)
+						//console.log(info.formats[i].codecs)
+						VoiceConnection.play(info.formats[i].url)
+						break
+					}
+				}
+
+        //VoiceConnection.play(info.formats[0].url)//.once("end", () => {
 					//bot.createMessage(msg.channel.id, `Finished playing`)
 				//})
         return `Now playing \`${args[0]}\``
       } catch (e) {
+				console.log(e)
         return `Something went wrong \`\`\`${e}\`\`\``
       }
     }
