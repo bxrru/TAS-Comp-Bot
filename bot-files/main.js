@@ -110,6 +110,7 @@ function loadAllModules(){
 	loadModule(announcements)
 	loadModule(require(`./voice.js`))
 	loadModule(require(`./m64_editor.js`))
+	loadModule(require(`./dtm_editor.js`))
 }
 
 

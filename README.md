@@ -43,6 +43,7 @@ This project is always evolving and there are always new feature requests, but h
 - voice queue
 - global handle for messages over 2000 characters
 - choose which files to update on restart
+- automatically load all files in bot-files directory
 
 Low priority:
 - generalize prefix
