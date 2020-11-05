@@ -235,7 +235,7 @@ function write(offset, file, input) {
     input = stringLiteralToBuffer(input, size)
 
   } else if (type == Integer) {
-    input = intToLittleEndian(input)
+    input = intToLittleEndian(input, size)
 
   } else if (type == Boolean) {
     input = input ? Buffer.from([1]) : Buffer.from([0])
@@ -300,28 +300,84 @@ function downloadAndRun(attachment, callback, url, filename, filesize) {
 // Encryption/Decryption Algorithms:
 //https://github.com/dolphin-emu/dolphin/blob/9ffa72ad1fb8574ecda9e120d8a7fb930d053b01/Source/Core/Core/HW/WiimoteEmu/Encryption.cpp
 
-// decrypt(Buffer, Array of Numbers) returns a new Buffer
-// Ex:
-function decrypt(bytes, key) {
-  //for (u32 i = 0; i != len; ++i, ++addr)
-  //  data[i] = (data[i] ^ sb[addr % 8]) + ft[addr % 8];
-  //}
+// decrypt(Buffer, Buffer)
+// Ex: decrypt(<34 0E 08 17 79 44>, <E3 6A FD 03 19 A6 46 EC A9 18 8B 6A E3 19 C5 20>) => <80 80 80 80 B3 03>
+function decrypt(data, key) {
+  for (i = 0; i < 6; i++) {
+    data[i] = ((data[i] ^ key[8 + i]) + key[i]) % 0x100
+  }
+  return data
 }
 
-// encrypt(Buffer, Array of Numbers) returns a new Buffer
-// Ex:
-function encrypt(bytes, key) {
-  //for (u32 i = 0; i != len; ++i, ++addr)
-  //  data[i] = (data[i] - ft[addr % 8]) ^ sb[addr % 8];
-  //}
+// encrypt(Buffer, Buffer)
+// Ex: encrypt(<80 80 80 80 B3 03>, <76 AC 6B C3 8A 54 EE FB B1 08 7A 3A C1 97 76 B5>) => <BB DC 6F 87 E8 38>
+function encrypt(data, key) {
+  for (i = 0; i < 6; i++) {
+    data[i] = ((data[i] - key[i] + 0x100) % 0x100) ^ key[8 + i]
+  }
+  return data
 }
 
-// changeControllerEncryption(Buffer, String, String)
+// changeControllerEncryption(Buffer, Buffer, Buffer)
 // returns dtm but with the nunchuk data encrypted using a different key
 function changeControllerEncryption(dtm, decryption_key, encryption_key) {
-  // will need to skip the length of a gcc controller for each plugged in - 8 bytes per "frame" (poll?)
-  // convert input...
 
+  var new_dtm = Buffer.from(dtm)
+
+  var i = 0x100 // controller data start point
+  while (i + 1 < dtm.length) {
+
+    var isWiimote = dtm[i + 1] == 0xA1 // No false positives on 5.0
+    var poll_length = isWiimote ? dtm[i++] : 8 // assume gcc otherwise
+
+    var poll = Buffer.alloc(poll_length)
+    dtm.copy(poll, 0, i, i + poll_length)
+
+    if (isWiimote && poll_length == 0x17 && poll[1] == 0x37) { // nunchuk extension
+      var data_length = 6
+      var nunchuk_data = Buffer.alloc(data_length) // init buffer
+      poll.copy(nunchuk_data, 0, poll_length - data_length) // copy encrypted data
+      nunchuk_data = encrypt(decrypt(nunchuk_data, decryption_key), encryption_key) // change encryption
+      nunchuk_data.copy(poll, poll_length - data_length) // copy back into poll
+    }
+
+    poll.copy(new_dtm, i, 0, poll_length) // change poll in new dtm
+    i += poll_length
+  }
+
+  return new_dtm
+}
+
+// removeGamecubeControllers(Buffer)
+// returns dtm but with gamecube controller data removed
+// this assumes that the dtm does have gcc data
+function removeGamecubeControllers(dtm) {
+
+  // header data
+  var controllers = read(0xB, dtm)
+  var new_controllers = controllers.substring(0, 4) + `0000`
+  var new_dtm = write(0xB, dtm, new_controllers)
+
+  // controller data
+  var i = 0x100 // start point
+  var j = 0x100 // location in new file
+
+  while (i + 1 < dtm.length) {
+
+    var isWiimote = dtm[i + 1] == 0xA1 // No false positives on 5.0
+
+    if (isWiimote) {
+      var poll_length = dtm[i] + 1 // include the byte that has the length
+      dtm.copy(new_dtm, j, i, i + poll_length)
+      j += poll_length
+      i += poll_length
+
+    } else {
+      i += 8
+    }
+  }
+
+  return new_dtm.slice(0, j) // remove leftover data
 }
 
 
@@ -351,6 +407,11 @@ function parseFile(msg) {
   msg.attachments[0].error = false
   return msg.attachments[0]
 }
+
+
+// ================
+// Discord Commands
+// ================
 
 
 module.exports = {
@@ -476,6 +537,69 @@ module.exports = {
 
       downloadAndRun(attachment, writedata)
 
+    }
+  },
+
+  changeencryption:{
+    name: `recrypt`,
+    short_descrip: `Changes wiimote encryption`,
+    full_descrip: `Usage: \`$recrypt <old_key> <new_key> <dtm attachment>\`\nChanges the nunchuk encryption of a .dtm file. The keys must be given without spaces Ex: \`$recrypt E36AFD0319A646ECA9188B6AE319C520 76AC6BC38A54EEFBB1087A3AC19776B5\`. It *should* handle any combination of controllers (untested).`,
+    hidden: true,
+    function: async function(bot, msg, args) {
+
+      if (args.length < 2) return `Missing Arguments: \`$recrypt <old_key> <new_key> <dtm attachment>\``
+
+      var attachment = parseFile(msg)
+      if (attachment.error) return attachment.error
+
+      async function recrypt(dtm, filename) {
+        var key1 = stringLiteralToBuffer(args[0], 32)
+        var key2 = stringLiteralToBuffer(args[1], 32)
+        var new_file = changeControllerEncryption(dtm, key1, key2)
+        try {
+          await bot.createMessage(
+            msg.channel.id,
+            `Nunchuk encryption changed from \`${bufferToStringLiteral(key1)}\` to \`${bufferToStringLiteral(key2)}\``,
+            {file: new_file, name: filename}
+          )
+        } catch (e) {
+          console.log(e)
+        }
+      }
+
+      downloadAndRun(attachment, recrypt)
+
+    }
+  },
+
+  removegccs:{
+    name: `removegcc`,
+    short_descrip: `Removes gcc input data`,
+    full_descrip: `Usage: \`removegcc <dtm attachment>\`\nRemoves all gamecube controller data from a dtm.`,
+    hidden: true,
+    function: async function(bot, msg, args) {
+
+      var attachment = parseFile(msg)
+      if (attachment.error) return attachment.error
+
+      async function removegcc(dtm, filename) {
+        if (read(0xB, dtm).substr(4) == `0000`) {
+          bot.createMessage(msg.channel.id, `Invalid Argument: DTM does not contain any GCC data`)
+        } else {
+          var new_dtm = removeGamecubeControllers(dtm)
+          try {
+            await bot.createMessage(
+              msg.channel.id,
+              `Removed GCC data`,
+              {file: new_dtm, name: filename}
+            )
+          } catch (e) {
+            console.log(e)
+          }
+        }
+      }
+
+      downloadAndRun(attachment, removegcc)
     }
   }
 }
