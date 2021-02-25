@@ -294,7 +294,7 @@ function downloadAndRun(attachment, callback, url, filename, filesize) {
 
 
 // ========================
-// Controller Data Handling // TODO
+// Controller Data Handling
 // ========================
 
 // Encryption/Decryption Algorithms:
@@ -378,6 +378,190 @@ function removeGamecubeControllers(dtm) {
   }
 
   return new_dtm.slice(0, j) // remove leftover data
+}
+
+// pollToControllerData(Buffer, Buffer)
+// converts a data stream (input poll) into a readable object with the data
+// Examples:
+// Input: <13 A1 33 00 00 80 66 80 01 C6 6A 65 C6 6A F7 C6 5A 6F C6 6A>
+// Output: {mode:0x33, accel:[512,408,512], ir:[512,384], extension:NULL}
+// Input: <17 A1 37 00 00 80 66 80 3C D2 66 9F D2 32 D2 66 A9 D2 BB DC 6F 87 E8 38>
+// Output: {mode:0x37, accel:[512,512,616], ir:[512,384], buttons:"",
+//          extension:{accel:[512,512,512], stick:[128,128], buttons:""}}
+function pollToControllerData(poll, extension_decryption_key) {
+  var obj = {
+    mode: 0,
+    length: 0,
+    isWiimote: 0,
+    accel: [0,0,0],
+    ir: [0,0],
+    buttons: "", //"A B + - 1 2 UP DOWN LEFT RIGHT HOME",
+    extension: {
+      accel: [0,0,0],
+      stick: [0,0],
+      buttons: "", //"Z C"
+    }
+  }
+
+  obj.length = poll[0]
+  obj.isWiimote = poll[1] == 0xA1 // No false positives on 5.0
+  obj.mode = poll[2]
+
+  // buttons
+  if (poll[3] & 0x01) obj.buttons += "LEFT "
+  if (poll[3] & 0x02) obj.buttons += "RIGHT "
+  if (poll[3] & 0x04) obj.buttons += "DOWN "
+  if (poll[3] & 0x08) obj.buttons += "UP "
+  if (poll[3] & 0x10) obj.buttons += "+ "
+  if (poll[4] & 0x10) obj.buttons += "- "
+  if (poll[4] & 0x08) obj.buttons += "A "
+  if (poll[4] & 0x04) obj.buttons += "B "
+  if (poll[4] & 0x02) obj.buttons += "1 "
+  if (poll[4] & 0x01) obj.buttons += "2 "
+  if (poll[4] & 0x80) obj.buttons += "HOME "
+  obj.buttons = obj.buttons.trim() // remove space
+
+  // acceleration
+  // least significant bits stored in button bytes
+  // for y,z least significant bit is always 0
+  obj.accel[0] = (poll[5] << 2) + ((poll[3] & 0x60) >> 5)
+  obj.accel[1] = (poll[6] << 2) + ((poll[4] & 0x20) >> 4)
+  obj.accel[2] = (poll[7] << 2) + ((poll[4] & 0x40) >> 5)
+
+  if (obj.mode == 0x33) { // no nunchuk
+    for (var i = 0; i < 4; i++) { // 12 byte IR
+      obj.ir[0] += poll[8 + i * 2] + ((poll[10 + i * 2] & 0x30) << 8)
+      obj.ir[1] += poll[9 + i * 2] + ((poll[10 + i * 2] & 0xC0) << 8)
+      // size = poll[10] & 0x0F // unused
+    }
+
+  } else if (obj.mode == 0x37) { // with nunchuk
+    for (var i = 0; i < 2; i++) { // 10 byte IR
+      obj.ir[0] += poll[8 + i * 5] + ((poll[10 + i * 5] & 0x30) << 8)
+      obj.ir[1] += poll[9 + i * 5] + ((poll[10 + i * 5] & 0xC0) << 8)
+      obj.ir[0] += poll[11 + i * 5] + ((poll[10 + i * 5] & 0x03) << 8)
+      obj.ir[1] += poll[12 + i * 5] + ((poll[10 + i * 5] & 0x0C) << 8)
+    }
+
+    var data_length = 6
+    var nunchuk = Buffer.alloc(data_length)
+    poll.copy(nunchuk, 0, obj.length - data_length + 1)
+    nunchuk = decrypt(nunchuk, extension_decryption_key)
+
+    // stick
+    obj.extension.stick[0] = nunchuk[0]
+    obj.extension.stick[1] = nunchuk[1]
+
+    // accel
+    obj.extension.accel[0] = (nunchuk[2] << 2) + ((nunchuk[5] & 0x0C) >> 2)
+    obj.extension.accel[1] = (nunchuk[3] << 2) + ((nunchuk[5] & 0x30) >> 4)
+    obj.extension.accel[2] = (nunchuk[4] << 2) + ((nunchuk[5] & 0xC0) >> 6)
+
+    // buttons
+    if ((nunchuk[5] & 0x01) == 0) obj.extension.buttons += "Z "
+    if ((nunchuk[5] & 0x02) == 0) obj.extension.buttons += "C "
+    obj.extension.buttons = obj.extension.buttons.trim()
+  }
+  // fix IR // should always be an integer anyways
+  obj.ir[0] = Math.floor(obj.ir[0] / 4)
+  obj.ir[1] = Math.floor(obj.ir[1] / 4)
+  if (obj.ir[0] > 1023) obj.ir[0] = 1023 // FFFFFF => max
+  if (obj.ir[1] > 1023) obj.ir[1] = 1023
+
+  //console.log(poll)
+  //console.log(obj)
+  return obj
+}
+
+// controllerDataToPoll(Object, Buffer)
+// the reverse of the function above
+// returns a buffer (including the buffer length as the first byte)
+function controllerDataToPoll(obj, extension_encryption_key) {
+  if (!obj.isWiimote) { // handle gamecube controllers later
+    return NULL
+  }
+
+  var poll = Buffer.alloc(obj.length + 1)
+  poll[0] = obj.length
+  poll[1] = 0xA1
+  poll[2] = obj.mode
+
+  if (obj.buttons.includes("LEFT")) poll[3] += 0x01
+  if (obj.buttons.includes("RIGHT")) poll[3] += 0x02
+  if (obj.buttons.includes("DOWN")) poll[3] += 0x04
+  if (obj.buttons.includes("UP")) poll[3] += 0x08
+  if (obj.buttons.includes("+")) poll[3] += 0x10
+  if (obj.buttons.includes("-")) poll[4] += 0x10
+  if (obj.buttons.includes("A")) poll[4] += 0x08
+  if (obj.buttons.includes("B")) poll[4] += 0x04
+  if (obj.buttons.includes("1")) poll[4] += 0x02
+  if (obj.buttons.includes("2")) poll[4] += 0x01
+  if (obj.buttons.includes("HOME")) poll[4] += 0x80
+
+  poll[5] += obj.accel[0] >> 2
+  poll[6] += obj.accel[1] >> 2
+  poll[7] += obj.accel[2] >> 2
+  poll[3] += (obj.accel[0] & 0x3) << 5
+  poll[4] += (obj.accel[0] & 0x2) << 4
+  poll[4] += (obj.accel[0] & 0x2) << 5
+
+  // set IR 4 points as (x-60,y), (x-50,y), (x+50,y), (x+60,y)
+  if (obj.mode == 0x33) {
+    for (var i = 0; i < 4; i++) {
+      poll[9 + i * 3] = obj.ir[1] & 0xFF
+      poll[10 + i * 3] += (obj.ir[1] & 0x300) >> 2
+    }
+    if (obj.ir[0] - 50 > 0) { // x1
+      poll[8] = (obj.ir[0] - 50) & 0xFF
+      poll[10] += ((obj.ir[0] - 50) & 0x300) >> 4
+    }
+    poll[11] = (obj.ir[0] + 50) & 0xFF // x2
+    poll[13] += ((obj.ir[0] + 50) & 0x300) >> 4
+    if (obj.ir[0] - 60 > 0) { // x3
+      poll[14] = (obj.ir[0] - 60) & 0xFF
+      poll[16] += ((obj.ir[0] - 60) & 0x300) >> 4
+    }
+    poll[17] = (obj.ir[0] + 60) & 0xFF // x4
+    poll[19] += ((obj.ir[0] + 60) & 0x300) >> 8
+
+  } else if (obj.mode == 0x37) {
+    for (var i = 0; i < 2; i++) {
+      poll[9 + i * 5] = obj.ir[1] & 0xFF
+      poll[10 + i * 5] += (obj.ir[1] & 0x300) >> 2
+      poll[12 + i * 5] = obj.ir[1] & 0xFF
+      poll[10 + i * 5] += (obj.ir[1] & 0x300) >> 6
+    }
+    if (obj.ir[0] - 50 > 0) { // x1
+      poll[8] = (obj.ir[0] - 50) & 0xFF
+      poll[10] += ((obj.ir[0] - 50) & 0x300) >> 4
+    }
+    poll[11] = (obj.ir[0] + 50) & 0xFF // x2
+    poll[10] += ((obj.ir[0] + 50) & 0x300) >> 8
+    if (obj.ir[0] - 60 > 0) { // x3
+      poll[13] = (obj.ir[0] - 60) & 0xFF
+      poll[15] += ((obj.ir[0] - 60) & 0x300) >> 4
+    }
+    poll[16] = (obj.ir[0] + 60) & 0xFF // x4
+    poll[15] += ((obj.ir[0] + 60) & 0x300) >> 8
+
+    // nunchuk poll[18] = nunchul[0]
+    var data_length = 6
+    var nunchuk = Buffer.alloc(data_length)
+    nunchuk[0] = obj.extension.stick[0]
+    nunchuk[1] = obj.extension.stick[1]
+
+    nunchuk[2] = obj.extension.accel[0] >> 2
+    nunchuk[3] = obj.extension.accel[1] >> 2
+    nunchuk[4] = obj.extension.accel[2] >> 2
+    nunchuk[5] = (obj.extension.accel[0] & 0x3) << 2
+    nunchuk[5] = (obj.extension.accel[1] & 0x3) << 4
+    nunchuk[5] = (obj.extension.accel[2] & 0x3) << 6
+
+    nunchuk = encrypt(nunchuk, extension_encryption_key)
+    nunchuk.copy(poll, 18)
+  }
+
+  return poll
 }
 
 
@@ -603,3 +787,167 @@ module.exports = {
     }
   }
 }
+
+
+// ==================
+// Editing local DTMs // INCOMPLETE
+// ==================
+
+// editLocalDTM(filename, command, args...)
+// this assumes you pass the right number of arguments
+// this code is currently untested
+function editLocalDTM(a, b, c, d, e, f, g) {
+  var args = [a, b, c, d, e, f, g]
+  var SAVE_TO_NEW_FILE = true
+  try {
+    var dtm = fs.readFileSync(`./${args[0]}.dtm`)
+    var save_filename = SAVE_TO_NEW_FILE ? `./${args[0]}_edit.dtm` : `./${args[0]}.dtm`
+    switch (args[1]) {
+      case `read`:
+        var offset = parseOffset(args[2])
+        console.log(`${Header[offset][2]}: ${read(offset, dtm)}`)
+        break
+
+      case `dtminfo`:
+        var offset = parseOffset(args[2])
+        Object.keys(Header).forEach(offset => {
+          console.log(`${Header[offset][2]}: ${read(offset, dtm)}`)
+        })
+        break
+
+      case `write`:
+        var offset = parseOffset(args[2])
+        var old_data = read(offset, dtm)
+        var new_dtm = write(offset, dtm, args[3])
+        fs.saveFileSync(save_filename, new_dtm)
+        console.log(`Value changed from \`${old_data}\` to \`${args[3]}\``)
+        break
+
+      case `recrypt`:
+        var key1 = stringLiteralToBuffer(args[2], 32)
+        var key2 = stringLiteralToBuffer(args[3], 32)
+        var new_dtm = changeControllerEncryption(dtm, key1, key2)
+        fs.saveFileSync(save_filename, new_dtm)
+        console.log(`Nunchuk encryption changed from \`${bufferToStringLiteral(key1)}\` to \`${bufferToStringLiteral(key2)}\``)
+        break
+
+      case `removegcc`:
+        var new_dtm = removeGamecubeControllers(dtm)
+        fs.saveFileSync(save_filename, new_dtm)
+        console.log(`Removed GameCube controllers`)
+        break
+
+      case `parsepolls`:
+        var key = stringLiteralToBuffer(args[2], 32)
+        function print_poll(obj) {
+          var s = obj.buttons
+          s += ` ACC:${obj.accel.join(`,`)}`
+          s += ` IR:${obj.ir.join(`,`)}`
+          if (obj.mode == 0x37) {
+            if (obj.extension.buttons.length > 0) s += ` `
+            s += obj.extension.buttons
+            s += ` N-ACC:${obj.extension.accel.join(`,`)}`
+            s += ` ANA:${obj.extension.stick.join(`,`)}`
+          }
+          console.log(s.trim())
+        }
+        var i = 0x100 // controller data start point
+        while (i + 1 < dtm.length) {
+          var isWiimote = dtm[i + 1] == 0xA1 // No false positives on 5.0
+          var poll_length = isWiimote ? dtm[i] + 1 : 8
+          var poll = Buffer.alloc(poll_length)
+          dtm.copy(poll, 0, i, i + poll_length)
+          if (isWiimote) {
+            var obj = pollToControllerData(poll, key)
+            print_poll(obj)
+          }
+          i += poll_length
+        }
+        break
+
+      case `convert2poll`:
+        var key = stringLiteralToBuffer(args[2], 32)
+        console.log(controllerDataToPoll(args[3], key))
+        break
+
+      default:
+        console.log(`Command not recognized`)
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+//editLocalDTM(`in`, `dtminfo`, 31, `Xander`) // edit author
+//editLocalDTM(`a`, `write`, parseInt(0xD), 71583) // vi // input 447692
+//editLocalDTM(`Sky_Station_G1`, `parsepolls`, `C835F094A02E880301700735C8A09866`)
+/*var frame = {
+    mode: 0,
+    length: 0,
+    isWiimote: 0,
+    accel: [0,0,0],
+    ir: [0,0],
+    buttons: "", //"A B + - 1 2 UP DOWN LEFT RIGHT HOME",
+    extension: {
+      accel: [0,0,0],
+      stick: [0,0],
+      buttons: "", //"Z C"
+    }
+}*/
+//editLocalDTM(`a`, `convert2poll`, `C835F094A02E880301700735C8A09866`, frame) // currently untested
+
+// changePolls(String, String, String)
+// takes in 3 filenames. dtmpoll and desiredpoll are formatted:
+// [[frame, # of polls], ...]
+// assumes 2 wiimotes with no other controllers
+function changePolls(dtmname, dtmpoll, desiredpoll, startFrame, convertedStartFrame) {
+  var dtm = fs.readFileSync(`./` + dtmname)
+
+  var pollfile1 = fs.readFileSync(`./` + dtmpoll)
+  var current_num_polls = JSON.parse(pollfile1.toString())
+
+  var pollfile2 = fs.readFileSync(`./` + desiredpoll)
+  var desired_num_polls = JSON.parse(pollfile2.toString())
+
+  var new_dtm = Buffer.from(dtm)
+  var i = 0x100 // controller data start
+  var j = 0x100 // location in new file
+
+  // keep track of what the polls are on the current frame
+  var cpi = 0 // current poll index
+  while (current_num_polls[cpi][0] != startFrame) {
+    for (var x = 0; x < current_num_polls[cpi][1]; x++) i += dtm[i] + 1
+    cpi++
+  }
+  console.log(cpi, i)
+  var dpi = 0 // desired poll index
+  while (desired_num_polls[dpi][0] != convertedStartFrame) dpi++
+  console.log(dpi)
+
+  while (cpi < current_num_polls.length && dpi < desired_num_polls.length) {
+    var p1_poll_length = dtm[i] + 1 // include the byte that has the length
+    //console.log(`p1 len`, p1_poll_length)
+    var p1 = dtm.slice(i, i + p1_poll_length)
+    //console.log(p1)
+
+    var p2_poll_length = dtm[i] + 1
+    var p2 = dtm.slice(i + p1_poll_length, i + p1_poll_length + p2_poll_length)
+    //console.log(p2)
+
+    // copy the new poll amount to the new file
+    for (var x = 0; x < desired_num_polls[dpi][1] / 2; x++) {
+      j += p1.copy(new_dtm, j) // returns number of bytes copyies
+      j += p2.copy(new_dtm, j)
+    }
+
+    // pass over the current number of polls
+    for (var x = 0; x < current_num_polls[cpi][1]; x++) {
+      i += dtm[i] + 1
+    }
+
+    cpi++
+    dpi++
+  }
+
+  fs.writeFileSync(`out.dtm`, new_dtm.slice(0, j))
+}
+//changePolls(`in.dtm`, `polls_GE3.txt`, `polls.txt`, 168, 62971)
