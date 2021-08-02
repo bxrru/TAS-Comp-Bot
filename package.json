@@ -6,7 +6,7 @@
   "dependencies": {
     "@discordjs/opus": "^0.3.2",
     "bufferutil": "^4.0.1",
-    "chrono-node": "^1.4.6",
+    "chrono-node": "^2.2.4",
     "eris": "^0.13.3",
     "eris-additions": "^1.4.1",
     "erlpack": "github:abalabahaha/erlpack",
