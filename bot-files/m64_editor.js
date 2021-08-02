@@ -2,6 +2,9 @@
 
 var fs = require(`fs`)
 var save = require(`./save.js`)
+const cp = require(`child_process`)
+const process = require(`process`)
+const request = require(`request`)
 
 // intToLittleEndian(int, int)
 // returns a buffer containing the base 10 int in little endian form
@@ -76,7 +79,19 @@ function onDownload(filename, filesize, callback) {
 function downloadAndRun(attachment, callback, url, filename, filesize) {
   if (!url) url = attachment.url
   if (!filename) filename = attachment.filename
-  if (!filesize) filesize = attachment.size
+  if (!filesize) {
+    if (attachment) {
+      filesize = attachment.size
+    } else {
+      request({url:url, method: `HEAD`}, (err, response) => { // find the filesize
+        save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
+        onDownload(filename, response.headers[`content-length`], callback)
+      })
+      return
+    }
+    save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
+    onDownload(filename, filesize, callback)
+  }
 
   save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
 
@@ -253,6 +268,92 @@ module.exports = {
       }
 
       downloadAndRun(msg.attachments[0], updateAuthor)
+
+    }
+  },
+
+  encode:{
+    name: `encode`,
+    aliases: [`record`],
+    short_descrip: `Encode an m64`,
+    full_descrip: `Usage: \`$encode <link to m64> <link to st>\`\nDownloads the files, makes an encode, and uploads the recording. [BETA]`,
+    hidden: true,
+    function: async function(bot, msg, args) {
+
+      return
+
+      // How this works:
+      // 1. Download m64
+      // 2. Download st
+      // 3. Run mupen with -avi and -m64 commands
+      // 4. Once avi capture is done, delete "encode.m64/st"
+      //    Note: this uses the emulator closing as the sign to continue
+      //          This needs some way to ensure the emulator closes (possibly a lua script forcing it closed?)
+      // 5. Upload avi capture named "encode.mp4"
+      //    a) use ffmpeg to convert
+      // 6. Delete "encode.mp4"
+
+      // ToDo: be generous with user input (st link + m64 attachment, st/m64 in any order, etc.)
+      //       Detect rom and play U or J
+      //       add a queuing system
+
+      if (args.length < 2) {
+        return `Missing Arguments: \`$encode <link to m64> <link to st>\``
+      } else if (!args[0].endsWith(`.m64`)) {
+        return `Invalid Argument: 1st file is not an m64`
+      } else if (!args[1].endsWith(`.st`)) {
+        return `Invalid Argument: 2nd file is not an st`
+      }
+
+      var m64_url = args[0]
+      var st_url = args[1]
+      var filename = m64_url.split(`/`) // ensure contains / ?
+      filename = filename[filename.length - 1]
+      filename = filename.substring(0, filename.length - 4)
+
+      function NextEncode() {
+        // remove front of queue
+        // start next
+        return
+      }
+
+      function AddToEncodingQueue(m64, st) {
+        // add to queue
+        // if the length is 1 begin encoding
+      }
+
+      function runMupen() {
+        bot.createMessage(msg.channel.id, `Encoding...`)
+        if (fs.existsSync(`./encode.avi`)) fs.unlinkSync(`./encode.avi`) // remove previous encode
+        if (fs.existsSync(`./encode.mp4`)) fs.unlinkSync(`./encode.mp4`)
+        const MUPEN_PATH = "B:/Mupen64/1.0.7_2/mupen64_1_8_0_encoding_fixed.exe " // nice file path
+        const GAME = `-g "B:/Mupen64/U.z64" `
+        const M64 = `-m64 "${process.cwd() + save.getSavePath().substring(1)}/encode.m64" `
+        const LUA = `-lua "B:\\Mupen64\\Lua\\Encode\\inputs.lua" `
+        const AVI = `-avi "encode.avi"`
+        var Mupen = cp.exec(MUPEN_PATH + GAME + M64 + AVI + LUA) // 3
+        Mupen.on('close', (code, signal) => { // 4
+          bot.createMessage(msg.channel.id, `Uploading...`)
+          cp.execSync(`ffmpeg -i encode.avi encode.mp4`)
+          fs.readFile(`./encode.mp4`, async (err, mp4) => {
+            try {
+              await bot.createMessage(msg.channel.id, `Encode Complete`, {file: mp4, name: `${filename}.mp4`}) // 5
+              fs.unlinkSync(`./encode.mp4`)
+            } catch (err) {
+              bot.createMessage(msg.channel.id, `Something went wrong\`\`\`${err}\`\`\``)
+            }
+            NextEncode()
+          })
+        })
+      }
+
+      function downloadST() {
+        downloadAndRun(undefined, runMupen, st_url, `encode.st`) // 2 -> 3
+      }
+
+      downloadAndRun(undefined, downloadST, m64_url, `encode.m64`) // 1 -> 2
+
+      // return AddToEncodingQueue(m64, st) // return queue number if something is already running
 
     }
   }
