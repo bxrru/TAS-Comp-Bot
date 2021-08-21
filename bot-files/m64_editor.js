@@ -1,22 +1,31 @@
 // m64 header information source: http://tasvideos.org/EmulatorResources/Mupen/M64.html
 
-var fs = require(`fs`)
-var save = require(`./save.js`)
+const fs = require(`fs`)
+const users = require("./users.js");
+const save = require(`./save.js`)
 const cp = require(`child_process`)
 const process = require(`process`)
 const request = require(`request`)
 
 // The following are used for the encoding command
 // They will need to be manually set before running an instance of the bot
-const MUPEN_PATH = "B:/Mupen64/1.0.7_2/"
-const MUPEN_NAME = "mupen64_1_8_0_encoding_fixed.exe "
-const LUA = `-lua "B:\\Mupen64\\Lua\\Encode\\inputs.lua" `
-const GAME_PATH = "B:/Mupen64/" // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
-const KNOWN_CRC = { // supported ROMS (TODO: add common romhacks)
-  "FF 2B 5A 63": "U",
-  "0E 3D AA 4E": "J",
-  "AF 5E 2D 01": "Ghosthack_v2",
-  "E2 23 33 F9": "Ghosthack_v3"
+// Make sure that the manage bad roms (etc.) settings in Mupen are disabled so that romhacks can be run from commandline
+
+const MUPEN_PATH = "B:/Mupen64/1.0.7_2/mupen64_1_8_0_encoding_fixed.exe" // `B:\\Mupen64\\1.0.9\\mupen64.exe`
+const LUA = `-lua "B:\\Mupen64\\Lua\\Encode\\inputs.lua"`
+const GAME_PATH = "B:/Mupen64/ROMs/Romhacks/" // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
+const KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
+  "FF 2B 5A 63": "Super Mario 64 (USA)", 
+  "0E 3D AA 4E": "Super Mario 64 (JP)",
+  //"AF 5E 2D 01": "Ghosthack v2", // depricated
+  "E2 23 33 F9": "Ghost Race Transparent (v3)",
+  "8D 3C 49 DC": "Last Impact (1.2)",
+  "88 60 DB 69": "Shining Stars Repainted (1.1)",
+  "BC B0 D5 1E": "Green Comet (1.0.1)",
+  "8B 70 48 88": "The Green Stars (1.3)",
+  "34 13 32 75": "Another Mario Adventure (1.10)",
+  //"63 83 23 38": "No Speed Limit 64 (Normal)"
+  "F5 FF C3 A7": "No Speed Limit 64 (B-Speed)"
 }
 
 var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user id}
@@ -371,49 +380,76 @@ module.exports = {
     name: `encode`,
     aliases: [`record`],
     short_descrip: `Encode an m64`,
-    full_descrip: `Usage: \`$encode <link to m64> <link to st>\`\nDownloads the files, makes an encode, and uploads the recording. [BETA]`,
+    full_descrip: `Usage: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use \`$encode cancel\`.\n\nIf the bot is not processing the queue, contact an admin to use \`$encode ForceSkip\` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nTo see the queue length, use \`$encode queue\``,
     hidden: true,
     function: async function(bot, msg, args) {
+      return `This command is currently disabled`
+      //if (!users.hasCmdAccess(msg)) return `You do not have permission to use this command`
 
-      return `This command is currently disabled` // exit because I dont want the bot on my linux server to update and try and run this command
+      // alternate uses
+      if (args.length == 1) {
+        if (args[0].toUpperCase() == `CANCEL`) {
+          for (var i = 0; i < EncodingQueue.length; i++) {
+            if (EncodingQueue[i].user == msg.author.id && EncodingQueue[i].process == undefined && !EncodingQueue[i].skip) {
+              EncodingQueue[i].skip = true // mark to be skipped instead of removing it to try and avoid async problems
+              return `${EncodingQueue[i].filename} will be skipped`
+            }
+          }
+          return `You do not have an encode request in queue`
 
-      // How this works:
-      // 1. Download m64
-      // 2. Download st
-      // 3. Run mupen with -avi and -m64 commands
-      // 4. Once avi capture is done, delete "encode.m64/st"
-      //    Note: this uses the emulator closing as the sign to continue
-      //          This needs some way to ensure the emulator closes (possibly a lua script forcing it closed?)
-      // 5. Upload avi capture named "encode.mp4"
-      //    a) use ffmpeg to convert
-      // 6. Delete "encode.mp4"
+        } else if (args[0].toUpperCase() == `FORCESKIP` && users.hasCmdAccess(msg)) { // sending fake links can stall execution
+          var encode = EncodingQueue.shift()
+          encode.process = 0 // ghost process is never killed. EncodingQueue[0].process.kill() // TODO: FIX THIS
+          NextEncode(true, true)
+          return `**WARNING: Mupen is still open.** Contact the bot owner to close it and prevent a server crash. Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
 
-      // ToDo: be generous with user input (st link + m64 attachment, st/m64 in any order, etc.)
-      //       Detect rom and play U or J
-      //       add a queuing system
-
-      if (args.length < 2) {
-        return `Missing Arguments: \`$encode <link to m64> <link to st>\``
-      } else if (!args[0].endsWith(`.m64`)) {
-        return `Invalid Argument: 1st file is not an m64`
-      } else if (!args[1].endsWith(`.st`)) {
-        return `Invalid Argument: 2nd file is not an st`
+        } else if (args[0].toUpperCase() == `QUEUE`) {
+          return `Queue length: ${EncodingQueue.length}` // TODO: maybe give more detailed info?
+        }
       }
 
-      var m64_url = args[0]
-      var st_url = args[1]
+
+      // look for m64 & st as either a URL in the arguments, or an attachment
+      var m64_url = ``
+      var st_url = ``
+
+      for (var i = 0; i < args.length; i++) {
+        if (args[i].endsWith(`.m64`)) {
+          m64_url = args[i]
+        } else if (args[i].endsWith(`.st`) || args[i].endsWith(`.savestate`)) {
+          st_url = args[i]
+        }
+      }
+
+      for (var i = 0; i < msg.attachments.length; i++) {
+        if (msg.attachments[i].url.endsWith(`.m64`)) {
+          m64_url = msg.attachments[i].url
+        } else if (msg.attachments[i].url.endsWith(`.st`) || msg.attachments[i].url.endsWith(`.savestate`)) {
+          st_url = msg.attachments[i].url
+        }
+      }
+
+      if (!m64_url && !st_url) {
+        return `Missing/Invalid Arguments: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\``
+      }
+
       var filename = m64_url.split(`/`) // ensure contains / ?
       filename = filename[filename.length - 1]
       filename = filename.substring(0, filename.length - 4)
 
-
       function NextEncode(ping = true, delayed_retry = true) {
-        if (EncodingQueue.length == 0 || EncodingQueue[0].processing) {
+        if (EncodingQueue.length == 0 || EncodingQueue[0].process != undefined) {
           return // nothing to encode, or needs to wait
         }
 
         var encode = EncodingQueue[0] // using this in the following functions instead of parameters is cringe
-        EncodingQueue[0].processing = true // don't remove right away so new encoding requests don't try to run at the same time
+        EncodingQueue[0].process = true // don't remove right away so new encoding requests don't try to run at the same time
+
+        if (encode.skip) {
+          EncodingQueue.shift()
+          NextEncode(true, true)
+          return
+        }
 
         function runMupen() {
           //bot.createMessage(encode.channel_id, `Encoding...`)
@@ -421,7 +457,7 @@ module.exports = {
           if (fs.existsSync(`./encode.mp4`)) fs.unlinkSync(`./encode.mp4`)
           
           // auto detect game
-          var m64 = fs.readFileSync(save.getSavePath() + `/encode.m64`) // no error handling. This file should exist.
+          var m64 = fs.readFileSync(save.getSavePath() + `/encode.m64`)
           var crc = m64.slice(0xE4, 0xE4 + 4)
           crc = bufferToStringLiteral(crc.reverse())
           if (crc in KNOWN_CRC == false) {
@@ -429,11 +465,13 @@ module.exports = {
             return
           }
           
-          const GAME = `-g "${GAME_PATH}${KNOWN_CRC[crc]}.${KNOWN_CRC[crc] == `J` ? `n` : `z`}64" `
+          const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.${KNOWN_CRC[crc] == `Super Mario 64 (JP)` ? `n` : `z`}64" `
           const M64 = `-m64 "${process.cwd() + save.getSavePath().substring(1)}/encode.m64" `
           const AVI = `-avi "encode.avi"`
           
-          var Mupen = cp.exec(MUPEN_PATH + MUPEN_NAME + GAME + M64 + AVI + LUA) // 3
+          //console.log(MUPEN_PATH + GAME + M64 + AVI + LUA)
+          var Mupen = cp.exec(MUPEN_PATH + GAME + M64 + AVI + LUA) // 3
+          EncodingQueue[0].process = Mupen
           
           /*if (ping) { // one ping is bad enough, but maybe this is a good idea?
             bot.createMessage(encode.channel, `<@${encode.user}> your encode is being processed`).catch(
@@ -441,28 +479,31 @@ module.exports = {
             )
           }*/
   
-          Mupen.on('close', (code, signal) => { // 4
+          Mupen.on('close', async (code, signal) => { // 4
 
             if (fs.existsSync(MUPEN_PATH + `encode_failed.txt`)) {
-              bot.createMessage(encode.channel, `Failed to playback m64 (CRC: ${crc}, ${KNOWN_CRC[crc]}). Could not encode <@${encode.user}>`)
+              bot.createMessage(encode.channel, `Failed to playback m64 (CRC: ${crc}, ${KNOWN_CRC[crc]}) <@${encode.user}>`)
               fs.unlinkSync(MUPEN_PATH + `encode_failed.txt`)
-              NextEncode(true, true)
-              return
-            }
 
-            bot.createMessage(encode.channel, `Uploading...`)
-            cp.execSync(`ffmpeg -i encode.avi encode.mp4`)
-            fs.readFile(`./encode.mp4`, async (err, mp4) => {
+            } else if (!fs.existsSync(`./encode.avi`)) {
+              bot.createMessage(encode.channel, `Error: avi not found <@${encode.user}>`)
+
+            } else {
+              bot.createMessage(encode.channel, `Uploading...`)
               try {
-                let reply = ping ? `Encode Complete <@${encode.user}>` : `Encode Complete`
-                await bot.createMessage(encode.channel, reply, {file: mp4, name: `${encode.filename}.mp4`}) // 5
+                cp.execSync(`ffmpeg -i encode.avi encode.mp4`)
+                var video = fs.readFileSync(`./encode.mp4`)
+                var reply = ping ? `Encode Complete <@${encode.user}>` : `Encode Complete`
+                await bot.createMessage(encode.channel, reply, {file: video, name: `${encode.filename}.mp4`}) // 5
                 fs.unlinkSync(`./encode.mp4`)
               } catch (err) {
                 bot.createMessage(encode.channel, `Something went wrong <@${encode.user}> \`\`\`${err}\`\`\``)
               }
-              EncodingQueue.shift() // now it's safe to remove this from the queue
-              NextEncode(true, true)
-            })
+            }
+            
+            EncodingQueue.shift() // now it's safe to remove this from the queue
+            NextEncode(true, true)
+            
           })
         }
 
@@ -488,7 +529,8 @@ module.exports = {
           filename: filename,
           channel: channel_id,
           user: user_id,
-          processing: false
+          process: undefined,
+          skip: false
         })
 
 
@@ -507,5 +549,22 @@ module.exports = {
       return AddToEncodingQueue(m64_url, st_url, filename, msg.channel.id, msg.author.id)
 
     }
+  },
+
+  listcrc:{
+    name: `ListCRC`,
+    aliases: [],
+    short_descrip: `See recognized games`,
+    full_descrip: `Shows a list of ROM CRCs that the \`$encode\` command supports. If there is a game that you would like added to this list, please contact the owner of this bot`,
+    hidden: true,
+    function: async function(bot, msg, args) {
+      var result = `CRC: ROM Name\n` + "```"
+      crc = Object.keys(KNOWN_CRC)
+      for (var i = 0; i < crc.length; i++) {
+        result += `${crc[i]}: ${KNOWN_CRC[crc[i]]}\n`
+      }
+      return result + "```"
+    }
+
   }
 }
