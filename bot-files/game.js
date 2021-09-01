@@ -201,6 +201,7 @@ module.exports = {
     short_descrip: "Chooses your Secret Santa",
     full_descrip: "Sends a DM to everyone @ mentioned in the command, with a name of another person on the list. No 2 users will get each other, and nobody will get themself.",
     hidden: true,
+    custom: true,
     function: async function(bot, msg, args){
 
       var users = []

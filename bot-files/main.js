@@ -24,7 +24,7 @@ var BOT_ACCOUNT = ""
 
 var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
 	description: "List of commands",
-	owner: "Eddio0141, Barry & Xander",
+	owner: "ERGC | Xander, Eddio0141, & Barry",
 	prefix: "$"
 });
 
@@ -109,8 +109,6 @@ function loadAllModules(){
 	loadModule(comp)
 	loadModule(announcements)
 	loadModule(require(`./voice.js`))
-	loadModule(require(`./m64_editor.js`))
-	loadModule(require(`./dtm_editor.js`))
 }
 
 
@@ -121,10 +119,6 @@ bot.on("messageCreate", async(msg) => {
 
 	if (msg.author.id == BOT_ACCOUNT) return // ignore it's own messages
 
-	// another meme
-	if (msg.content.split(' ').includes('<@!532974459267710987>') || msg.content.split(' ').includes('<@532974459267710987>')) {
-		bot.createMessage(msg.channel.id, "What the f*ck. Did you really ping me at this time for that? You did. Arrangements have been made so that I will no longer be directly pinged from you. If you need me, contact somebody else.")
-	}
 
 	score.autoUpdateScore(bot, msg);
 	comp.filterSubmissions(bot, msg);

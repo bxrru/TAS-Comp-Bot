@@ -36,6 +36,8 @@ var SubmittedRole = ""
 const UPDATES = [`UPDATE`,`WARNING`,`ERROR`,`NEW SUBMISSION`,`DQ`,`TIMER`,`FILE`,`TIMING`]
 var IgnoreUpdates = {} // id: []
 
+const FILE_EXTENSION = "rkg"
+
 // TODO: Implement a confirmation of request feature that makes people
 // resend a task request with some number to actually start the task
 
@@ -345,7 +347,7 @@ module.exports = {
 			module.exports.save()
 			module.exports.updateSubmissionMessage(bot)
 
-			var message = `${msg.author.username} deleted submission from ${deleted.name} \`(${deleted.id})\`\nm64: ${deleted.m64}\nst: ${deleted.st}`
+			var message = `${msg.author.username} deleted submission from ${deleted.name} \`(${deleted.id})\`\nFile: ${deleted.m64}`
 			notifyHosts(bot, message)
 
 			// notify the user that their submission was deleted
@@ -375,7 +377,7 @@ module.exports = {
 	setSubmissionFile:{
 		name: "submitFile",
 		short_descrip: "Change a user's files",
-		full_descrip: "Usage: `$submitfile <submission_number> <url>`\nSets the stored file (m64 or st) to the url provided. The user will be notified that their files are changed. To upload files for someone new, use `$addSubmission` first.",
+		full_descrip: "Usage: `$submitfile <submission_number> <url>`\nSets the stored file to the url provided. The user will be notified that their files are changed. To upload files for someone new, use `$addSubmission` first.",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
@@ -399,18 +401,13 @@ module.exports = {
 			}
 
 			// check if it was given a url
-			if (module.exports.isM64({filename:args[0]})){
+			if (args[0].substr(-4).toLowerCase() == "." + FILE_EXTENSION){
 				module.exports.update_m64(user.id, args[0], 0)
-				notifyUserAndHost("M64")
-				return "Successfully updated M64"
-
-			} else if (module.exports.isSt({filename:args[0]})){
-				module.exports.update_st(user.id, args[0], 0)
-				notifyUserAndHost("ST")
-				return "Successfully updated ST"
+				notifyUserAndHost("." + FILE_EXTENSION)
+				return "Successfully updated ." + FILE_EXTENSION
 
 			} else {
-				return "Invalid Filetype: Must be `.m64` or `.st`"
+				return "Invalid Filetype: Must be `." + FILE_EXTENSION + "`"
 			}
 
 
@@ -422,7 +419,7 @@ module.exports = {
 
 			msg.attachment.forEach((attachment) => async function(attachment){
 
-				if (module.exports.isM64(attachment) || module.exports.isSt(attachment)){
+				if (module.exports.isDAT(attachment) || module.exports.isSt(attachment)){
 					updated = true
 					try {
 						var dm = await bot.getDMChannel(user.id)
@@ -463,15 +460,15 @@ module.exports = {
 	setFilePrefixCMD:{
 		name: "setFilePrefix",
 		short_descrip: "Sets the prefix for submission filenames",
-		full_descrip: "Usage: `$setfileprefix <filePrefix>`\nChanges the prefix for files. IE the `TASCompetitionTask` from `TASCompetitionTask#ByName`. `<filePrefix>` cannot contain spaces and will be used as: `<filePrefix>#by<name>.st/m64`. This changes the filenames of all submissions when downloaded using `$get all`.",
+		full_descrip: "Usage: `$setfileprefix <filePrefix>`\nChanges the prefix for files. IE the `TASCompetitionTask` from `TASCompetitionTask#ByName`. `<filePrefix>` cannot contain spaces and will be used as: `<filePrefix>#by<name>."+FILE_EXTENSION+"`. This changes the filenames of all submissions when downloaded using `$get all`.",
 		hidden: true,
 		function: function(bot,msg,args){
 			if (notAllowed(msg)) return
 			if (args.length == 0) return "Not Enough Arguments: `$setfileprefix <fileprefix>`"
 			FilePrefix = args[0]
 			module.exports.save()
-			notifyHosts(bot, `Files will now be named \`${FilePrefix}${Task}By<Name>.st/m64\``)
-			return `Files will now be named \`${FilePrefix}${Task}By<Name>.st/m64\``
+			notifyHosts(bot, `Files will now be named \`${FilePrefix}${Task}By<Name>.`+FILE_EXTENSION+`\``)
+			return `Files will now be named \`${FilePrefix}${Task}By<Name>.`+FILE_EXTENSION+`\``
 		}
 	},
 
@@ -604,7 +601,7 @@ module.exports = {
 
 			try {
 				var dm = await bot.getDMChannel(user_id)
-				var warning = "You have been set as the recipient of submission updates for the SM64 TAS Competition. "
+				var warning = "You have been set as the recipient of submission updates for the MKW TAS Competition. "
 				warning += "If you believe this to be an error please contact the bot's owner"
 				await dm.createMessage(warning)
 				Host_IDs.push(dm.recipient.id)
@@ -635,7 +632,7 @@ module.exports = {
 
 					try {
 						var dm = await bot.getDMChannel(id)
-						var warning = "You are no longer set as the recipient of submission updates for the SM64 TAS Competition. "
+						var warning = "You are no longer set as the recipient of submission updates for the MKW TAS Competition. "
 						warning += "If you believe this to be an error please contact the bot's owner"
 						await dm.createMessage(warning)
 						return dm.recipient.username + " (ID `" + id + "`) will no longer recieve submission updates"
@@ -850,7 +847,7 @@ module.exports = {
 				if (num.message.length) return num.message
 
 				var s = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
-				var result = (num.dq?`DQ`:``) + `${num.number}. ${s.name}\nID: ${s.id}\nTime: ${getTimeString(s.time)} (${s.time}) ${s.info}\nm64: ${s.m64}\nst: ${s.st}`
+				var result = (num.dq?`DQ`:``) + `${num.number}. ${s.name}\nID: ${s.id}\nTime: ${s.time.min}:${s.time.sec.padStart(2, "0")}.${s.time.ms.padStart(3, "0")} ${s.info}\n`+FILE_EXTENSION+`: ${s.m64}`
 				if (miscfuncs.isDM(msg)) {
 					return result
 				} else {
@@ -882,10 +879,9 @@ module.exports = {
 				text += 'cd "' + name + '"\n'
 			}
 
-			// download m64 + st
+			// download .dat (internally labelled as .m64 because im lazy)
 			var filename = module.exports.properFileName(name)
-			if (submission.m64) text += `powershell -Command "Invoke-WebRequest ${submission.m64} -OutFile '${filename}.m64'\n`
-			if (submission.st) text += `powershell -Command "Invoke-WebRequest ${submission.st} -OutFile '${filename}.st'\n`
+			if (submission.m64) text += `powershell -Command "Invoke-WebRequest ${submission.m64} -OutFile '${filename}.`+FILE_EXTENSION+`'\n`
 
 			// go back to main folder
 			text += 'cd ".."\n'
@@ -939,7 +935,7 @@ module.exports = {
 
 			info += `**General Info**\n`
       info += `Current status: \`${AllowSubmissions ? '' : 'Not '}Accepting Submissions${TimedTask ? ' (Timed Task)' : ''}\`\n`
-			info += `Filenames: \`${FilePrefix}${Task}By<Name>.m64\`\n`
+			info += `Filenames: \`${FilePrefix}${Task}By<Name>.`+FILE_EXTENSION+`\`\n`
 			info += `Default Submissions Channel: ${SubmissionsChannel == `` ? `\`disabled\`` : `<#${SubmissionsChannel}>`}\n`
 			try {
 				var message = await bot.getMessage(Channel_ID, Message_ID)
@@ -1223,16 +1219,13 @@ module.exports = {
 			var st = submission.st.length != 0;
 		}
 
-		if (m64 && st){
-			var msg = `"Submission Status: \`2/2\` Submission complete.\nm64: ${submission.m64}\nst: ${submission.st}`
-			msg += submission.time == null ? `\nTime: No Time Available Yet` : `Time: ${getTimeString(submission.time)} ${submission.info}`
+		if (m64) {
+			var msg = `Submission Status: Submission complete.\nFile: ${submission.m64}`
+			msg += submission.time == null ? `\nTime: No Time Available Yet` : `Time: ${submission.time.min}:${submission.time.sec.padStart(2, "0")}.${submission.time.ms.padStart(3, "0")} ${submission.info}`
 			return msg
-		} else if (m64 && !st){
-			return "Submission Status: `1/2` No st received.\nm64: "+submission.m64
-		} else if (!m64 && st){
-			return "Submission Status: `1/2` No m64 received.\nst: "+submission.st
-		} else { // (!m64 && !st)
-			return "Submission Status: `0/2` No m64 or st received."
+
+		} else {
+			return `No submission received`
 		}
 	},
 
@@ -1324,8 +1317,8 @@ module.exports = {
 	},
 
 	// return whether an attachment is an m64 or not
-	isM64:function(attachment){
-		return attachment.filename.substr(-4).toLowerCase() == ".m64"
+	isDAT:function(attachment){
+		return attachment.filename.substr(-4).toLowerCase() == "."+FILE_EXTENSION
 	},
 
 	// return whether an attachment is a savestate or not
@@ -1372,13 +1365,10 @@ module.exports = {
 	attachment = {filename, url, size} */
 	filterFiles:async function(bot, msg, attachment){
 
-		// make sure the file is an m64 or st
-		if (module.exports.isM64(attachment)) {
-			var filename = ".m64"
-		} else if (module.exports.isSt(attachment)) {
-			var filename = ".st"
-		} else {
-			bot.createMessage(msg.channel.id, "Attachment ``"+attachment.filename+"`` is not an ``m64`` or ``st``")
+		// make sure the file is a .dat
+		var filename = "."+FILE_EXTENSION
+		if (attachment.filename.substr(-4).toLowerCase() != filename) {
+			bot.createMessage(msg.channel.id, "Attachment ``"+attachment.filename+"`` is not a `."+FILE_EXTENSION+"`")
 			return
 		}
 
@@ -1404,22 +1394,14 @@ module.exports = {
 	storeFile:async function(bot, file, msg){
 
 		try {
-			var filetype = "ST"
-			if (module.exports.isM64({filename:file.name})) filetype = "M64"
+			var filetype = "."+FILE_EXTENSION
 
-			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check your submitted files", file)
+			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check your submitted file", file)
 			var attachment = message.attachments[0]
 
 			// save the url and filesize in the submission
-			if (module.exports.isM64(attachment)){
-				module.exports.update_m64(msg.author.id, attachment.url, attachment.size)
-
-			} else if (module.exports.isSt(attachment)){
-				module.exports.update_st(msg.author.id, attachment.url, attachment.size)
-
-			} else { // this should never happen since it must be an m64 or st at this point
-				throw "Attempted to upload incorrect file: " + file.name
-			}
+			// just gonna use the built in m64 save function
+			module.exports.update_m64(msg.author.id, attachment.url, attachment.size)
 
 			// notify host of updated file
 			module.exports.forwardSubmission(bot, msg.author.id, file.name, attachment.url)
@@ -1501,7 +1483,7 @@ module.exports = {
 		if (!miscfuncs.isDM(msg)) return
 		if (msg.content.startsWith("$")) return // ignore commands
 
-		var hasM64orSt = msg.attachments.filter(module.exports.isM64).length || msg.attachments.filter(module.exports.isSt).length
+		var hasM64orSt = msg.attachments.filter(module.exports.isDAT).length
 		if (!hasM64orSt) return
 
 		if (Users.isBanned(msg.author.id)) return
@@ -1545,14 +1527,7 @@ module.exports = {
 
 		// need a better way to get the ID of the submission
 		var submission = module.exports.getSubmission(user_id)
-		var result = submission.submission.name + " (" + submission.id + ") "
-
-		if (module.exports.isM64({filename: filename})){
-			result += "uploaded m64 " + url
-		} else {
-			result += "uploaded st " + url
-		}
-
+		var result = submission.submission.name + " (" + submission.id + ") uploaded ."+FILE_EXTENSION+" " + url
 		notifyHosts(bot, result, `File`)
 
 	},
@@ -1717,37 +1692,41 @@ module.exports = {
 		name: `SetTime`,
 		aliases: [`SetResult`, `SetResults`],
 		short_descrip: `Sets a user's time for their submission`,
-		full_descrip: `Usage: \`$settime <submission_number> <VIs> [additional info]\`\nSets the time (in VIs) for a user's run. To see the results, use \`$getresults\`. This will DM the user telling them the information that is set with this command. To see a list of submission numbers use \`$listsubmissions\`. The \`additional info\` field is for rerecords, A press count, or any other relevant information to be displayed in the results. `,
+		full_descrip: `Usage: \`$settime <submission_number> <minutes> <seconds> <miliseconds> [additional info]\`\nSets the time for a user's run. To see the results, use \`$getresults\`. This will DM the user telling them the information that is set with this command. To see a list of submission numbers use \`$listsubmissions\`. The \`additional info\` field is for rerecords, A press count, or any other relevant information to be displayed in the results. `,
 		hidden: true,
 		function:async function(bot, msg, args) {
 			if (notAllowed(msg)) return
-			if (args.length < 2) return `Missing Arguments: \`$settime <submission_number> <VIs> [additional info]\``
+			if (args.length < 4) return `Missing Arguments: \`$settime <submission_number> <minutes> <seconds> <miliseconds> [additional info]\``
 
 			var num = getSubmissionNumber(args.shift())
-			var VIs = args.shift()
+			var min = args.shift()
+			var sec = args.shift()
+			var ms = args.shift()
 			var info = args.join(` `)
 
 			if (num.message.length) return num.message
-			if (isNaN(VIs)) return `Invalid Argument: VIs must be a number`
+			if (isNaN(min)) return `Invalid Argument: min must be a number`
+			if (isNaN(sec)) return `Invalid Argument: sec must be a number`
+			if (isNaN(ms)) return `Invalid Argument: ms must be a number`
 
 			if (num.dq) {
-				DQs[num.number - 1].time = VIs
+				DQs[num.number - 1].time = {min:min, sec:sec, ms:ms}
 				DQs[num.number - 1].info = info
 				var submission = DQs[num.number - 1]
 			} else {
-				Submissions[num.number - 1].time = VIs
+				Submissions[num.number - 1].time = {min:min, sec:sec, ms:ms}
 				Submissions[num.number - 1].info = info
 				var submission = Submissions[num.number - 1]
 			}
 			module.exports.save()
 
-			var result = `${submission.name} (${num.dq ? `DQ` : ``}${num.number}): ${getTimeString(VIs)} (${VIs})`
+			var result = `${submission.name} (${num.dq ? `DQ` : ``}${num.number}): ${min}:${sec.padStart(2, "0")}.${ms.padStart(3, "0")}`
 			result += info.length ? ` ${info}. ` : `. `
 			result += `Updated by ${msg.author.username}`
 
 			try {
 				var dm = await bot.getDMChannel(submission.id)
-				dm.createMessage(`Your time has been updated: ${getTimeString(VIs)} ${info}`)
+				dm.createMessage(`Your time has been updated: ${min}:${sec.padStart(2, "0")}.${ms.padStart(3, "0")} ${info}`)
 			} catch (e) {
 				result += `. **Warning:** Failed to notify user of their time update. `
 			}
@@ -1773,12 +1752,15 @@ module.exports = {
 			var Results = [...Submissions].sort((a,b) => {
 				if (a.time == null) return -1
 				if (b.time == null) return 1
-				return a.time - b.time
+				var time_a = a.time.min * 60 + a.time.sec + a.time.ms
+				var time_b = b.time.min * 60 + b.time.sec + b.time.ms
+				return time_a - time_b
 			})
 
 			for (var i = 0; i < Results.length; i++) {
 				var s = Results[i]
-				var line = `${i + 1}. ${s.name} ${getTimeString(s.time)} ${s.info}`
+				var line = `${i + 1}. ${s.name}`
+				line += s.time ? ` ${s.time.min}:${s.time.sec.padStart(2, "0")}.${s.time.ms.padStart(3, "0")} ${s.info}` : ` N/A`
 				if (num_bold-- > 0) line = `**${line}**`
 
 				// split up messages
@@ -1793,7 +1775,7 @@ module.exports = {
 			for (var i = 0; i < DQs.length; i++) {
 				var s = DQs[i]
 				var line = `DQ: ${s.name} `
-				if (s.time) line += s.time + ` `
+				if (s.time) line += `${s.time.min}:${s.time.sec.padStart(2, "0")}.${s.time.ms.padStart(3, "0")} `
 				if (s.info) line += s.info + ` `
 				line += `(${s.reason})`
 
