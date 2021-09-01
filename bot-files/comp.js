@@ -1739,12 +1739,12 @@ module.exports = {
 	GetResults:{
 		name: `GetResults`,
 		short_descrip: `Get the results for the task`,
-		full_descrip: `Usage: \`$getresults [num_bold]\`\nGets the results for a task. \`num_bold\` is the number of players who will be highlighted in the results. This uses the information provided from \`$settime\`. And produces the format: 1. Name Ti"me info, DQ: name (reason). If anyone's time has not been added to the database, they will be put at the top of the list. `,
+		full_descrip: `Usage: \`$getresults [num_bold]\`\nGets the results for a task. \`num_bold\` is the number of players who will be highlighted in the results. This uses the information provided from \`$settime\`. And produces the format: 1st. Name Ti"me info, DQ: name (reason). If anyone's time has not been added to the database, they will be put at the top of the list. This will bold top 3 by default.`,
 		hidden: true,
 		function:async function(bot, msg, args) {
 			if (notAllowed(msg)) return
 
-			var num_bold = 0
+			var num_bold = 3
 			if (args.length > 0 && !isNaN(args[0])) num_bold = args[0]
 
 			var result = `\`\`\`**__Task ${Task} Results:__**\n\n`
@@ -1759,7 +1759,18 @@ module.exports = {
 
 			for (var i = 0; i < Results.length; i++) {
 				var s = Results[i]
-				var line = `${i + 1}. ${s.name}`
+				var line = `. ${s.name}`
+
+				if ((i + 1) % 10 == 1 && (i + 1) % 100 != 11) {
+					line = `${i+1}st` + line
+				} else if ((i + 1) % 10 == 2 && (i + 1) % 100 != 12) {
+					line = `${i+1}nd` + line
+				} else if ((i + 1) % 10 == 3 && (i + 1) % 100 != 13) {
+					line = `${i+1}rd` + line
+				} else {
+					line = `${i+1}th` + line
+				}
+
 				line += s.time ? ` ${s.time.min}:${s.time.sec.padStart(2, "0")}.${s.time.ms.padStart(3, "0")} ${s.info}` : ` N/A`
 				if (num_bold-- > 0) line = `**${line}**`
 
