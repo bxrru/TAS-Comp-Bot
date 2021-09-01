@@ -870,21 +870,21 @@ module.exports = {
 
 		var addSubmission = function(submission, dq) {
 			// make folder // go into folder
-			var name = module.exports.fileSafeName(submission.name)
-			if (dq) {
-				text += 'md "DQ_' + name + '"\n'
-				text += 'cd "DQ_' + name + '"\n'
-			} else {
-				text += 'md "' + name + '"\n'
-				text += 'cd "' + name + '"\n'
-			}
+			var name = module.exports.fileSafeName(dq ? `dq_` + submission.name : submission.name)
+			//if (dq) {
+			//	text += 'md "DQ_' + name + '"\n'
+			//	text += 'cd "DQ_' + name + '"\n'
+			//} else {
+			//	text += 'md "' + name + '"\n'
+			//	text += 'cd "' + name + '"\n'
+			//}
 
 			// download .dat (internally labelled as .m64 because im lazy)
 			var filename = module.exports.properFileName(name)
 			if (submission.m64) text += `powershell -Command "Invoke-WebRequest ${submission.m64} -OutFile '${filename}.`+FILE_EXTENSION+`'\n`
 
 			// go back to main folder
-			text += 'cd ".."\n'
+			//text += 'cd ".."\n'
 		}
 
 		Submissions.forEach(s => addSubmission(s, false))
