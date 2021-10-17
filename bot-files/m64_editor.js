@@ -11,9 +11,9 @@ const request = require(`request`)
 // They will need to be manually set before running an instance of the bot
 // Make sure that the manage bad roms (etc.) settings in Mupen are disabled so that romhacks can be run from commandline
 
-const MUPEN_PATH = "B:/Mupen64/1.0.7_2/mupen64_1_8_0_encoding_fixed.exe" // `B:\\Mupen64\\1.0.9\\mupen64.exe`
-const LUA = `-lua "B:\\Mupen64\\Lua\\Encode\\inputs.lua"`
-const GAME_PATH = "B:/Mupen64/ROMs/Romhacks/" // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
+const MUPEN_PATH = "C:\\MupenServerFiles\\1.0.7_2\\mupen64_1_8_0_encoding_fixed.exe" // `B:\\Mupen64\\1.0.9\\mupen64.exe`
+const LUA = `-lua "C:\\MupenServerFiles\\EncodeLua\\inputs.lua"`
+const GAME_PATH = "C:\\MupenServerFiles\\ROMs\\" // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 const KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
   "FF 2B 5A 63": "Super Mario 64 (USA)", 
   "0E 3D AA 4E": "Super Mario 64 (JP)",
@@ -383,7 +383,7 @@ module.exports = {
     full_descrip: `Usage: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use \`$encode cancel\`.\n\nIf the bot is not processing the queue, contact an admin to use \`$encode ForceSkip\` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nTo see the queue length, use \`$encode queue\``,
     hidden: true,
     function: async function(bot, msg, args) {
-      return `This command is currently disabled`
+      //return `This command is currently disabled`
       //if (!users.hasCmdAccess(msg)) return `You do not have permission to use this command`
 
       // alternate uses
