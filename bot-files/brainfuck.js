@@ -68,11 +68,14 @@ module.exports = {
     function: async function(bot, msg, args, debug, silent){
       if (Instructions.length) return // prevents executing input as code (if every message is compiled)
       Init(msg.content)
-      var start = new Date()
+      const start = Date.now()
       while (pos < Instructions.length){
         await Apply_Command(bot, msg, Instructions[pos], silent)
         pos++
-        if (new Date() - start > TIME_LIMIT) return `Time Limit Exceded\nOutput: ${Output}\nCell: ${Cell}\nMemory: ${Mem}`
+        if (Date.now() - start > TIME_LIMIT) {
+          Instructions = []
+          return `Time Limit Exceded\nOutput: ${Output}\nCell: ${Cell}\nMemory: ${Mem}`
+        }
       }
       if (debug===undefined) debug = true
       if (debug) Output = `Output: ${Output}\nCell: ${Cell}\nMemory: ${Mem}`
