@@ -72,7 +72,7 @@ module.exports = {
       while (pos < Instructions.length){
         await Apply_Command(bot, msg, Instructions[pos], silent)
         pos++
-        if (Date.now() - start > TIME_LIMIT) {
+        if (Date.now() - start > TIME_LIMIT){
           Instructions = []
           return `Time Limit Exceded\nOutput: ${Output}\nCell: ${Cell}\nMemory: ${Mem}`
         }
