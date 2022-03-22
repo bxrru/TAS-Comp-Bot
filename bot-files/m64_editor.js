@@ -11,7 +11,7 @@ const request = require(`request`)
 // They will need to be manually set before running an instance of the bot
 // Make sure that the manage bad roms (etc.) settings in Mupen are disabled so that romhacks can be run from commandline
 
-const MUPEN_PATH = "C:\\MupenServerFiles\\1.0.7_2\\mupen64_1_8_0_encoding_fixed.exe" // `B:\\Mupen64\\1.0.9\\mupen64.exe`
+const MUPEN_PATH = "C:\\MupenServerFiles\\1.0.7_2\\a.exe" // `B:\\Mupen64\\1.0.9\\mupen64.exe`
 const LUA = `-lua "C:\\MupenServerFiles\\EncodeLua\\inputs.lua"`
 const GAME_PATH = "C:\\MupenServerFiles\\ROMs\\" // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 const KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
@@ -24,8 +24,11 @@ const KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it 
   "BC B0 D5 1E": "Green Comet (1.0.1)",
   "8B 70 48 88": "The Green Stars (1.3)",
   "34 13 32 75": "Another Mario Adventure (1.10)",
+  "89 96 84 12": "Another Mario Adventure (1.11)",
   //"63 83 23 38": "No Speed Limit 64 (Normal)"
-  "F5 FF C3 A7": "No Speed Limit 64 (B-Speed)"
+  "F5 FF C3 A7": "No Speed Limit 64 (B-Speed)",
+  "31 E0 AD FA": "Star Road (1.0.1)",
+  "A7 43 11 0F": "Mario Party 64 (1.1.2)"
 }
 
 var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user id}
@@ -397,14 +400,30 @@ module.exports = {
           }
           return `You do not have an encode request in queue`
 
-        } else if (args[0].toUpperCase() == `FORCESKIP` && users.hasCmdAccess(msg)) { // sending fake links can stall execution
+        } else if (args[0].toUpperCase() == `FORCESKIP` && (users.hasCmdAccess(msg) || msg.author.id == EncodingQueue[0].user)) { // sending fake links can stall execution
           var encode = EncodingQueue.shift()
           encode.process = 0 // ghost process is never killed. EncodingQueue[0].process.kill() // TODO: FIX THIS
           NextEncode(true, true)
-          return `**WARNING: Mupen is still open.** Contact the bot owner to close it and prevent a server crash. Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
+          return `**WARNING: Mupen may still be open.** Alerting <@532409333456175104> to close it and prevent a server crash. Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
 
         } else if (args[0].toUpperCase() == `QUEUE`) {
-          return `Queue length: ${EncodingQueue.length}` // TODO: maybe give more detailed info?
+		  var result = ``
+		  var i = 0
+		  for (const encode of EncodingQueue) {
+			//console.log(encode)
+			var dm = await bot.getDMChannel(encode.user) // no catch ?
+			//console.log(dm)
+			var username = dm.recipient.username
+			result += `${i++}. ${username} `
+			result += dm.id == encode.channel ? `DM` : `<#${encode.channel}>`
+			if (users.hasCmdAccess(msg) && args.length > 1 && args[1].toUpperCase() == `FULL`) { // cant be executed rn
+			  result += ` ${encode.m64} ${encode.st}`
+			} else {
+			  result += ` ${encode.filename}`
+			}
+			result += `\n`
+		  }
+          return result //`Queue length: ${EncodingQueue.length}` // TODO: maybe give more detailed info?
         }
       }
 
@@ -428,8 +447,8 @@ module.exports = {
           st_url = msg.attachments[i].url
         }
       }
-
-      if (!m64_url && !st_url) {
+	  
+      if (!m64_url || !st_url) {
         return `Missing/Invalid Arguments: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\``
       }
 
@@ -467,10 +486,11 @@ module.exports = {
           
           const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.${KNOWN_CRC[crc] == `Super Mario 64 (JP)` ? `n` : `z`}64" `
           const M64 = `-m64 "${process.cwd() + save.getSavePath().substring(1)}/encode.m64" `
-          const AVI = `-avi "encode.avi"`
+          const AVI = `-avi "encode.avi" `
           
-          //console.log(MUPEN_PATH + GAME + M64 + AVI + LUA)
-          var Mupen = cp.exec(MUPEN_PATH + GAME + M64 + AVI + LUA) // 3
+		  var cmd = MUPEN_PATH + GAME + M64 + AVI + LUA
+          //console.log(cmd, cmd.length)
+          var Mupen = cp.exec(cmd) // 3
           EncodingQueue[0].process = Mupen
           
           /*if (ping) { // one ping is bad enough, but maybe this is a good idea?
@@ -480,7 +500,7 @@ module.exports = {
           }*/
   
           Mupen.on('close', async (code, signal) => { // 4
-
+			//console.log(code, signal)
             if (fs.existsSync(MUPEN_PATH + `encode_failed.txt`)) {
               bot.createMessage(encode.channel, `Failed to playback m64 (CRC: ${crc}, ${KNOWN_CRC[crc]}) <@${encode.user}>`)
               fs.unlinkSync(MUPEN_PATH + `encode_failed.txt`)
@@ -489,6 +509,12 @@ module.exports = {
               bot.createMessage(encode.channel, `Error: avi not found <@${encode.user}>`)
 
             } else {
+			  var stats = fs.statSync(`./encode.avi`)
+			  if (stats.size == 0) {
+			    bot.createMessage(encode.channel, `Error: avi is 0 bytes. There was likely a crash when attempting to encode <@${encode.user}>`)
+				return
+			  }
+			  
               bot.createMessage(encode.channel, `Uploading...`)
               try {
                 cp.execSync(`ffmpeg -i encode.avi encode.mp4`)

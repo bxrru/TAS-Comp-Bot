@@ -34,7 +34,17 @@ bot.on("ready", async() => {
 	NAME = self.username
 	loadAllModules()
 	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
-	bot.createMessage(chat.chooseChannel('bot_dms'), `Connected (${miscfuncs.getDateTime()})`)
+	var connected_msg = `Connected (${miscfuncs.getDateTime()})`
+	if (fs.existsSync(`./crash.log`)) {
+		try {
+			var err = fs.readFileSync(`./crash.log`)
+			connected_msg += "\n```" + err + "```"
+			fs.unlinkSync(`./crash.log`)
+		} catch (e) {
+			connected_msg += "\n```Unknown Error: Failed to open crash log```"
+		}
+	}
+	bot.createMessage(chat.chooseChannel('bot_dms'), connected_msg)
 });
 
 function addCommand(name, func, descrip, fullDescrip, hide, aliases){

@@ -49,7 +49,7 @@ var updateFiles = function() {
 
     // download new files
     deleteFolderRecursive('./TAS-Comp-Bot') // just incase it's leftover
-    cp.execSync(`git clone "https://github.com/Barryyyyyy/TAS-Comp-Bot"`)
+    cp.execSync(`git clone "https://github.com/bxrru/TAS-Comp-Bot"`)
 
     // delete old files
     deleteFolderRecursive(Info.Bot_Files_Path)
@@ -85,8 +85,12 @@ var start = function() {
   var CompBot = cp.exec(`node ${Info.Bot_Files_Path}/main.js ${process.argv[2]}`, (error, stdout, stderr) => {
     if (error) {
       Started = false
-      console.error(`Error: ${error}`)
-      console.log("Press Enter to restart bot...")
+	  try {
+		fs.writeFileSync(`./crash.log`, `${error}`)
+	  } catch (e) {
+		console.error(`Failed to write crash log ${e}\n${error}`)
+	  }
+	  start() // restart anyways
     }
   });
 
@@ -95,12 +99,12 @@ var start = function() {
 
   // State exit code & update bot-files on custom exit code
   CompBot.on('close', (number, signal) => {
-    console.log(`Exit Code: ${number}` + number == 42 ? ` UPDATING` : ` (No Update)`)
+    console.log(`Exit Code: ${number}` + (number == 42 ? ` UPDATING` : ` (No Update)`))
     Started = false
     if (number == 42) {
       updateFiles()
     } else if (number == 0 || number == 69){
-      start() // keep the bot alive
+      start() // keep the bot alive intentionally
     }
   })
 
