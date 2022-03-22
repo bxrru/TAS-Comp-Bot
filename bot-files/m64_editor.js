@@ -11,24 +11,13 @@ const request = require(`request`)
 // They will need to be manually set before running an instance of the bot
 // Make sure that the manage bad roms (etc.) settings in Mupen are disabled so that romhacks can be run from commandline
 
-const MUPEN_PATH = "C:\\MupenServerFiles\\1.0.7_2\\a.exe" // `B:\\Mupen64\\1.0.9\\mupen64.exe`
+// these values are loaded from /saves/m64.json (don't edit them here)
+var MUPEN_PATH = "C:\\..."
 const LUA = `-lua "C:\\MupenServerFiles\\EncodeLua\\inputs.lua"`
-const GAME_PATH = "C:\\MupenServerFiles\\ROMs\\" // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
-const KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
-  "FF 2B 5A 63": "Super Mario 64 (USA)", 
-  "0E 3D AA 4E": "Super Mario 64 (JP)",
+var GAME_PATH = "C:\\..." // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
+var KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
   //"AF 5E 2D 01": "Ghosthack v2", // depricated
-  "E2 23 33 F9": "Ghost Race Transparent (v3)",
-  "8D 3C 49 DC": "Last Impact (1.2)",
-  "88 60 DB 69": "Shining Stars Repainted (1.1)",
-  "BC B0 D5 1E": "Green Comet (1.0.1)",
-  "8B 70 48 88": "The Green Stars (1.3)",
-  "34 13 32 75": "Another Mario Adventure (1.10)",
-  "89 96 84 12": "Another Mario Adventure (1.11)",
   //"63 83 23 38": "No Speed Limit 64 (Normal)"
-  "F5 FF C3 A7": "No Speed Limit 64 (B-Speed)",
-  "31 E0 AD FA": "Star Road (1.0.1)",
-  "A7 43 11 0F": "Mario Party 64 (1.1.2)"
 }
 
 var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user id}
@@ -404,7 +393,7 @@ module.exports = {
           var encode = EncodingQueue.shift()
           encode.process = 0 // ghost process is never killed. EncodingQueue[0].process.kill() // TODO: FIX THIS
           NextEncode(true, true)
-          return `**WARNING: Mupen may still be open.** Alerting <@532409333456175104> to close it and prevent a server crash. Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
+          return `Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
 
         } else if (args[0].toUpperCase() == `QUEUE`) {
 		  var result = ``
@@ -592,5 +581,14 @@ module.exports = {
       return result + "```"
     }
 
+  },
+  
+  load: function() {
+    var data = save.readObject(`m64.json`)
+	MUPEN_PATH = data.MupenPath
+	GAME_PATH = data.GamePath
+	Object.keys(data.CRC).forEach(crc => {
+		KNOWN_CRC[crc] = data.CRC[crc]
+	})
   }
 }
