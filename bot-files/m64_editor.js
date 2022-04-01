@@ -13,7 +13,8 @@ const request = require(`request`)
 
 // these values are loaded from /saves/m64.json (don't edit them here)
 var MUPEN_PATH = "C:\\..."
-const LUA = `-lua "C:\\MupenServerFiles\\EncodeLua\\inputs.lua"`
+var LUA_INPUTS = `C:\\MupenServerFiles\\EncodeLua\\inputs.lua`
+var LUA_TIME_LIMIT = "B:\\timelimit.lua"
 var GAME_PATH = "C:\\..." // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 var KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
   //"AF 5E 2D 01": "Ghosthack v2", // depricated
@@ -29,7 +30,7 @@ local timer = 0
 local last_frame = -1
 
 function autoexit()
-    if emu.samplecount() == last_frame then
+    if emu.samplecount() ~= last_frame then
         timer = timer + 1
     end
     last_frame = emu.samplecount()
@@ -43,6 +44,40 @@ end
 emu.atinput(autoexit)
 */
 
+const BitField = 0
+const UInt = 1
+const Integer = 2 // little endian
+const AsciiString = 3
+const UTFString = 4
+const Bytes = 5
+
+// m64 header information source: http://tasvideos.org/EmulatorResources/Mupen/M64.html
+// each entry is offset: [type, byte size, description]
+const HEADER = {
+  0x000: [Bytes, 4, `Signature: 4D 36 34 1A "M64\\x1A`],
+  0x004: [Integer, 4, `Version number (3)`],
+  0x008: [Integer, 4, `Movie UID (recording epoch time)`],
+  0x00C: [UInt, 4, `Number of VIs`],
+  0x010: [UInt, 4, `Rerecord count`],
+  0x014: [UInt, 1, `VIs per second`],
+  0x015: [UInt, 1, `Number of controllers`],
+  //0x016: [UInt, 2, `Reserved (0)`],
+  0x018: [Integer, 4, `number of input samples for any controller`],
+  0x01C: [UInt, 2, `Movie start type (from snapshot is 1, from power-on is 2)`],
+  0x01E: [UInt, 2, `Reserved (0)`],
+  0x020: [BitField, 4, `Controllers (from least to most significant, the bits are for controllers 1-4: present, has mempack, has rumblepak)`],
+  //0x024: [UInt, 160, `Reserved (0)`],
+  0x0C4: [AsciiString, 32, `internal name of ROM used when recording (directly from ROM)`],
+  0x0E4: [UInt, 4, `ROM CRC32`],
+  0x0E8: [UInt, 2, `ROM country code`],
+  //0x0EA: [UInt, 56 `Reserved (0)`],
+  0x122: [AsciiString, 64, `Video plugin used when recording`],
+  0x162: [AsciiString, 64, `Sound plugin used when recording`],
+  0x1A2: [AsciiString, 64, `Input plugin used when recording`],
+  0x1E2: [AsciiString, 64, `RSP plugin used when recording`],
+  0x222: [UTFString, 222, `Movie author (UTF-8)`],
+  0x300: [UTFString, 256, `Movie description (UTF-8)`]
+}
 
 // intToLittleEndian(int, int)
 // returns a buffer containing the base 10 int in little endian form
@@ -146,6 +181,128 @@ function downloadAndRun(attachment, callback, url, filename, filesize) {
   save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
   onDownload(filename, filesize, callback)
 }
+
+
+// ===========
+// Mupen Queue
+// ===========
+
+const DEFAULT_TIME_LIMIT = 5*60*30 // 5 minutes
+var previous_time_limit = DEFAULT_TIME_LIMIT + 1
+var MupenQueue = []
+
+function NextProcess(bot) {
+  //console.log(`verifying next can be run`)
+  if (MupenQueue.length == 0 || MupenQueue[0].process != null) {
+    return // nothing to run, or something is currently running
+  }
+  var request = MupenQueue[0]
+  while (request.skip) {
+    if (MupenQueue.length == 0) return
+    MupenQueue.shift()
+    request = MupenQueue[0]
+  }
+  //console.log(`Running Mupen ${request}`)
+
+  downloadAndRun(
+    undefined,
+    () => {
+      
+      // auto detect game
+      var m64 = fs.readFileSync(save.getSavePath() + `/tas.m64`)
+      var crc = m64.slice(0xE4, 0xE4 + 4)
+      crc = bufferToStringLiteral(crc.reverse())
+      if (crc in KNOWN_CRC == false) { // what if the user is the bot (internal calls?)
+        if (request.channel_id == null) {
+          console.log(`ERROR: unknown CRC ${crc} when running Mupen\n${request}`)
+        } else {
+          bot.createMessage(request.channel_id, `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`)
+        }
+        NextProcess(bot)
+        return
+      }
+
+      // set timelimit if it's different
+      if (request.time_limit != previous_time_limit) {
+        // open timelimit.txt and put in the number
+        // have timelimit.lua read that number
+        previous_time_limit = request.time_limit
+      }
+
+      downloadAndRun(
+        undefined,
+        () => { // run mupen
+          
+          request.startup()
+          const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.${KNOWN_CRC[crc] == `Super Mario 64 (JP)` ? `n` : `z`}64" `
+          var Mupen = cp.exec(MUPEN_PATH + GAME + request.cmdflags)
+          MupenQueue[0].process = Mupen
+          Mupen.on(`close`, async (code, signal) => {
+
+            if (fs.existsSync(`TLE.txt`)) { // currently do nothing on time limit exceeded...
+              fs.unlinkSync(`TLE.txt`)
+              request.callback(true) // pass true if the run timed out
+            } else {
+              request.callback(false)
+            }
+            
+            MupenQueue.shift()
+            NextProcess(bot)
+            
+          })
+
+        },
+        request.st_url,
+        "tas.st"
+      )
+
+    },
+    request.m64_url,
+    "tas.m64"
+  )
+}
+
+// adds a mupen request to the queue. Returns the 0-indexed position of the request
+// the m64/st are saved as tas.m64/st
+// if you want to run mupen with the -m64 argument that must be explicitly passed here
+// startup is called after the download is complete but before mupen is run
+// callback is called once the mupen process closes
+// all processes are run with -lua ./timelimit.lua;
+// channel_id is used to send a message if no game matches the tas being loaded
+// user_id will be pinged if no game matches the tas being loaded (and a valid channel_id is provided)
+// Ex. QueueAdd(bot, "...m64", "...st", ["-avi", "encode.avi", "-lua", "C:\\file.lua"], ()=>{}, ()=>{}, 0, 0)
+function QueueAdd(bot, m64_url, st_url, cmdline_args, startup, callback, channel_id = null, user_id = null, time_limit = DEFAULT_TIME_LIMIT) {
+  //console.log(`Adding ${m64_url}\n${st_url}\n${cmdline_args}\n${channel_id} ${user_id}\n${time_limit}`)
+  var cmd = ``
+  for (var i = 0; i < cmdline_args.length; ++i) {
+    if (cmdline_args[i] == `-lua`) {
+      cmd += `-lua "${LUA_TIME_LIMIT};${cmdline_args[++i]}"`
+    } else if (cmdline_args[i].startsWith(`-`)) {
+      cmd += cmdline_args[i]
+    } else {
+      cmd += ` "${cmdline_args[i]}" `
+    }
+  }
+  if (!cmdline_args.includes(`-lua`)) {
+    cmd += ` -lua "${LUA_TIME_LIMIT}"` // always run a timelimit lua file
+  }
+  //console.log(`cmd: "${cmd}"`)
+  MupenQueue.push({
+    m64_url: m64_url, st_url: st_url, cmdflags: cmd,
+    startup: startup, callback: callback,
+    channel_id: channel_id, user_id: user_id,
+    time_limit: time_limit, skip: false, process: null
+  })
+  //console.log(MupenQueue)
+  if (MupenQueue.length == 1) {
+    NextProcess(bot)
+  }
+  return MupenQueue.length
+}
+
+// ================
+// Discord Commands
+// ================
 
 
 module.exports = {
@@ -271,7 +428,7 @@ module.exports = {
   author:{
     name: `author`,
     aliases: [`authors`, `auth`],
-    short_descrip: `Edit athor's name`,
+    short_descrip: `Edit author's name`,
     full_descrip: `Usage: \`$auth [new name] <m64 attachment>\`\nChanges the author in the attached m64 file. You can uses spaces in the new name.`,
     hidden: true,
     function: async function(bot, msg, args) {
@@ -321,9 +478,23 @@ module.exports = {
     }
   },
 
+  header:{
+    name: `m64header`,
+    short_descrip: `List header table`,
+    full_descrip: `Usage: \`$header\`\nLists the m64 header table`,
+    hidden: true,
+    function: async function(bot, msg, args) {
+      var result = ``
+      Object.keys(HEADER).forEach(offset => {
+        result += `0x${parseInt(offset).toString(16).toUpperCase().padStart(2, `0`)} ${HEADER[offset][2]}\n`
+      })
+      return "```" + result + "```"
+    }
+  },
+
   info:{
     name: `m64info`,
-    aliases: [`m64header`],
+    aliases: [],
     short_descrip: `Reads important header data`,
     full_descrip: `Usage: \`$m64info <m64 attachment>\`\nReads the authors, description, rerecords, and ROM CRC.`,
     hidden: true,
@@ -379,39 +550,45 @@ module.exports = {
       //if (!users.hasCmdAccess(msg)) return `You do not have permission to use this command`
 
       // alternate uses
+      // toDo: mupen process command (users with access can cancel anything in the queue after providing an index)
       if (args.length == 1) {
         if (args[0].toUpperCase() == `CANCEL`) {
-          for (var i = 0; i < EncodingQueue.length; i++) {
-            if (EncodingQueue[i].user == msg.author.id && EncodingQueue[i].process == undefined && !EncodingQueue[i].skip) {
-              EncodingQueue[i].skip = true // mark to be skipped instead of removing it to try and avoid async problems
-              return `${EncodingQueue[i].filename} will be skipped`
+          for (var i = 0; i < MupenQueue.length; i++) {
+            if (MupenQueue[i].user_id == msg.author.id && MupenQueue[i].process == null && !MupenQueue[i].skip) {
+              MupenQueue[i].skip = true // mark to be skipped instead of removing it to try and avoid async problems
+              var url = MupenQueue[i].m64_url.split('/')
+              return `${url[url.length-1]} will be skipped` // gives filename
             }
           }
           return `You do not have an encode request in queue`
 
-        } else if (args[0].toUpperCase() == `FORCESKIP` && (users.hasCmdAccess(msg) || msg.author.id == EncodingQueue[0].user)) { // sending fake links can stall execution
-          var encode = EncodingQueue.shift()
-          encode.process = 0 // ghost process is never killed. EncodingQueue[0].process.kill() // TODO: FIX THIS
-          NextEncode(true, true)
+        } else if (args[0].toUpperCase() == `FORCESKIP` && (users.hasCmdAccess(msg) || msg.author.id == MupenQueue[0].user)) { // sending fake links can stall execution
+          var encode = MupenQueue.shift()
+          encode.process = 0 // ghost process is never killed. EncodingQueue[0].process.kill() // TODO: FIX THIS ?
+          NextProcess(bot)
           return `Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
 
-        } else if (args[0].toUpperCase() == `QUEUE`) {
-		  var result = ``
-		  var i = 0
-		  for (const encode of EncodingQueue) {
-			//console.log(encode)
-			var dm = await bot.getDMChannel(encode.user) // no catch ?
-			//console.log(dm)
-			var username = dm.recipient.username
-			result += `${i++}. ${username} `
-			result += dm.id == encode.channel ? `DM` : `<#${encode.channel}>`
-			if (users.hasCmdAccess(msg) && args.length > 1 && args[1].toUpperCase() == `FULL`) { // cant be executed rn
-			  result += ` ${encode.m64} ${encode.st}`
-			} else {
-			  result += ` ${encode.filename}`
-			}
-			result += `\n`
-		  }
+        } else if (args[0].toUpperCase() == `QUEUE` && users.hasCmdAccess(msg)) {
+		      var result = ``
+          MupenQueue.forEach(async(process, index) => {
+            result += `${index}. `
+            if (process.user_id == null) {
+              result += `[no user] `
+            } else {
+              var dm = await bot.getDMChannel(process.user_id) // no catch...
+              result += `${dm.recipient.username} `
+            }
+            
+            if (process.channel_id == null) {
+              result += `[no channel]`
+            } else if (process.channel_id == dm.id) {
+              result += `DM`
+            } else {
+              result += `<#${process.channel_id}>`
+            }
+
+            result += '\n'
+          })
           return result //`Queue length: ${EncodingQueue.length}` // TODO: maybe give more detailed info?
         }
       }
@@ -441,128 +618,52 @@ module.exports = {
         return `Missing/Invalid Arguments: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\``
       }
 
-      var filename = m64_url.split(`/`) // ensure contains / ?
+      var filename = m64_url.split(`/`) // doesnt ensure it contains / because it should contain it...
       filename = filename[filename.length - 1]
       filename = filename.substring(0, filename.length - 4)
 
-      function NextEncode(ping = true, delayed_retry = true) {
-        if (EncodingQueue.length == 0 || EncodingQueue[0].process != undefined) {
-          return // nothing to encode, or needs to wait
-        }
-
-        var encode = EncodingQueue[0] // using this in the following functions instead of parameters is cringe
-        EncodingQueue[0].process = true // don't remove right away so new encoding requests don't try to run at the same time
-
-        if (encode.skip) {
-          EncodingQueue.shift()
-          NextEncode(true, true)
-          return
-        }
-
-        function runMupen() {
-          //bot.createMessage(encode.channel_id, `Encoding...`)
+      var pos = QueueAdd(
+        bot,
+        m64_url,
+        st_url,
+        ["-m64", process.cwd()+save.getSavePath().substring(1)+"/tas.m64", "-avi", "encode.avi", "-lua", LUA_INPUTS],
+        () => {
           if (fs.existsSync(`./encode.avi`)) fs.unlinkSync(`./encode.avi`) // remove previous encode
           if (fs.existsSync(`./encode.mp4`)) fs.unlinkSync(`./encode.mp4`)
-          
-          // auto detect game
-          var m64 = fs.readFileSync(save.getSavePath() + `/encode.m64`)
-          var crc = m64.slice(0xE4, 0xE4 + 4)
-          crc = bufferToStringLiteral(crc.reverse())
-          if (crc in KNOWN_CRC == false) {
-            bot.createMessage(encode.channel, `<@${encode.user}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`)
+        },
+        async () => {
+          if (!fs.existsSync(`./encode.avi`)) {
+            bot.createMessage(msg.channel.id, `Error: avi not found <@${msg.author.id}>`)
             return
           }
-          
-          const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.${KNOWN_CRC[crc] == `Super Mario 64 (JP)` ? `n` : `z`}64" `
-          const M64 = `-m64 "${process.cwd() + save.getSavePath().substring(1)}/encode.m64" `
-          const AVI = `-avi "encode.avi" `
-          
-		  var cmd = MUPEN_PATH + GAME + M64 + AVI + LUA
-          //console.log(cmd, cmd.length)
-          var Mupen = cp.exec(cmd) // 3
-          EncodingQueue[0].process = Mupen
-          
-          /*if (ping) { // one ping is bad enough, but maybe this is a good idea?
-            bot.createMessage(encode.channel, `<@${encode.user}> your encode is being processed`).catch(
-              err => console.log(`Failed Encode Processing Message` + err)
-            )
-          }*/
-  
-          Mupen.on('close', async (code, signal) => { // 4
-			//console.log(code, signal)
-            if (fs.existsSync(MUPEN_PATH + `encode_failed.txt`)) {
-              bot.createMessage(encode.channel, `Failed to playback m64 (CRC: ${crc}, ${KNOWN_CRC[crc]}) <@${encode.user}>`)
-              fs.unlinkSync(MUPEN_PATH + `encode_failed.txt`)
 
-            } else if (!fs.existsSync(`./encode.avi`)) {
-              bot.createMessage(encode.channel, `Error: avi not found <@${encode.user}>`)
-
-            } else {
-			  var stats = fs.statSync(`./encode.avi`)
-			  if (stats.size == 0) {
-			    bot.createMessage(encode.channel, `Error: avi is 0 bytes. There was likely a crash when attempting to encode <@${encode.user}>`)
-				return
-			  }
-			  
-              bot.createMessage(encode.channel, `Uploading...`)
-              try {
-                cp.execSync(`ffmpeg -i encode.avi encode.mp4`)
-                var video = fs.readFileSync(`./encode.mp4`)
-                var reply = ping ? `Encode Complete <@${encode.user}>` : `Encode Complete`
-                await bot.createMessage(encode.channel, reply, {file: video, name: `${encode.filename}.mp4`}) // 5
-                fs.unlinkSync(`./encode.mp4`)
-              } catch (err) {
-                bot.createMessage(encode.channel, `Something went wrong <@${encode.user}> \`\`\`${err}\`\`\``)
-              }
-            }
-            
-            EncodingQueue.shift() // now it's safe to remove this from the queue
-            NextEncode(true, true)
-            
-          })
-        }
-
-        function downloadST() {
-          downloadAndRun(undefined, runMupen, encode.st, `encode.st`) // 2 -> 3
-        }
-  
-        downloadAndRun(undefined, downloadST, encode.m64, `encode.m64`) // 1 -> 2
-
-        // have a 1 time delay to check again in 5s (i dont trust asyncronous bs, but if it skips something twice I'll be damned)
-        if (delayed_retry) {
-          setTimeout(() => NextEncode(true, false), 5000)
-        }
-        
-        return
-      }
-
-      function AddToEncodingQueue(m64_url, st_url, filename, channel_id, user_id) {
-        // add to queue
-        EncodingQueue.push({
-          m64: m64_url,
-          st: st_url,
-          filename: filename,
-          channel: channel_id,
-          user: user_id,
-          process: undefined,
-          skip: false
-        })
-
-
-        if (EncodingQueue.length == 1) {
-          NextEncode(false, true)
-          return "Queue position 0: your encode is processing..."
-        } else if (EncodingQueue.length == 2) {
-          return "Queue position 1: your encode will be processed next"
-        } else {
-          return `Queue position ${EncodingQueue.length - 1}`
-        }
-      }
-
+          var stats = fs.statSync(`./encode.avi`)
+          if (stats.size == 0) {
+            bot.createMessage(msg.channel.id, `Error: avi is 0 bytes. There was likely a crash when attempting to encode <@${msg.author.id}>`)
+            return
+          }
       
-
-      return AddToEncodingQueue(m64_url, st_url, filename, msg.channel.id, msg.author.id)
-
+          bot.createMessage(msg.channel.id, `Uploading...`)
+          try {
+            cp.execSync(`ffmpeg -i encode.avi encode.mp4`) // TODO: detect if server is boosted (filesize limit) and pass -fs flag
+            var video = fs.readFileSync(`./encode.mp4`)
+            await bot.createMessage(msg.channel.id, `Encode Complete <@${msg.author.id}>`, {file: video, name: `${filename}.mp4`})
+            fs.unlinkSync(`./encode.mp4`)
+          } catch (err) {
+            bot.createMessage(msg.channel.id, `Something went wrong <@${msg.author.id}> \`\`\`${err}\`\`\``)
+          }
+        },
+        msg.channel.id,
+        msg.author.id,
+        2*60*30 + 30*30 // 2.5 min
+      )
+      
+      if (pos == 1) {
+        return "Queue position 1: your encode is processing..."
+      } else if (EncodingQueue.length == 2) {
+        return "Queue position 2: your encode will be processed next"
+      }
+      return `Queue position ${pos}`
     }
   },
 
@@ -585,10 +686,14 @@ module.exports = {
   
   load: function() {
     var data = save.readObject(`m64.json`)
-	MUPEN_PATH = data.MupenPath
-	GAME_PATH = data.GamePath
-	Object.keys(data.CRC).forEach(crc => {
-		KNOWN_CRC[crc] = data.CRC[crc]
-	})
-  }
+	  MUPEN_PATH = data.MupenPath
+	  GAME_PATH = data.GamePath
+    LUA_INPUTS = data.InputLuaPath
+    LUA_TIME_LIMIT = data.TimeoutLuaPath
+	  Object.keys(data.CRC).forEach(crc => {
+		  KNOWN_CRC[crc] = data.CRC[crc]
+	  })
+  },
+
+  Process: QueueAdd
 }

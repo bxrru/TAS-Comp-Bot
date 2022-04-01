@@ -11,8 +11,10 @@
 		"89 96 84 12": "Another Mario Adventure (1.11)",
 		"F5 FF C3 A7": "No Speed Limit 64 (B-Speed)",
 		"31 E0 AD FA": "Star Road (1.0.1)",
-		"A7 43 11 0F": "Mario Party 64 (1.1.2)",
+		"A7 43 11 0F": "Mario Party 64 (1.1.2)"
 	},
 	"MupenPath": "C:\\MupenServerFiles\\1.0.7_2\\a.exe",
-	"GamePath": "C:\\MupenServerFiles\\ROMs\\"
+	"GamePath": "C:\\MupenServerFiles\\ROMs\\",
+	"InputLuaPath": "C:\\MupenServerFiles\\EncodeLua\\inputs.lua",
+	"TimeoutLuaPath": "C:\\MupenServerFiles\\TimingLua\\timelimit.lua"
 }

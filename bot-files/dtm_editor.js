@@ -603,7 +603,7 @@ module.exports = {
 	short_name: `dtm`,
 
   header:{
-    name: `header`,
+    name: `dtmheader`,
     short_descrip: `List header table`,
     full_descrip: `Usage: \`$header\`\nLists the dtm header table`,
     hidden: true,
@@ -617,7 +617,7 @@ module.exports = {
   },
 
   read:{
-    name: `read`,
+    name: `dtmread`,
     short_descrip: `Read specific header data`,
     full_descrip: `Usage: \`$read <offset> <dtm attachment>\`\nReads the specified offset in the header. The offset must be a valid start location of some data.`,
     hidden: true,
@@ -670,7 +670,7 @@ module.exports = {
   },
 
   write:{
-    name: `write`,
+    name: `dtmwrite`,
     short_descrip: `Edit header data`,
     full_descrip: `Usage: \`$write <offset> <arguments...> <dtm attachment>\`\nWrites the arguments to the specified offset in the header. The offset must be a valid start location of some data.`,
     hidden: true,

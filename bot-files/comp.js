@@ -6,6 +6,8 @@ const fs = require("fs")
 const request = require("request")
 const chrono = require("chrono-node")
 const Announcement = require("./announcement.js")
+const Mupen = require("./m64_editor.js")
+const save = require("./save.js")
 
 var AllowSubmissions = false
 var Task = 1
@@ -119,6 +121,81 @@ function getTimeString(VIs) {
   return min > 0 ? `${min}'${sec}"${ms}` : `${sec}"${ms}`
 }
 
+// 3min time limit by default
+function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel_id = null, err_user_id = null) {
+	const LUAPATH = "C:\\MupenServerFiles\\TimingLua\\" // TODO: put in config?
+	return Mupen.Process( // returns position in queue
+		bot,
+		Submissions[submission_number].m64,
+		Submissions[submission_number].st,
+		["-lua", LUAPATH + "TASCompTiming.lua"],
+		() => {
+			if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
+			fs.copyFileSync(save.getSavePath() + "/tas.m64", LUAPATH + "submission.m64")
+			if (fs.existsSync(LUAPATH + "submission.st")) fs.unlinkSync(LUAPATH + "submission.st")
+			fs.copyFileSync(save.getSavePath() + "/tas.st", LUAPATH + "submission.st")
+		},
+		async (TLE) => {
+			var admin_msg = `${Submissions[submission_number].name} (${submission_number+1}): `
+			if (TLE) {
+				admin_msg += `time limit exceeded (their run must be timed manually)`
+				try {
+					var dm = await bot.getDMChannel(Submissions[submission_number].id)
+					dm.createMessage(`Your submission exceeds the process time limit. It will be manually timed by a host at a later time.`)
+				} catch (e) {
+					admin_msg += `**Warning:** Failed to notify user of their time update. `
+				}
+				notifyHosts(bot, admin_msg, "Timing")
+				return
+			}
+			var result = fs.readFileSync(LUAPATH + "result.txt").toString()
+			if (result.startsWith("DQ")) {
+				var reason = result.split(' ')
+				reason.shift()
+				reason = reason.join(' ')
+				admin_msg += `DQ [${reason}]. `
+				try {
+					var dm = await bot.getDMChannel(Submissions[submission_number].id)
+					dm.createMessage(`Your submission is currently disqualified. Reason: \`${reason}\``)
+				} catch (e) {
+					admin_msg += `**Warning:** Failed to notify user of their time update. `
+				}
+			} else {
+				var frames = Number(result.split(' ')[1])
+				Submissions[submission_number].VIs = frames * 2
+				admin_msg += `||${getTimeString(frames*2)} (${frames}f)||. `
+				try {
+					var dm = await bot.getDMChannel(Submissions[submission_number].id)
+					dm.createMessage(`Your time has been updated: ${getTimeString(frames * 2)} (${frames}f)`)
+				} catch (e) {
+					admin_msg += `**Warning:** Failed to notify user of their time update. `
+				}
+			}
+			fs.unlinkSync(LUAPATH + "result.txt")
+			admin_msg += `Auto-timed by lua`
+			if (err_channel_id) bot.createMessage(err_channel_id, admin_msg) // assume timing was manually requested
+			notifyHosts(bot, admin_msg, `Timing`)
+		},
+		err_channel_id,
+		err_user_id,
+		time_limit
+	)
+}
+
+// msg is the DM that contains a submitted file
+function CheckAutoTiming(bot, msg) {
+	var updated_m64 = false
+	msg.attachments.forEach((attachment) => {
+		updated_m64 |= attachment.url.endsWith(".m64")
+	})
+	if (!updated_m64) return // make sure they changed the inputs (though there are cases where changing st alone can update time [rng/timers])
+	Submissions.forEach((submission, index) => {
+		if (submission.id != msg.author.id) return
+		if (submission.m64.length == 0 || submission.st.length == 0) return // make sure there is both an m64 and st
+		AutoTimeEntry(bot, index)
+	})
+}
+
 module.exports = {
 	name: "Competition",
 	short_name: "comp",
@@ -203,10 +280,10 @@ module.exports = {
 
 			TimedTask = false
 			AllowSubmissions = false
-			Task += 1 // increment task
+			//Task += 1 // increment task
 			module.exports.save()
 
-			var result = `No longer accepting submissions for Task ${Task - 1}. `
+			var result = `No longer accepting submissions for Task ${Task}. `
 
 			if (Announcement.KillDelayedFunction("COMP-RELEASE", true)) {
 				result += `Public release has been cancelled. `
@@ -227,13 +304,13 @@ module.exports = {
 
 			if (args.length > 0 && TaskChannel != ``) {
 				try {
-					bot.createMessage(TaskChannel, `Task ${Task - 1} is complete! Thank you for participating!`)
+					bot.createMessage(TaskChannel, `Task ${Task} is complete! Thank you for participating!`)
 				} catch (e) {
 					result += `Failed to send Time's Up! message to the Task Channel. `
 				}
 			}
 
-			notifyHosts(bot, result + `Ready for Task ${Task}!`)
+			notifyHosts(bot, result + `Ready for Task ${Task+1}!`)
 			return result
 		}
 	},
@@ -1224,8 +1301,8 @@ module.exports = {
 		}
 
 		if (m64 && st){
-			var msg = `"Submission Status: \`2/2\` Submission complete.\nm64: ${submission.m64}\nst: ${submission.st}`
-			msg += submission.time == null ? `\nTime: No Time Available Yet` : `Time: ${getTimeString(submission.time)} ${submission.info}`
+			var msg = `Submission Status: \`2/2\` Submission complete.\nm64: ${submission.m64}\nst: ${submission.st}`
+			msg += submission.time == null ? `\nTime: No Time Available Yet` : `\nTime: ${getTimeString(submission.time)} (${submission.time}) ${submission.info}`
 			return msg
 		} else if (m64 && !st){
 			return "Submission Status: `1/2` No st received.\nm64: "+submission.m64
@@ -1425,7 +1502,7 @@ module.exports = {
 			module.exports.forwardSubmission(bot, msg.author.id, file.name, attachment.url)
 
 		} catch (e) {
-			notifyHosts(bot, "Failed to store submission url from " + msg.author.username)
+			notifyHosts(bot, "Failed to store submission url from " + msg.author.username, `Error`)
 		}
 
 	},
@@ -1451,6 +1528,7 @@ module.exports = {
 			// upload the file then delete it locally
 			await module.exports.storeFile(bot, file, msg)
 			fs.unlinkSync(Save.getSavePath() + "/" + filename)
+			CheckAutoTiming(bot, msg)
 		}
 
 
@@ -1741,7 +1819,7 @@ module.exports = {
 			}
 			module.exports.save()
 
-			var result = `${submission.name} (${num.dq ? `DQ` : ``}${num.number}): ${getTimeString(VIs)} (${VIs})`
+			var result = `${submission.name} (${num.dq ? `DQ` : ``}${num.number}): ||${getTimeString(VIs)} (${VIs})||`
 			result += info.length ? ` ${info}. ` : `. `
 			result += `Updated by ${msg.author.username}`
 
@@ -1754,6 +1832,21 @@ module.exports = {
 
 			notifyHosts(bot, result, `Timing`)
 			return result
+		}
+	},
+
+	AutoTime:{
+		name:`AutoTime`,
+		short_descrip: `Time a submission via Mupen-lua`,
+		full_descrip: `Usage: \`$autotime <submission_number>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. This will disable the default time limit (runs longer than 3min can still be timed with the script through this command).`,
+		hidden: true,
+		function: async function(bot, msg, args) {
+			if (notAllowed(msg)) return `Missing permissions`
+			if (args.length < 1) return `Missing Argument: \`$autotime <submission_number>\``
+			var submission_number = getSubmissionNumber(args[0])
+			submission_number = submission_number.number - 1 // assuming non DQ since I need to rework that anyways
+			var pos = AutoTimeEntry(bot, submission_number, -1, msg.channel.id, msg.author.id)
+			return `Position in queue: ${pos}`
 		}
 	},
 
