@@ -16,7 +16,7 @@ var Host_IDs = []
 var SubmissionsChannel = ""
 var Channel_ID = ""
 var Message_ID = ""
-var DQs = [] // same as Submissions but with 'Reason' field as well
+var DQs = [] // same as Submissions but with 'Reason' field as well // toDO: replace with bool dq field in Submissions
 var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, time, info}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
 // time is saved in VIs, info is additional info for results (rerecords, A presses, etc.)
@@ -37,6 +37,8 @@ var SubmittedRole = ""
 
 const UPDATES = [`UPDATE`,`WARNING`,`ERROR`,`NEW SUBMISSION`,`DQ`,`TIMER`,`FILE`,`TIMING`]
 var IgnoreUpdates = {} // id: []
+
+var AllowAutoTime = false
 
 // TODO: Implement a confirmation of request feature that makes people
 // resend a task request with some number to actually start the task
@@ -154,21 +156,30 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 				reason.shift()
 				reason = reason.join(' ')
 				admin_msg += `DQ [${reason}]. `
-				try {
+				if (Submissions[submission_number].dq && Submissions[submission_number].info == reason) {
+					admin_msg += `(result unchanged) `
+				} else {
+					Submissions[submission_number].dq = true
+					Submissions[submission_number].info = reason
+					module.exports.save()
 					var dm = await bot.getDMChannel(Submissions[submission_number].id)
-					dm.createMessage(`Your submission is currently disqualified. Reason: \`${reason}\``)
-				} catch (e) {
-					admin_msg += `**Warning:** Failed to notify user of their time update. `
+					dm.createMessage(`Your submission is currently disqualified. Reason: \`${reason}\``).catch(e => {
+						admin_msg += `**Warning:** Failed to notify user of their time update. `
+					})
 				}
+				
 			} else {
 				var frames = Number(result.split(' ')[1])
-				Submissions[submission_number].VIs = frames * 2
 				admin_msg += `||${getTimeString(frames*2)} (${frames}f)||. `
-				try {
+				if (Submissions[submission_number].time == frames * 2) {
+					admin_msg += `(time unchanged) `
+				} else {
+					Submissions[submission_number].time = frames * 2
+					module.exports.save()
 					var dm = await bot.getDMChannel(Submissions[submission_number].id)
-					dm.createMessage(`Your time has been updated: ${getTimeString(frames * 2)} (${frames}f)`)
-				} catch (e) {
-					admin_msg += `**Warning:** Failed to notify user of their time update. `
+					dm.createMessage(`Your time has been updated: ${getTimeString(frames * 2)} (${frames}f)`).catch(e => {
+						admin_msg += `**Warning:** Failed to notify user of their time update. `
+					})
 				}
 			}
 			fs.unlinkSync(LUAPATH + "result.txt")
@@ -184,6 +195,7 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 
 // msg is the DM that contains a submitted file
 function CheckAutoTiming(bot, msg) {
+	if (!AllowAutoTime) return
 	var updated_m64 = false
 	msg.attachments.forEach((attachment) => {
 		updated_m64 |= attachment.url.endsWith(".m64")
@@ -1244,6 +1256,7 @@ module.exports = {
 			st_size: st_filesize,
 			namelocked: false,
 			time: null,
+			dq: false,
 			info: ''
 		}
 
@@ -1300,9 +1313,18 @@ module.exports = {
 			var st = submission.st.length != 0;
 		}
 
-		if (m64 && st){
-			var msg = `Submission Status: \`2/2\` Submission complete.\nm64: ${submission.m64}\nst: ${submission.st}`
-			msg += submission.time == null ? `\nTime: No Time Available Yet` : `\nTime: ${getTimeString(submission.time)} (${submission.time}) ${submission.info}`
+		if (m64 && st) {
+			var msg = `Submission Status: \`2/2\` Submission complete\n`
+			if (submission.dq) {
+				msg += `**WARNING** Your run is currently disqualified!\n`
+				msg += `Reason: ${submission.info}`
+			} else if (submission.time != null) {
+				msg += `Time: ${getTimeString(submission.time)} (${submission.time/2}f)`
+				if (submission.info != ``) msg += ` ` + submission.info
+			} else {
+				`Your run has not been timed yet.`
+			}
+			msg += `\nm64: ${submission.m64}\nst: ${submission.st}`
 			return msg
 		} else if (m64 && !st){
 			return "Submission Status: `1/2` No st received.\nm64: "+submission.m64
@@ -1356,7 +1378,8 @@ module.exports = {
 			releasedate: ReleaseDate.toString(),
 			warnings: TimeRemainingWarnings,
 			roletype: RoleStyle,
-			ignoredupdates: IgnoreUpdates
+			ignoredupdates: IgnoreUpdates,
+			autotime: AllowAutoTime
 		}
 		Save.saveObject("submissions.json", data)
 	},
@@ -1398,6 +1421,7 @@ module.exports = {
 			IgnoreUpdates[id] = []
 			while (data.ignoredupdates[id].length) IgnoreUpdates[id].push(data.ignoredupdates[id].pop())
 		})
+		AllowAutoTime = data.autotime == undefined ? false : data.autotime
 	},
 
 	// return whether an attachment is an m64 or not
@@ -1838,15 +1862,33 @@ module.exports = {
 	AutoTime:{
 		name:`AutoTime`,
 		short_descrip: `Time a submission via Mupen-lua`,
-		full_descrip: `Usage: \`$autotime <submission_number>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. This will disable the default time limit (runs longer than 3min can still be timed with the script through this command).`,
+		full_descrip: `Usage: \`$autotime <submission_number or 'all'>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. If only 1 run is autotimed, this will disable the default time limit (runs longer than 3min can still be timed with the script through this command). This will DM participants if their time changes.`,
 		hidden: true,
 		function: async function(bot, msg, args) {
 			if (notAllowed(msg)) return `Missing permissions`
-			if (args.length < 1) return `Missing Argument: \`$autotime <submission_number>\``
+			if (args.length < 1) return `Missing Argument: \`$autotime <submission_number or 'all'>\``
+			if (args[0] == 'all') {
+				for (var i = 0; i < Submissions.length; ++i) {
+					AutoTimeEntry(bot, i)
+				}
+				return `All ${Submissions.length} submissions are in queue to be timed.`
+			}
 			var submission_number = getSubmissionNumber(args[0])
 			submission_number = submission_number.number - 1 // assuming non DQ since I need to rework that anyways
 			var pos = AutoTimeEntry(bot, submission_number, -1, msg.channel.id, msg.author.id)
 			return `Position in queue: ${pos}`
+		}
+	},
+
+	ToggleAutoTime:{
+		name: `ToggleAutoTime`,
+		short_descrip: `enable timing on submission`,
+		full_descrip: `Usage: \`$toggleautotime\`\nThis toggles (turns on/off) auto timing as soon as competitors submit m64s. Use this command to stop the bot from timing runs with an outdated script (while still allowing people to submit). This does not disable \`$AutoTime\``,
+		hidden: true,
+		function: async function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			AllowAutoTime = !AllowAutoTime
+			return `Timing when a new file is received is now \`${AllowAutoTime ? 'enabled' : 'disabled'}\``
 		}
 	},
 
@@ -1861,41 +1903,38 @@ module.exports = {
 			var num_bold = 0
 			if (args.length > 0 && !isNaN(args[0])) num_bold = args[0]
 
-			var result = `\`\`\`**__Task ${Task} Results:__**\n\n`
+			var result = `\`\`\`**__Task ${Task} Results:__**\n`
 
-			var Results = [...Submissions].sort((a,b) => {
-				if (a.time == null) return -1
-				if (b.time == null) return 1
-				return a.time - b.time
-			})
+			var untimed = [...Submissions].filter(a => a.time == null)
+			var dqs = [...Submissions].filter(a => a.dq)
+			var timed = [...Submissions].filter(a => !a.dq && a.time != null).sort((a,b) => a.time - b.time)
 
-			for (var i = 0; i < Results.length; i++) {
-				var s = Results[i]
-				var line = `${i + 1}. ${s.name} ${getTimeString(s.time)} ${s.info}`
+			var ordinal_suffix = function(n) {
+				if ((n % 100) in [11, 12, 13]) {
+					return 'th'
+				} else if (n % 10 == 1) {
+					return 'st'
+				} else if (n % 10 == 2) {
+					return 'nd'
+				} else if (n % 10 == 3) {
+					return 'rd'
+				}
+				return 'th'
+			}
+
+			timed.forEach((s, i) => {
+				var line = `${i+1}${ordinal_suffix(i+1)}. ${s.name} ${getTimeString(s.time)} ${s.info}`.trim()
 				if (num_bold-- > 0) line = `**${line}**`
-
-				// split up messages
-				if (result.length + line.length > 1900) {
-					await bot.createMessage(msg.channel.id, result + `\`\`\``)
-					result = `\`\`\``
-				}
-				result += line + `\n`
-			}
-
+				result += line
+			})
 			result += `\n`
-			for (var i = 0; i < DQs.length; i++) {
-				var s = DQs[i]
-				var line = `DQ: ${s.name} `
-				if (s.time) line += s.time + ` `
-				if (s.info) line += s.info + ` `
-				line += `(${s.reason})`
-
-				if (result.length + line.length > 1900) {
-					await bot.createMessage(msg.channel.id, result + `\`\`\``)
-					result = `\`\`\``
-				}
-				result += line + `\n`
-			}
+			dqs.forEach(dq => {
+				result += `\nDQ: ${dq.name} ${dq.time ? getTimeString(dq.time) + ' ' : ''}[${dq.info}]`
+			})
+			result += `\n`
+			untimed.forEach(s => {
+				result += `\n${s.name}`
+			})
 
 			return result + `\`\`\``
 		}

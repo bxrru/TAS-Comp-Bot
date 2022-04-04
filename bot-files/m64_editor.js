@@ -25,7 +25,8 @@ var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user i
 
 // Note: the lua script needs to have a built in failsafe. Sample code:
 /*
-local MAX_WAIT_TIME = 5 * 30
+local f = io.open("maxtimelimit.txt")
+local MAX_WAIT_TIME = f:read("*n")
 local timer = 0
 local last_frame = -1
 
@@ -35,7 +36,7 @@ function autoexit()
     end
     last_frame = emu.samplecount()
     if timer == MAX_WAIT_TIME then
-        f = io.open("encode_failed.txt", "w")
+        f = io.open("TLE.txt", "w")
         io.close(f)
         os.exit() 
     end
@@ -191,8 +192,8 @@ const DEFAULT_TIME_LIMIT = 5*60*30 // 5 minutes
 var previous_time_limit = DEFAULT_TIME_LIMIT + 1
 var MupenQueue = []
 
-function NextProcess(bot) {
-  //console.log(`verifying next can be run`)
+function NextProcess(bot, retry = true) {
+  //console.log(JSON.stringify(MupenQueue))
   if (MupenQueue.length == 0 || MupenQueue[0].process != null) {
     return // nothing to run, or something is currently running
   }
@@ -215,9 +216,19 @@ function NextProcess(bot) {
       if (crc in KNOWN_CRC == false) { // what if the user is the bot (internal calls?)
         if (request.channel_id == null) {
           console.log(`ERROR: unknown CRC ${crc} when running Mupen\n${request}`)
+        } else if (crc == '') {
+          // this is a strange case... maybe I'm opening the file too many times in this code?
+          // for some reason, retrying immediately (0s delay) has worked every time this error has come up
+          if (retry) {
+            setTimeout(() => NextProcess(bot, false), 1000) // try again in 1s (just to be safe)
+            return
+          } else {
+            bot.createMessage(request.channel_id, `Error: double empty CRC (could not read file?). Please contact an admin`)
+          }
         } else {
           bot.createMessage(request.channel_id, `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`)
         }
+        MupenQueue.shift() // this request cannot be run
         NextProcess(bot)
         return
       }
@@ -266,7 +277,7 @@ function NextProcess(bot) {
 // the m64/st are saved as tas.m64/st
 // if you want to run mupen with the -m64 argument that must be explicitly passed here
 // startup is called after the download is complete but before mupen is run
-// callback is called once the mupen process closes
+// callback is called once the mupen process closes, it is passed whether the time limit was exceeded or not (bool)
 // all processes are run with -lua ./timelimit.lua;
 // channel_id is used to send a message if no game matches the tas being loaded
 // user_id will be pinged if no game matches the tas being loaded (and a valid channel_id is provided)
@@ -543,7 +554,7 @@ module.exports = {
     name: `encode`,
     aliases: [`record`],
     short_descrip: `Encode an m64`,
-    full_descrip: `Usage: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use \`$encode cancel\`.\n\nIf the bot is not processing the queue, contact an admin to use \`$encode ForceSkip\` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nTo see the queue length, use \`$encode queue\``,
+    full_descrip: `Usage: \`$encode [cancel/forceskip/queue/nolua] <m64> <st/savestate>\`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use \`$encode cancel\`.\n\nIf the bot is not processing the queue, contact an admin to use \`$encode ForceSkip\` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing the option \`nolua\\no-lua\\disable-lua\` will not run the input visualzing/ram watch lua script (Note: this option must be sent before the links to files)`,
     hidden: true,
     function: async function(bot, msg, args) {
       //return `This command is currently disabled`
@@ -568,7 +579,7 @@ module.exports = {
           NextProcess(bot)
           return `Encode skipped: \`\`\`${JSON.stringify(encode)}\`\`\``
 
-        } else if (args[0].toUpperCase() == `QUEUE` && users.hasCmdAccess(msg)) {
+        } else if (args[0].toUpperCase() == `QUEUE`) {
 		      var result = ``
           MupenQueue.forEach(async(process, index) => {
             result += `${index}. `
@@ -580,11 +591,11 @@ module.exports = {
             }
             
             if (process.channel_id == null) {
-              result += `[no channel]`
+              result += `(no channel)`
             } else if (process.channel_id == dm.id) {
-              result += `DM`
+              result += `(DM)`
             } else {
-              result += `<#${process.channel_id}>`
+              result += `(<#${process.channel_id}>)`
             }
 
             result += '\n'
@@ -615,18 +626,23 @@ module.exports = {
       }
 	  
       if (!m64_url || !st_url) {
-        return `Missing/Invalid Arguments: \`$encode [cancel/forceskip/queue] <m64> <st/savestate>\``
+        return `Missing/Invalid Arguments: \`$encode [cancel/forceskip/queue/nolua] <m64> <st/savestate>\``
       }
 
       var filename = m64_url.split(`/`) // doesnt ensure it contains / because it should contain it...
       filename = filename[filename.length - 1]
       filename = filename.substring(0, filename.length - 4)
+      
+      var mupen_args = ["-m64", process.cwd()+save.getSavePath().substring(1)+"/tas.m64", "-avi", "encode.avi", "-lua", LUA_INPUTS]
+      if (args.length && [`NOLUA`, `NO-LUA`, `DISABLE-LUA`].filter((a) => a == args[0].toUpperCase()).length) {
+        mupen_args.splice(mupen_args.length-2, mupen_args.length) // remove last two args
+      }
 
       var pos = QueueAdd(
         bot,
         m64_url,
         st_url,
-        ["-m64", process.cwd()+save.getSavePath().substring(1)+"/tas.m64", "-avi", "encode.avi", "-lua", LUA_INPUTS],
+        mupen_args,
         () => {
           if (fs.existsSync(`./encode.avi`)) fs.unlinkSync(`./encode.avi`) // remove previous encode
           if (fs.existsSync(`./encode.mp4`)) fs.unlinkSync(`./encode.mp4`)
@@ -646,8 +662,18 @@ module.exports = {
           bot.createMessage(msg.channel.id, `Uploading...`)
           try {
             cp.execSync(`ffmpeg -i encode.avi encode.mp4`) // TODO: detect if server is boosted (filesize limit) and pass -fs flag
+            var filesize_limit = msg.channel.guild != undefined && msg.channel.guild.premiumTier == 2 ? 50 : 8 // mb
+            filesize_limit = filesize_limit * 1000000 // in bytes
+            stats = fs.statSync(`./encode.mp4`)
+            var reply = `Encode Complete <@${msg.author.id}>`
+            if (stats.size > filesize_limit) { // trim video to fit
+              reply += ` (filesize limit exceeded)`
+              fs.renameSync(`./encode.mp4`, `./encode2.mp4`)
+              cp.execSync(`ffmpeg -i encode2.mp4 -fs ${filesize_limit * 0.98} encode.mp4`) // leave room for header?
+              fs.unlinkSync(`./encode2.mp4`)
+            }
             var video = fs.readFileSync(`./encode.mp4`)
-            await bot.createMessage(msg.channel.id, `Encode Complete <@${msg.author.id}>`, {file: video, name: `${filename}.mp4`})
+            await bot.createMessage(msg.channel.id, reply, {file: video, name: `${filename}.mp4`})
             fs.unlinkSync(`./encode.mp4`)
           } catch (err) {
             bot.createMessage(msg.channel.id, `Something went wrong <@${msg.author.id}> \`\`\`${err}\`\`\``)
