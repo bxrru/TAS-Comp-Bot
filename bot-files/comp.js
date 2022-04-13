@@ -9,6 +9,8 @@ const Announcement = require("./announcement.js")
 const Mupen = require("./m64_editor.js")
 const save = require("./save.js")
 
+const LUAPATH = "C:\\MupenServerFiles\\TimingLua\\" // TODO: put in config?
+
 var AllowSubmissions = false
 var Task = 1
 var FilePrefix = "TASCompetition"
@@ -125,7 +127,6 @@ function getTimeString(VIs) {
 
 // 3min time limit by default
 function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel_id = null, err_user_id = null) {
-	const LUAPATH = "C:\\MupenServerFiles\\TimingLua\\" // TODO: put in config?
 	return Mupen.Process( // returns position in queue
 		bot,
 		Submissions[submission_number].m64,
@@ -152,9 +153,7 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 			}
 			var result = fs.readFileSync(LUAPATH + "result.txt").toString()
 			if (result.startsWith("DQ")) {
-				var reason = result.split(' ')
-				reason.shift()
-				reason = reason.join(' ')
+				var reason = result.split(' ').slice(1).join(' ')
 				admin_msg += `DQ [${reason}]. `
 				if (Submissions[submission_number].dq && Submissions[submission_number].info == reason) {
 					admin_msg += `(result unchanged) `
@@ -170,11 +169,18 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 				
 			} else {
 				var frames = Number(result.split(' ')[1])
+				var info = result.split(' ').slice(2).join(' ') // normally an empty string
 				admin_msg += `||${getTimeString(frames*2)} (${frames}f)||. `
-				if (Submissions[submission_number].time == frames * 2) {
+				if (
+					Submissions[submission_number].time == frames * 2 &&
+					Submissions[submission_number].info == info && // usecase: extra info is important (track A presses)
+					!Submissions[submission_number].dq // unchanged if it wasn't a DQ previously
+				) {
 					admin_msg += `(time unchanged) `
 				} else {
 					Submissions[submission_number].time = frames * 2
+					Submissions[submission_number].info = info
+					Submissions[submission_number].dq = false
 					module.exports.save()
 					var dm = await bot.getDMChannel(Submissions[submission_number].id)
 					dm.createMessage(`Your time has been updated: ${getTimeString(frames * 2)} (${frames}f)`).catch(e => {
@@ -1322,7 +1328,7 @@ module.exports = {
 				msg += `Time: ${getTimeString(submission.time)} (${submission.time/2}f)`
 				if (submission.info != ``) msg += ` ` + submission.info
 			} else {
-				`Your run has not been timed yet.`
+				msg += `Your run has not been timed yet.`
 			}
 			msg += `\nm64: ${submission.m64}\nst: ${submission.st}`
 			return msg
@@ -1431,7 +1437,7 @@ module.exports = {
 
 	// return whether an attachment is a savestate or not
 	isSt:function(attachment){
-		return attachment.filename.substr(-3).toLowerCase() == ".st"
+		return attachment.filename.substr(-3).toLowerCase() == ".st" || attachment.filename.substr(-10).toLowerCase() == ".savestate"
 	},
 
 	// returns a string with no special characters
@@ -1471,7 +1477,7 @@ module.exports = {
 	Deletes the local files, and stores the discord urls
 
 	attachment = {filename, url, size} */
-	filterFiles:async function(bot, msg, attachment){
+	filterFiles:async function(bot, msg, attachment, allow_autotime){
 
 		// make sure the file is an m64 or st
 		if (module.exports.isM64(attachment)) {
@@ -1495,7 +1501,7 @@ module.exports = {
 		// begin downloading the file
 		Save.downloadFromUrl(attachment.url, Save.getSavePath() + "/" + filename)
 
-		module.exports.uploadFile(bot, filename, attachment.size, msg)
+		module.exports.uploadFile(bot, filename, attachment.size, msg, allow_autotime)
 		if (RoleStyle == `ON-SUBMISSION`) module.exports.giveRole(bot, msg.author.id, msg.author.username)
 		module.exports.updateSubmissionMessage(bot)
 
@@ -1533,7 +1539,7 @@ module.exports = {
 
 	// recursive function that will keep trying to upload a file until the buffer size matches
 	// this is meant to be used after a file starts to download
-	uploadFile:async function(bot, filename, filesize, msg){
+	uploadFile:async function(bot, filename, filesize, msg, allow_autotime){
 
 		try {
 			var file = {
@@ -1546,13 +1552,15 @@ module.exports = {
 
 		// if the file hasnt completely downloaded try again
 		if (file.file.byteLength != filesize){
-			setTimeout(function(){module.exports.uploadFile(bot, filename, filesize, msg)}, 1000)
+			setTimeout(function(){module.exports.uploadFile(bot, filename, filesize, msg, allow_autotime)}, 1000)
 
 		} else {
 			// upload the file then delete it locally
 			await module.exports.storeFile(bot, file, msg)
 			fs.unlinkSync(Save.getSavePath() + "/" + filename)
-			CheckAutoTiming(bot, msg)
+			if (allow_autotime) { // sometimes disable depending on submission order
+				CheckAutoTiming(bot, msg)
+			}
 		}
 
 
@@ -1620,9 +1628,16 @@ module.exports = {
 
 		if (TimedTask && !TimedTaskStatus.started.includes(msg.author.id)) return
 
-		msg.attachments.forEach(attachment => {
-			module.exports.filterFiles(bot, msg, attachment)
-		})
+		if (msg.attachments.length == 1) { // independent file, try to autotime (could be st or m64 change)
+			module.exports.filterFiles(bot, msg, msg.attachments[0], true)
+		} else if (msg.attachments.length > 1) {
+			msg.attachments.forEach(attachment => { // Save .st but don't time yet
+				if (module.exports.isSt(msg)) module.exports.filterFiles(bot, msg, attachment, false)
+			})
+			msg.attachments.forEach(attachment => { // Save .m64 and time the run
+				if (module.exports.isM64(msg)) module.exports.filterFiles(bot, msg, attachment, true)
+			})
+		}
 
 	},
 
@@ -1862,7 +1877,7 @@ module.exports = {
 	AutoTime:{
 		name:`AutoTime`,
 		short_descrip: `Time a submission via Mupen-lua`,
-		full_descrip: `Usage: \`$autotime <submission_number or 'all'>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. If only 1 run is autotimed, this will disable the default time limit (runs longer than 3min can still be timed with the script through this command). This will DM participants if their time changes.`,
+		full_descrip: `Usage: \`$autotime <submission_number or 'all'>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. If only 1 run is autotimed, this will disable the default time limit (runs longer than 3min can still be timed with the script through this command). This will DM participants if their time changes.\n\n**WARNING** this will respond with the time of the submission (do NOT use this in a public channel)`,
 		hidden: true,
 		function: async function(bot, msg, args) {
 			if (notAllowed(msg)) return `Missing permissions`
@@ -1968,5 +1983,20 @@ module.exports = {
 				return `You will no longer receive [${update}] updates. `
 			}
 		}
-	}
+	}/*,
+	// for now it can be manually updated on the server...
+	// I should move some functions from m64_editor.js to save.js because they are applicable here too for saving the file
+	updateTimingScript:{
+		name: `UpdateTimingScript`,
+		aliases: [`UpdateConditions`, `UpdateTimingLua`],
+		short_descrip: `Change the conditions.lua file`,
+		full_descrip: `Usage: \`$UpdateTimingScript <.lua attachment>\`\nThis will replace the \`Conditions.lua\` file that is run with the timing script (for automatically timing competition submissions). To retime the current submissions, use \`$autotime all\`.`,
+		hidden: true,
+		function:function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			var lua_files = msg.attachments.filter(a => a.filename.substr(-4).toLowerCase() == `.lua`)
+			if (lua_files.length == 0) return `Missing Argument: \`$UpdateTimingScript <.lua attachment>\``
+			// ...
+		}
+	}*/
 }

@@ -158,7 +158,7 @@ function onDownload(filename, filesize, callback) {
   if (!hasDownloaded(filename, filesize)) {
     setTimeout(() => {onDownload(filename, filesize, callback)}, 1000) // recursive call after 1s
   } else {
-    callback(filename)
+    setTimeout(() => callback(filename), 1000) // wait 1s to hope file actually loads??
   }
 }
 
@@ -214,17 +214,19 @@ function NextProcess(bot, retry = true) {
       var crc = m64.slice(0xE4, 0xE4 + 4)
       crc = bufferToStringLiteral(crc.reverse())
       if (crc in KNOWN_CRC == false) { // what if the user is the bot (internal calls?)
-        if (request.channel_id == null) {
-          console.log(`ERROR: unknown CRC ${crc} when running Mupen\n${request}`)
-        } else if (crc == '') {
+        if (crc == '') {
           // this is a strange case... maybe I'm opening the file too many times in this code?
           // for some reason, retrying immediately (0s delay) has worked every time this error has come up
           if (retry) {
-            setTimeout(() => NextProcess(bot, false), 1000) // try again in 1s (just to be safe)
+            setTimeout(() => NextProcess(bot, false), 5000) // try again in 5s (just to be safe)
             return
+          } else if (request.channel_id == null) {
+            console.log(`ERROR: double empty CRC when running Mupen\n${JSON.stringify(request)}`)
           } else {
             bot.createMessage(request.channel_id, `Error: double empty CRC (could not read file?). Please contact an admin`)
           }
+        } else if (request.channel_id == null) {
+          console.log(`ERROR: unknown CRC ${crc} when running Mupen\n${JSON.stringify(request)}`)
         } else {
           bot.createMessage(request.channel_id, `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`)
         }
