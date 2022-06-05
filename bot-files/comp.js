@@ -22,6 +22,10 @@ var DQs = [] // same as Submissions but with 'Reason' field as well // toDO: rep
 var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, time, info}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
 // time is saved in VIs, info is additional info for results (rerecords, A presses, etc.)
+// Submissions will store the user_id of the most recent partner to submit (in co-op tasks)
+var Nicknames = {} // {id: name} remember custom names set with $setname between tasks
+var Teams = {} // {id1: id2, id2: id1, "id1,id2": team_name} // hard coded teams of 2
+var TeamTask = false
 
 var TimedTask = false
 var Hours = 1
@@ -45,12 +49,13 @@ var AllowAutoTime = false
 // TODO: Implement a confirmation of request feature that makes people
 // resend a task request with some number to actually start the task
 
-function SubmissionsToMessage(showInfo){
+async function SubmissionsToMessage(bot, showInfo){
 	var message = "**__Current Submissions:__**\n\n"
 	if (Submissions.length == 0) message += "No Submissions (Yet)\n"
 	for (var i = 0; i < Submissions.length; i++) {
 		var player = Submissions[i]
-		message += `${i + 1}. ${player.name}${showInfo ? ` (${player.id})` : ``}\n`
+		// only lists ID of most recent player to submit (when in a team)
+		message += `${i + 1}. ${await submissionName(bot, player.id)}${showInfo ? ` (${player.id})` : ``}\n`
 	}
 
 	if (showInfo) {
@@ -131,7 +136,7 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 		bot,
 		Submissions[submission_number].m64,
 		Submissions[submission_number].st,
-		["-lua", LUAPATH + "TASCompTiming.lua"],
+		["-m64", LUAPATH + "submission.m64", "-lua", LUAPATH + "TASCompTiming.lua"],
 		() => {
 			if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
 			fs.copyFileSync(save.getSavePath() + "/tas.m64", LUAPATH + "submission.m64")
@@ -152,44 +157,53 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 				return
 			}
 			var result = fs.readFileSync(LUAPATH + "result.txt").toString()
+			var user_msg = ``
+			var unchanged = false
 			if (result.startsWith("DQ")) {
 				var reason = result.split(' ').slice(1).join(' ')
 				admin_msg += `DQ [${reason}]. `
-				if (Submissions[submission_number].dq && Submissions[submission_number].info == reason) {
+				unchanged = Submissions[submission_number].dq && Submissions[submission_number].info == reason
+				Submissions[submission_number].dq = true
+				Submissions[submission_number].info = reason
+				user_msg = `Your submission is currently disqualified. Reason: \`${reason}\` `
+				if (unchanged) {
 					admin_msg += `(result unchanged) `
-				} else {
-					Submissions[submission_number].dq = true
-					Submissions[submission_number].info = reason
-					module.exports.save()
-					var dm = await bot.getDMChannel(Submissions[submission_number].id)
-					dm.createMessage(`Your submission is currently disqualified. Reason: \`${reason}\``).catch(e => {
-						admin_msg += `**Warning:** Failed to notify user of their time update. `
-					})
+					user_msg += `(result unchanged) `
 				}
-				
 			} else {
 				var frames = Number(result.split(' ')[1])
 				var info = result.split(' ').slice(2).join(' ') // normally an empty string
-				admin_msg += `||${getTimeString(frames*2)} (${frames}f)||. `
-				if (
+				admin_msg += `||${getTimeString(frames*2)} (${frames}f) ${info}||. `
+				unchanged = (
 					Submissions[submission_number].time == frames * 2 &&
 					Submissions[submission_number].info == info && // usecase: extra info is important (track A presses)
 					!Submissions[submission_number].dq // unchanged if it wasn't a DQ previously
-				) {
+				)
+				Submissions[submission_number].time = frames * 2
+				Submissions[submission_number].info = info
+				Submissions[submission_number].dq = false
+				user_msg = `Your time has been updated: ${getTimeString(frames * 2)} (${frames}f) ${info} `
+				if (unchanged) {
 					admin_msg += `(time unchanged) `
-				} else {
-					Submissions[submission_number].time = frames * 2
-					Submissions[submission_number].info = info
-					Submissions[submission_number].dq = false
-					module.exports.save()
-					var dm = await bot.getDMChannel(Submissions[submission_number].id)
-					dm.createMessage(`Your time has been updated: ${getTimeString(frames * 2)} (${frames}f)`).catch(e => {
-						admin_msg += `**Warning:** Failed to notify user of their time update. `
+					user_msg += `(time unchanged) `
+				}
+			}
+			module.exports.save()
+			fs.unlinkSync(LUAPATH + "result.txt")
+			admin_msg += `Auto-timed by lua. `
+			// either the time has changed, or it hasnt changed but it was a submission (not an admin timing the run)
+			if (!unchanged || (unchanged && !err_channel_id)) {
+				var dm = await bot.getDMChannel(Submissions[submission_number].id)
+				dm.createMessage(user_msg.trim()).catch(e => {
+					admin_msg += `**Warning:** Failed to notify user of their time update. ` // since this isn't awaited, I don't think this error actually shows up...
+				})
+				if (completedTeam(Submissions[submission_number].id)) { // message teammate
+					dm = await bot.getDMChannel(Teams[Submissions[submission_number].id])
+					dm.createMessage(user_msg.trim()).catch(e => {
+						admin_msg += `**Warning:** Failed to notify user's partner of their time update. `
 					})
 				}
 			}
-			fs.unlinkSync(LUAPATH + "result.txt")
-			admin_msg += `Auto-timed by lua`
 			if (err_channel_id) bot.createMessage(err_channel_id, admin_msg) // assume timing was manually requested
 			notifyHosts(bot, admin_msg, `Timing`)
 		},
@@ -200,18 +214,93 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 }
 
 // msg is the DM that contains a submitted file
+// this will time whether it's given an m64 or st
 function CheckAutoTiming(bot, msg) {
 	if (!AllowAutoTime) return
-	var updated_m64 = false
-	msg.attachments.forEach((attachment) => {
-		updated_m64 |= attachment.url.endsWith(".m64")
-	})
-	if (!updated_m64) return // make sure they changed the inputs (though there are cases where changing st alone can update time [rng/timers])
 	Submissions.forEach((submission, index) => {
 		if (submission.id != msg.author.id) return
 		if (submission.m64.length == 0 || submission.st.length == 0) return // make sure there is both an m64 and st
 		AutoTimeEntry(bot, index)
 	})
+}
+
+// =============
+// File Handling (this should be moved to save.js)
+// =============
+
+// check if a file has been fully downloaded
+function hasDownloaded(filename, filesize) {
+	try {
+	  var file = fs.readFileSync(save.getSavePath() + "/" + filename)
+	  return file.byteLength == filesize
+	} catch (e) {
+	  return false
+	}
+}
+  
+// TODO: give the call back a variable amount of args
+// run a callback function when a file downloads
+function onDownload(filename, filesize, callback) {
+	if (!hasDownloaded(filename, filesize)) {
+	  setTimeout(() => {onDownload(filename, filesize, callback)}, 1000) // recursive call after 1s
+	} else {
+	  setTimeout(() => callback(filename), 1000) // wait 1s to hope file actually loads??
+	}
+}
+  
+// repeated code. allows for url/filename/size to be entered manually,
+// it will use the attachment's properties if they arent passed
+function downloadAndRun(attachment, callback, url, filename, filesize) {
+	if (!url) url = attachment.url
+	if (!filename) filename = attachment.filename
+	if (!filesize) {
+	  if (attachment) {
+		filesize = attachment.size
+	  } else {
+		request({url:url, method: `HEAD`}, (err, response) => { // find the filesize
+		  save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
+		  onDownload(filename, response.headers[`content-length`], callback)
+		})
+		return
+	  }
+	}
+  
+	save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
+	onDownload(filename, filesize, callback)
+}
+
+function parseDate(str) {
+	var date = new Date(Number(str)) // try epoch time first
+	if (date == "Invalid Date") data = new Date(str) // expected date string format
+	if (date == "Invalid Date") data = chrono.parseDate(str) // human date format
+	return date // will be null if all fail
+}
+
+function completedTeam(user_id) {
+	return Teams[user_id] && Teams[Teams[user_id]] == user_id
+}
+
+async function submissionName(bot, user_id, only_team_name = false) {
+	if (!completedTeam(user_id)) {
+		if (user_id in Nicknames) return Nicknames[user_id]
+		var submitted = Submissions.filter(s => s.user_id == user_id)
+		if (submitted.length) return submitted[0].name // instead of loading the user with the bot
+		return `` // none
+	}
+	try {
+		var user = await Users.getUser(bot, user_id)
+		var partner = await Users.getUser(bot, Teams[user_id])
+		var name1 = user_id in Nicknames ? Nicknames[user_id] : user.username // player nicknames
+		var name2 = Teams[user_id] in Nicknames ? Nicknames[Teams[user_id]] : partner.username
+		if ([user_id,Teams[user_id]] in Teams) {
+			if (only_team_name) return Teams[[user_id,Teams[user_id]]]
+			return `${Teams[[user_id,Teams[user_id]]]} (${name1} & ${name2})`
+		}
+		return `${name1} & ${name2}`
+	} catch (error) {
+		console.log(`Error retrieving team name: ${error}`)
+	}
+	return ``
 }
 
 module.exports = {
@@ -370,6 +459,7 @@ module.exports = {
 			if (notAllowed(msg)) return
 
 			var result = "SUBMISSIONS CLEARED by " + msg.author.username + ". "
+			if (Object.keys(Teams).length) result += "Teams removed. "
 			result += await module.exports.clearRoles(bot)
 			result += await module.exports.deleteSubmissionMessage(bot)
 
@@ -378,6 +468,7 @@ module.exports = {
 			TimedTaskStatus.started = []
 			TimedTaskStatus.completed = []
 			TimedTaskStatus.startTimes = []
+			Teams = {}
 			module.exports.save()
 
 			notifyHosts(bot, result)
@@ -440,7 +531,7 @@ module.exports = {
 			module.exports.save()
 			module.exports.updateSubmissionMessage(bot)
 
-			var message = `${msg.author.username} deleted submission from ${deleted.name} \`(${deleted.id})\`\nm64: ${deleted.m64}\nst: ${deleted.st}`
+			var message = `${msg.author.username} deleted submission from ${await submissionName(bot, deleted.id)} \`(${deleted.id})\`\nm64: ${deleted.m64}\nst: ${deleted.st}`
 			notifyHosts(bot, message)
 
 			// notify the user that their submission was deleted
@@ -673,7 +764,7 @@ module.exports = {
 
 				if (message.author.id != self.id) return "Invalid user. Message must be sent by me"
 
-				message.edit(SubmissionsToMessage())
+				message.edit(await SubmissionsToMessage(bot))
 				Channel_ID = channel_id
 				Message_ID = message_id
 				module.exports.save()
@@ -945,7 +1036,7 @@ module.exports = {
 				if (num.message.length) return num.message
 
 				var s = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
-				var result = (num.dq?`DQ`:``) + `${num.number}. ${s.name}\nID: ${s.id}\nTime: ${getTimeString(s.time)} (${s.time}) ${s.info}\nm64: ${s.m64}\nst: ${s.st}`
+				var result = (num.dq?`DQ`:``) + `${num.number}. ${await submissionName(bot, s.id)}\nID: ${s.id}\nTime: ||${getTimeString(s.time)} (${s.time/2}f) ${s.info}||\nm64: ${s.m64}\nst: ${s.st}`
 				if (miscfuncs.isDM(msg)) {
 					return result
 				} else {
@@ -960,15 +1051,16 @@ module.exports = {
 	},
 
 	// gets the text for a batch script that will download every submission file `$get all`
-	getDownloadScript:function(){
+	getDownloadScript:async function(bot){
 
 		var text = ''
 		text += 'md "Task ' + Task + '"\n'
 		text += 'cd "Task ' + Task + '"\n'
-
-		var addSubmission = function(submission, dq) {
+		
+		var addSubmission = async function(submission, dq) {
 			// make folder // go into folder
-			var name = module.exports.fileSafeName(submission.name)
+			var name = module.exports.fileSafeName(await submissionName(bot, submission.id))
+			
 			if (dq) {
 				text += 'md "DQ_' + name + '"\n'
 				text += 'cd "DQ_' + name + '"\n'
@@ -986,7 +1078,9 @@ module.exports = {
 			text += 'cd ".."\n'
 		}
 
-		Submissions.forEach(s => addSubmission(s, false))
+		for (var i = 0; i < Submissions.length; i++) {
+			await addSubmission(Submissions[i], false)
+		}
 		DQs.forEach(s => addSubmission(s, true))
 
 		return text
@@ -994,9 +1088,9 @@ module.exports = {
 	},
 
 	// send the download script to a specified channel
-	getAllSubmissions:function(bot, channel){
+	getAllSubmissions:async function(bot, channel){
 
-		var text = module.exports.getDownloadScript()
+		var text = await module.exports.getDownloadScript(bot)
 
 		fs.writeFile("download.bat", text, (err) => {
 			if (err) {
@@ -1016,9 +1110,9 @@ module.exports = {
 		short_descrip: "Shows the list of current submissions",
 		full_descrip: "Shows the list of users that have submitted. This will include DQ'd submissions as well as user IDs",
 		hidden: true,
-		function: function(bot, msg, args){
+		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
-			return "```" + SubmissionsToMessage(true) + "```"
+			return "```" + (await SubmissionsToMessage(bot, true)) + "```"
 		}
 	},
 
@@ -1036,6 +1130,8 @@ module.exports = {
       info += `Current status: \`${AllowSubmissions ? '' : 'Not '}Accepting Submissions${TimedTask ? ' (Timed Task)' : ''}\`\n`
 			info += `Filenames: \`${FilePrefix}${Task}By<Name>.m64\`\n`
 			info += `Default Submissions Channel: ${SubmissionsChannel == `` ? `\`disabled\`` : `<#${SubmissionsChannel}>`}\n`
+			info += `Auto-timing: ${AllowAutoTime ? `enabled` : `disabled`}\n`
+			info += `Teams: ${TeamTask ? `enabled` : `disabled`}\n`
 			try {
 				var message = await bot.getMessage(Channel_ID, Message_ID)
 				info += `Submissions Message URL: https://discordapp.com/channels/${message.channel.guild.id}/${message.channel.id}/${message.id}\n`
@@ -1079,18 +1175,14 @@ module.exports = {
 
 			var user_id = msg.author.id
 
-			// get submission
-			if (!module.exports.hasSubmitted(user_id)){
-				return "You must submit files before changing your name"
-			}
-
-			if (module.exports.getSubmission(user_id).submission.namelocked || DQs.filter(user => user.id == user_id).length){
+			if (module.exports.hasSubmitted(user_id) && (module.exports.getSubmission(user_id).submission.namelocked || DQs.filter(user => user.id == user_id).length)) {
 				return "Missing Permissions"
 			}
 
 			// change their name
 			var name = args.join(" ")
-			module.exports.update_name(user_id, name)
+			Nicknames[user_id] = name
+			module.exports.update_name(user_id, name) // calls save()
 			module.exports.updateSubmissionMessage(bot)
 			return "Set name to " + name
 		}
@@ -1104,7 +1196,7 @@ module.exports = {
 		function: async function(bot, msg, args){
 			try {
 				var dm = await bot.getDMChannel(msg.author.id)
-				dm.createMessage(module.exports.getSubmisssionStatus(msg.author.id))
+				dm.createMessage(await module.exports.getSubmisssionStatus(bot, msg.author.id))
 			} catch (e) {
 				return "Something went wrong: Could not DM your submission status"
 			}
@@ -1273,6 +1365,7 @@ module.exports = {
 
 	// short hand for initializing a submission
 	addSubmissionName:function(user_id, name){
+		if (user_id in Nicknames) name = Nicknames[user_id]
 		module.exports.addSubmission(user_id, name, "", 0, "", 0)
 	},
 
@@ -1309,7 +1402,7 @@ module.exports = {
 	},
 
 	// returns whether an m64 and/or st have been submitted by a user
-	getSubmisssionStatus:function(user_id){
+	getSubmisssionStatus:async function(bot, user_id){
 		if (!module.exports.hasSubmitted(user_id)) {
 			var m64 = false
 			var st = false
@@ -1318,9 +1411,9 @@ module.exports = {
 			var m64 = submission.m64.length != 0;
 			var st = submission.st.length != 0;
 		}
-
+		var msg = "Submission Status: "
 		if (m64 && st) {
-			var msg = `Submission Status: \`2/2\` Submission complete\n`
+			msg += "`2/2` Submission complete\n"
 			if (submission.dq) {
 				msg += `**WARNING** Your run is currently disqualified!\n`
 				msg += `Reason: ${submission.info}`
@@ -1331,30 +1424,35 @@ module.exports = {
 				msg += `Your run has not been timed yet.`
 			}
 			msg += `\nm64: ${submission.m64}\nst: ${submission.st}`
-			return msg
 		} else if (m64 && !st){
-			return "Submission Status: `1/2` No st received.\nm64: "+submission.m64
+			msg += "`1/2` No st received.\nm64: "+submission.m64
 		} else if (!m64 && st){
-			return "Submission Status: `1/2` No m64 received.\nst: "+submission.st
+			msg += "`1/2` No m64 received.\nst: "+submission.st
 		} else { // (!m64 && !st)
-			return "Submission Status: `0/2` No m64 or st received."
+			msg += "`0/2` No m64 or st received."
 		}
+		if (completedTeam(user_id)) {
+			msg += `\nTeam: ${await submissionName(bot, user_id)}`
+		}
+		return msg
 	},
 
 	// checks whether a user id is linked to a submission or not
 	hasSubmitted:function(user_id){
+		if (user_id in Teams && Submissions.filter(user => user.id == Teams[user_id]).length) return true // partner submitted
 		return Submissions.filter(user => user.id == user_id).length || DQs.filter(user => user.id == user_id).length
 	},
 
 	// returns the submission object and it's ID given an id
 	getSubmission:function(user_id){
+		var partner_id = completedTeam(user_id) ? Teams[user_id] : ""
 		for (var i = 0; i < Submissions.length; i++) {
-			if (Submissions[i].id == user_id) {
+			if (Submissions[i].id == user_id || Submissions[i].id == partner_id) {
 				return {submission: Submissions[i], id: i + 1}
 			}
 		}
 		for (var i = 0; i < DQs.length; i++) {
-			if (DQs[i].id == user_id) {
+			if (DQs[i].id == user_id || DQs[i].id == partner_id) {
 				return {submission: DQs[i], id: `DQ${i + 1}`}
 			}
 		}
@@ -1385,7 +1483,10 @@ module.exports = {
 			warnings: TimeRemainingWarnings,
 			roletype: RoleStyle,
 			ignoredupdates: IgnoreUpdates,
-			autotime: AllowAutoTime
+			autotime: AllowAutoTime,
+			nicknames: Nicknames,
+			teamtask: TeamTask,
+			teams: Teams
 		}
 		Save.saveObject("submissions.json", data)
 	},
@@ -1407,7 +1508,7 @@ module.exports = {
 		Minutes = data.min
 		TaskMessage = data.taskmsg
 		TaskChannel = data.taskchannel
-		ReleaseDate = chrono.parseDate(data.releasedate)
+		ReleaseDate = parseDate(data.releasedate)
 		if (ReleaseDate == null) ReleaseDate = new Date()
 		TimedTaskStatus.started = []
 		while (data.timedtaskstatus.started.length > 0) TimedTaskStatus.started.push(data.timedtaskstatus.started.shift())
@@ -1416,7 +1517,7 @@ module.exports = {
 		TimedTaskStatus.startTimes = []
 		while (data.timedtaskstatus.startTimes.length > 0) {
 			var info = data.timedtaskstatus.startTimes.shift()
-			TimedTaskStatus.startTimes.push([info[0], chrono.parseDate(info[1])])
+			TimedTaskStatus.startTimes.push([info[0], parseDate(info[1])])
 		}
 		while (data.submissions.length > 0) Submissions.push(data.submissions.shift())
 		while (data.dqs.length > 0) DQs.push(data.dqs.shift())
@@ -1428,6 +1529,13 @@ module.exports = {
 			while (data.ignoredupdates[id].length) IgnoreUpdates[id].push(data.ignoredupdates[id].pop())
 		})
 		AllowAutoTime = data.autotime == undefined ? false : data.autotime
+		Object.keys(data.nicknames).forEach(id => {
+			Nicknames[id] = data.nicknames[id]
+		})
+		TeamTask = data.teamtask
+		Object.keys(data.teams).forEach(id => {
+			Teams[id] = data.teams[id]
+		})
 	},
 
 	// return whether an attachment is an m64 or not
@@ -1478,7 +1586,7 @@ module.exports = {
 
 	attachment = {filename, url, size} */
 	filterFiles:async function(bot, msg, attachment, allow_autotime){
-
+		
 		// make sure the file is an m64 or st
 		if (module.exports.isM64(attachment)) {
 			var filename = ".m64"
@@ -1488,21 +1596,24 @@ module.exports = {
 			bot.createMessage(msg.channel.id, "Attachment ``"+attachment.filename+"`` is not an ``m64`` or ``st``")
 			return
 		}
-
+		
 		// if they have not submitted, add a new submission
 		if (!module.exports.hasSubmitted(msg.author.id)){
 			module.exports.addSubmissionName(msg.author.id, msg.author.username)
-			notifyHosts(bot, `${msg.author.username} (${Submissions.length}) \`(${msg.author.id})\``, `New Submission`)
+			notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length}) \`(${msg.author.id})\``, `New Submission`)
 		}
 
-		var name = module.exports.getSubmission(msg.author.id).submission.name
+		var name = await submissionName(bot, msg.author.id, true)
 		filename = module.exports.properFileName(name) + filename
-
+		
 		// begin downloading the file
 		Save.downloadFromUrl(attachment.url, Save.getSavePath() + "/" + filename)
 
 		module.exports.uploadFile(bot, filename, attachment.size, msg, allow_autotime)
-		if (RoleStyle == `ON-SUBMISSION`) module.exports.giveRole(bot, msg.author.id, msg.author.username)
+		if (RoleStyle == `ON-SUBMISSION`) {
+			if (completedTeam(msg.author.id)) module.exports.giveRole(bot, Teams[msg.author.id], msg.author.username + `'s Partner`)
+			module.exports.giveRole(bot, msg.author.id, msg.author.username)
+		}
 		module.exports.updateSubmissionMessage(bot)
 
 	},
@@ -1529,7 +1640,7 @@ module.exports = {
 			}
 
 			// notify host of updated file
-			module.exports.forwardSubmission(bot, msg.author.id, file.name, attachment.url)
+			module.exports.forwardSubmission(bot, msg.author, file.name, attachment.url)
 
 		} catch (e) {
 			notifyHosts(bot, "Failed to store submission url from " + msg.author.username, `Error`)
@@ -1572,7 +1683,7 @@ module.exports = {
 		// create one if none exists
 		if ((Channel_ID == "" || Message_ID == "") && SubmissionsChannel != ""){
 			try {
-				var message = await bot.createMessage(SubmissionsChannel, SubmissionsToMessage())
+				var message = await bot.createMessage(SubmissionsChannel, await SubmissionsToMessage(bot))
 				Channel_ID = message.channel.id
 				Message_ID = message.id
 			} catch (e) {
@@ -1585,7 +1696,7 @@ module.exports = {
 		if (Channel_ID != "" && Message_ID != ""){
 			try {
 				var message = await bot.getMessage(Channel_ID, Message_ID);
-				message.edit(SubmissionsToMessage());
+				message.edit(await SubmissionsToMessage(bot));
 			} catch (e) {
 				console.log("Failed to edit submission message")
 				notifyHosts(bot, "Failed to edit submission message")
@@ -1600,7 +1711,7 @@ module.exports = {
 			await bot.addGuildMemberRole(Guild, user_id, SubmittedRole, "Submission received");
 		} catch (e) {
 			console.log("Could not assign role", name, e)
-			notifyHosts(bot, `Failed to assign ${name} the submitted role`, `ERROR`)
+			notifyHosts(bot, `Failed to assign ${name} (\`${user_id}\`) the submitted role`, `ERROR`)
 		}
 	},
 
@@ -1630,12 +1741,14 @@ module.exports = {
 
 		if (msg.attachments.length == 1) { // independent file, try to autotime (could be st or m64 change)
 			module.exports.filterFiles(bot, msg, msg.attachments[0], true)
-		} else if (msg.attachments.length > 1) {
-			msg.attachments.forEach(attachment => { // Save .st but don't time yet
-				if (module.exports.isSt(msg)) module.exports.filterFiles(bot, msg, attachment, false)
+		} else if (msg.attachments.length > 1) { // st takes longer to download, so time the run after that
+			msg.attachments.forEach(attachment => { // Save .m64 but don't time yet
+				if (module.exports.isM64(attachment)) module.exports.filterFiles(bot, msg, attachment, false)
 			})
-			msg.attachments.forEach(attachment => { // Save .m64 and time the run
-				if (module.exports.isM64(msg)) module.exports.filterFiles(bot, msg, attachment, true)
+			msg.attachments.forEach(attachment => { // Save .st 
+				if (module.exports.isSt(attachment)) { // arbitrary delay to try and ensure it checks autotiming after downloading both m64 & st
+					setTimeout(() => module.exports.filterFiles(bot, msg, attachment, true), 10000)
+				}
 			})
 		}
 
@@ -1656,20 +1769,34 @@ module.exports = {
 	},
 
 	// Sends a file update to the host(s)
-	forwardSubmission:async function(bot, user_id, filename, url){
+	forwardSubmission:async function(bot, user, filename, url){
 
-		if (!module.exports.hasSubmitted(user_id)) return console.log("SOMETHING WENT WRONG: COULD NOT FORWARD SUBMISSION")
+		if (!module.exports.hasSubmitted(user.id)) return console.log("SOMETHING WENT WRONG: COULD NOT FORWARD SUBMISSION")
 
 		// need a better way to get the ID of the submission
-		var submission = module.exports.getSubmission(user_id)
-		var result = submission.submission.name + " (" + submission.id + ") "
-
+		var submission = module.exports.getSubmission(user.id)
+		var result = ' '
 		if (module.exports.isM64({filename: filename})){
 			result += "uploaded m64 " + url
 		} else {
 			result += "uploaded st " + url
 		}
 
+		if (completedTeam(user.id)) { // notify partner
+			try {
+				var partner_dm = await bot.getDMChannel(Teams[user.id])
+				partner_dm.createMessage(user.username + result)
+			} catch (error) {
+				try {
+					var submitter_dm = await user.getDMChannel()
+					submitter_dm.createMessage("Failed to notify your teammate of the newly submitted file")
+				} catch (error) { // I hope this never happens
+					console.log("Failed to notify task entrant that their partner was failed to be notified of a submission")
+				}
+			}
+		}
+
+		result = user.username + " (" + submission.id + ")" + result
 		notifyHosts(bot, result, `File`)
 
 	},
@@ -1710,7 +1837,7 @@ module.exports = {
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			var date = chrono.parseDate(msg.content)
+			var date = parseDate(msg.content)
 			if (date == null) return `Invalid Argument: Date not detected \`${args.join(' ')}\``
 
 			var now = new Date()
@@ -1795,16 +1922,16 @@ module.exports = {
     full_descrip: "Usage: \`$timeremaining\`\nSee how much time is left for the current timed task. This only works if you started the task with \`$requesttask\`. Although it provides a seconds count, it is likely only accurate up to the minute give or take 1. If no task is currently taking place, the command call is ignored",
     hidden: true,
     function:async function(bot, msg, args){
-      if (!AllowSubmissions) return `There is no task running right now (0 minutes remaining)`
-			if (TimedTaskStatus.completed.includes(msg.author.id)) return `Your time is up! (0 minutes remaining)`
-			if (!TimedTaskStatus.started.includes(msg.author.id)) return `You have not started yet!`
+		if (!AllowSubmissions) return `There is no task running right now (0 minutes remaining)`
+		if (TimedTaskStatus.completed.includes(msg.author.id)) return `Your time is up! (0 minutes remaining)`
+		if (!TimedTaskStatus.started.includes(msg.author.id)) return `You have not started yet!`
 
-			var startdate = TimedTaskStatus.startTimes.filter(a => a[0] == msg.author.id)[0]
-      var end = chrono.parseDate(startdate.toString()) // bad way to make a copy
-      end.setHours(end.getHours()+Hours)
-      end.setMinutes(end.getMinutes()+Minutes)
-      var now = new Date()
-      return `You have approximately ${miscfuncs.formatSecsToStr((end - now) / 1000)} remaining to submit!`
+		var startdate = TimedTaskStatus.startTimes.filter(a => a[0] == msg.author.id)[0]
+		var end = parseDate(startdate.toString()) // bad way to make a copy
+		end.setHours(end.getHours()+Hours)
+		end.setMinutes(end.getMinutes()+Minutes)
+		var now = new Date()
+		return `You have approximately ${miscfuncs.formatSecsToStr((end - now) / 1000)} remaining to submit!`
     }
   },
 
@@ -1903,6 +2030,8 @@ module.exports = {
 		function: async function(bot, msg, args) {
 			if (notAllowed(msg)) return
 			AllowAutoTime = !AllowAutoTime
+			module.exports.save()
+			notifyHosts(bot, `\`Auto-timing on submission is now ${AllowAutoTime ? `enabled` : `disabled`}\``, `Update`)
 			return `Timing when a new file is received is now \`${AllowAutoTime ? 'enabled' : 'disabled'}\``
 		}
 	},
@@ -1925,7 +2054,7 @@ module.exports = {
 			var timed = [...Submissions].filter(a => !a.dq && a.time != null).sort((a,b) => a.time - b.time)
 
 			var ordinal_suffix = function(n) {
-				if ((n % 100) in [11, 12, 13]) {
+				if ((n % 100) in {11:1, 12:1, 13:1}) {
 					return 'th'
 				} else if (n % 10 == 1) {
 					return 'st'
@@ -1937,16 +2066,25 @@ module.exports = {
 				return 'th'
 			}
 
+			var placements = []
 			timed.forEach((s, i) => {
-				var line = `${i+1}${ordinal_suffix(i+1)}. ${s.name} ${getTimeString(s.time)} ${s.info}`.trim()
+				if (i == 0 || s.time > timed[i-1].time) {
+					placements.push(i+1)
+				} else {
+					placements.push(placements[i-1])
+				}
+			})
+
+			timed.forEach((s, i) => {
+				var line = `${placements[i]}${ordinal_suffix(placements[i])}. ${s.name} ${getTimeString(s.time)} ${s.info}`.trim()
 				if (num_bold-- > 0) line = `**${line}**`
-				result += line
+				result += line + `\n`
 			})
 			result += `\n`
 			dqs.forEach(dq => {
 				result += `\nDQ: ${dq.name} ${dq.time ? getTimeString(dq.time) + ' ' : ''}[${dq.info}]`
 			})
-			result += `\n`
+			result += `\n**Untimed Runs:**\n`
 			untimed.forEach(s => {
 				result += `\n${s.name}`
 			})
@@ -1983,8 +2121,31 @@ module.exports = {
 				return `You will no longer receive [${update}] updates. `
 			}
 		}
-	}/*,
-	// for now it can be manually updated on the server...
+	},
+	
+	broadcast:{
+		name: `broadcast`,
+		aliases: [],
+		short_descrip: `send a message to entrants`,
+		full_descrip: "Usage: `$broadcast <msg...>`\nSend a message to everyone who currently has a submission in the ongoing TAS competition. Even if submissions are not being accepted, this will send a message to any recorded submissions.",
+		hidden: true,
+		function:function(bot, msg, args) {
+			return // untested
+			if (notAllowed(msg)) return
+			if (args.length == 0) return `Error: No message provided.`
+			if (Submissions.length == 0) return `Error: there are no entrants to send the message to`
+			async function send_msg(submission) {
+				try {
+					var dm = await bot.getDMChannel(submission.id)
+					dm.createMessage(' '.join(args))
+				} catch (e) {
+					bot.createMessage(msg.channel.id, `Failed to broadcast message to <@${submission.id}> (${submission.id})`)
+				}
+			}
+			Submissions.forEach(send_msg)
+			return "The following message is being sent to all entrants: ```" + (' '.join(args)) + "```"
+		}
+	},
 	// I should move some functions from m64_editor.js to save.js because they are applicable here too for saving the file
 	updateTimingScript:{
 		name: `UpdateTimingScript`,
@@ -1996,7 +2157,115 @@ module.exports = {
 			if (notAllowed(msg)) return
 			var lua_files = msg.attachments.filter(a => a.filename.substr(-4).toLowerCase() == `.lua`)
 			if (lua_files.length == 0) return `Missing Argument: \`$UpdateTimingScript <.lua attachment>\``
-			// ...
+			downloadAndRun(lua_files[0], () => {
+				fs.rename(process.cwd()+save.getSavePath().substring(1)+'\\'+lua_files[0].filename, LUAPATH + `Conditions.lua`, (err) => {
+					bot.createMessage(msg.channel.id, err ? `Error moving file: \`\`\`${err}\`\`\`` : `Successfully uploaded \`Conditions.lua\``)
+					notifyHosts(bot, `\`Conditions.lua\` has been updated by ${msg.author.username}`)
+				})
+			})
 		}
-	}*/
+	},
+
+	toggleTeamTask:{
+		name: `ToggleTeamTask`,
+		aliases: [`ToggleCoopTask`, `ToggleTeams`],
+		short_descrip: ``,
+		full_descrip: ``,
+		hidden: true,
+		function:function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			TeamTask = !TeamTask
+			module.exports.save()
+			notifyHosts(bot, `\`Teams are now ${TeamTask ? `enabled` : `disabled`}\``, `Update`)
+			return `Teams are now \`${TeamTask ? 'enabled' : 'disabled'}\` for the current task`
+		}
+	},
+
+	setTeam:{
+		name: `SetTeam`,
+		aliases: [`SetTeammate`, `SetPartner`],
+		short_descrip: `Choose your partner for co-op tasks`,
+		full_descrip: `Usage: \`$setteam <mention/user_id>\`\nThis selects your partner for co-op tasks. Both people in the team need to use this command to finalize the team. You and your teammate will both be notified when either of you submits a new file.`,
+		hidden: true,
+		function:async function(bot, msg, args) {
+			if (!TeamTask) return `Teams are currently disabled`
+
+			var team_previously_complete = completedTeam(msg.author.id)
+
+			if (team_previously_complete && module.exports.hasSubmitted(msg.author.id)) {
+				return `You cannot change your teammate after submitting as a team.`
+			}
+			
+			var partner = null
+			if (msg.mentions.length) partner = msg.mentions[0]
+			if (partner == null && args.length) partner = await Users.getUser(args[0])
+			if (partner && partner.id == msg.author.id) return `You're always in a team with yourself!`
+			
+			if (team_previously_complete && (partner == null || Teams[msg.author.id] != partner.id)) { // changed team
+				delete Teams[[msg.author.id, Teams[msg.author.id]]] // remove old team name if it exists
+				delete Teams[[Teams[msg.author.id], msg.author.id]]
+				try {
+					var old_partner_dm = await bot.getDMChannel(Teams[msg.author.id])
+					old_partner_dm.createMessage(msg.author.username + ` has removed you as their partner`)
+				} catch (error) {
+					bot.createMessage(msg.channel.id, `**Warning:** could not notify previously set partner (\`${Teams[msg.author.id]}\`) of this change.`)
+				}
+
+			} else if (partner == null) {
+				return `Missing Arguments: No mention or user_id detected`
+
+			} else if (!team_previously_complete && Teams[partner.id] == msg.author.id) { // just completed the team
+				try {
+					var partner_dm = await bot.getDMChannel(partner.id)
+					partner_dm.createMessage(msg.author.username + ` has confirmed your team`)
+				} catch (error) {
+					bot.createMessage(msg.channel.id, `**Warning:** could not notify partner (\`${partner.id}\`) that your team is confirmed.`)
+				}
+			}
+
+			if (partner == null) { // update teams
+				delete Teams[msg.author.id]
+			} else {
+				Teams[msg.author.id] = partner.id
+			}
+			module.exports.save()
+
+			if (!team_previously_complete) { 
+				if (partner == null) {
+					return `You are no longer teaming with anyone.`
+				} else if (Teams[partner.id] == msg.author.id) {
+					return `Your team is now complete! You and ` + partner.username + ` are set to team.`
+				}
+			}
+			return `You have set your partner to ` + partner.username + `. To complete your team, they must add you as their teammate.`
+		}
+	},
+
+	setTeamName:{
+		name: `SetTeamName`,
+		aliases: [],
+		short_descrip: `Choose your team name for co-op tasks`,
+		full_descrip: `Usage: \`$setteamname <team name>\`\nSet your team name for co-op tasks! Either partner can use this command. Your partner will be notified of the change.`,
+		hidden: true,
+		function:async function(bot, msg, args) {
+			if (!completedTeam(msg.author.id)) return `You are not part of a team.`
+			if (args.length == 0) {
+				delete Teams[[msg.author.id, Teams[msg.author.id]]]
+				delete Teams[[Teams[msg.author.id], msg.author.id]]
+			} else {
+				Teams[[msg.author.id, Teams[msg.author.id]]] = args.join(' ')
+				Teams[[Teams[msg.author.id], msg.author.id]] = args.join(' ')
+			}
+			module.exports.updateSubmissionMessage(bot)
+			module.exports.save()
+			try {
+				var partner_dm = await bot.getDMChannel(Teams[msg.author.id])
+				partner_dm.createMessage(`Your partner has updated your team name to \`${args.join(' ')}\``)
+			} catch (error) {
+				bot.createMessage(msg.channel.id, `Failed to notify partner of team name change`)
+			}
+			if (args.length == 0) return `Your team name has been removed`
+			return `Your team name has been set to \`${args.join(' ')}\``
+		}
+	}
 }
