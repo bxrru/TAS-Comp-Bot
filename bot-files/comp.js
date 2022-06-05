@@ -144,7 +144,7 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 			fs.copyFileSync(save.getSavePath() + "/tas.st", LUAPATH + "submission.st")
 		},
 		async (TLE) => {
-			var admin_msg = `${Submissions[submission_number].name} (${submission_number+1}): `
+			var admin_msg = `${await submissionName(bot, Submissions[submission_number].id)} (${submission_number+1}): `
 			if (TLE) {
 				admin_msg += `time limit exceeded (their run must be timed manually)`
 				try {
@@ -283,7 +283,7 @@ function completedTeam(user_id) {
 async function submissionName(bot, user_id, only_team_name = false) {
 	if (!completedTeam(user_id)) {
 		if (user_id in Nicknames) return Nicknames[user_id]
-		var submitted = Submissions.filter(s => s.user_id == user_id)
+		var submitted = Submissions.filter(s => s.id == user_id)
 		if (submitted.length) return submitted[0].name // instead of loading the user with the bot
 		return `` // none
 	}
@@ -1371,8 +1371,9 @@ module.exports = {
 
 	// changes the m64 of a submission
 	update_m64:function(user_id, new_m64, filesize){
+		var partner_id = completedTeam(user_id) ? Teams[user_id] : ""
 		for (var i = 0; i < Submissions.length; i++) {
-			if (Submissions[i].id == user_id) {
+			if (Submissions[i].id == user_id || Submissions[i].id == partner_id) {
 				Submissions[i].m64 = new_m64
 				Submissions[i].m64_size = filesize
 			}
@@ -1382,8 +1383,9 @@ module.exports = {
 
 	// changes the st of a submission
 	update_st:function(user_id, new_st, filesize){
+		var partner_id = completedTeam(user_id) ? Teams[user_id] : ""
 		for (var i = 0; i < Submissions.length; i++) {
-			if (Submissions[i].id == user_id) {
+			if (Submissions[i].id == user_id || Submissions[i].id == partner_id) {
 				Submissions[i].st = new_st
 				Submissions[i].st_size = filesize
 			}
@@ -2075,13 +2077,14 @@ module.exports = {
 				}
 			})
 
-			timed.forEach((s, i) => {
-				var line = `${placements[i]}${ordinal_suffix(placements[i])}. ${s.name} ${getTimeString(s.time)} ${s.info}`.trim()
+			for (var i = 0; i < timed.length; i++) {
+				var line = `${placements[i]}${ordinal_suffix(placements[i])}. `
+				line += `${await submissionName(bot, timed[i].id)} ${getTimeString(timed[i].time)} ${timed[i].info}`.trim()
 				if (num_bold-- > 0) line = `**${line}**`
 				result += line + `\n`
-			})
+			}
 			result += `\n`
-			dqs.forEach(dq => {
+			dqs.forEach(dq => { // may need to use a for loop here as well to get proper name (if a team DQs)
 				result += `\nDQ: ${dq.name} ${dq.time ? getTimeString(dq.time) + ' ' : ''}[${dq.info}]`
 			})
 			result += `\n**Untimed Runs:**\n`
@@ -2169,8 +2172,8 @@ module.exports = {
 	toggleTeamTask:{
 		name: `ToggleTeamTask`,
 		aliases: [`ToggleCoopTask`, `ToggleTeams`],
-		short_descrip: ``,
-		full_descrip: ``,
+		short_descrip: `ennable/disable co-op task`,
+		full_descrip: `Usage: \`$toggleteamtask\`. Allows competitors to team up and submit together.`,
 		hidden: true,
 		function:function(bot, msg, args) {
 			if (notAllowed(msg)) return
