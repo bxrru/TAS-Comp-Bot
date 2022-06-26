@@ -7,7 +7,7 @@ Join the SM64 TASing server to keep up to date on the latest competitions: https
 ### Running the Bot
 Assuming you have a [bot application](https://discord.com/developers/applications) and [Node.js](https://nodejs.org/en/download/), download the files for this repository, then install the dependencies by opening a command prompt in the folder containing this readme and running `npm i`. If you have build errors try downloading the [Visual Studio Community 2017](https://visualstudio.microsoft.com/vs/older-downloads/) Node.js build tools and running `npm i --msvs_version=2017`.
 
-Next, put your token in `bot.js` and run `node .\start.js .\bot.js` to start the bot! Any user ids in the list of "Owner_IDs" will be able to use all of the commands, so make sure to add yours.
+Next, rename `bot.js.template` and `saves_template` to `bot.js` and `saves`, respectively, put your token in `bot.js` and run `node .\start.js .\bot.js` to start the bot! Any user ids in the list of "Owner_IDs" will be able to use all of the commands, so make sure to add yours.
 
 It's possible to run multiple bots from the same code by creating a new file with the same format as bot.js but with a different token. To keep their saves separate make sure to change the saves path.
 
