@@ -1,6 +1,0 @@
-module.exports = {
-  Bot_Token: '',
-  Owner_IDs: [],
-  Bot_Files_Path: './bot-files',
-  Saves_Path: './saves'
-}
