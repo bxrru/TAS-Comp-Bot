@@ -35,11 +35,14 @@ var TimedTaskStatus = {started:[],completed:[],startTimes:[]} // startTimes: [ID
 var ReleaseDate = new Date()
 var TaskChannel = ""
 var TimeRemainingWarnings = [15] // give warnings for how long people have left to submit to timed tasks
+var LateEntrants = []
+
 
 const ROLESTYLES = ["DISABLED", "ON-SUBMISSION", "TASK-END"]
 var RoleStyle = "DISABLED"
 var Guild = ""
 var SubmittedRole = ""
+var TimedTaskRole = "" // to disable this it needs to be set to ""
 
 const UPDATES = [`UPDATE`,`WARNING`,`ERROR`,`NEW SUBMISSION`,`DQ`,`TIMER`,`FILE`,`TIMING`]
 var IgnoreUpdates = {} // id: []
@@ -271,6 +274,7 @@ function downloadAndRun(attachment, callback, url, filename, filesize) {
 
 function parseDate(str) {
 	var date = new Date(Number(str)) // try epoch time first
+	if (date < new Date(1e12)) date = new Date(Number(str+"000")) // time was in s not ms (for these purposes we only need times in the future)
 	if (date == "Invalid Date") data = new Date(str) // expected date string format
 	if (date == "Invalid Date") data = chrono.parseDate(str) // human date format
 	return date // will be null if all fail
@@ -301,6 +305,10 @@ async function submissionName(bot, user_id, only_team_name = false) {
 		console.log(`Error retrieving team name: ${error}`)
 	}
 	return ``
+}
+
+function timestamp(date) {
+	return Math.floor(+date/1000)
 }
 
 module.exports = {
@@ -358,19 +366,16 @@ module.exports = {
 		// this is all the now live message
 		var msg = `**__Task ${Task}__** is now live!\n\n`
 		msg += `You will have **${Hours} hour${Hours == 1 ? '' : 's'} and ${Minutes} minute${Minutes == 1 ? '' : 's'}** to complete this task.\n\n`
-		msg += `To start the task, use the command \`$requesttask\`. It may be started anytime within the next `
-
-		var total = Math.floor((ReleaseDate - now) / 1000 / 60 / 60)
-		msg += `**${total} hour${total == 1 ? '' : 's'}** at which point the task will be released publicly.\n\n`
+		msg += `To start the task, use the command \`$requesttask\`. It may be started anytime before `
+		msg += `<t:${timestamp(ReleaseDate)}:F> (<t:${timestamp(ReleaseDate)}:R>) at which point the task will be released publicly.\n\n`
 
 		var deadline = new Date(ReleaseDate)
 		deadline.setHours(ReleaseDate.getHours()+Hours)
 		deadline.setMinutes(ReleaseDate.getMinutes()+Minutes)
-		msg += `The final deadline is ${deadline}\n\n`
-		msg += `Good Luck, and Have Fun! @everyone`
+		msg += `The final deadline to submit is <t:${timestamp(deadline)}:F>`
 
 		try {
-			bot.createMessage(TaskChannel, {content:msg, disableEveryone:false})
+			bot.createMessage(TaskChannel, msg)
 		} catch (e) {
 			notifyHosts(bot, `Failed to send \`Task is live!\` message \`\`\`${e}\`\`\``, `ERROR`)
 		}
@@ -716,6 +721,39 @@ module.exports = {
 			}
 
 			SubmittedRole = role;
+			module.exports.save();
+			return result
+		}
+	},
+
+	setTimedTaskRole:{
+		name: "setTimedTaskRole",
+		aliases: [],
+		short_descrip: "Sets the timed task role",
+		full_descrip: "Usage: `$setrole [role_id]`\nSets the role to be given out when people are currently competing in a timed task (thier timer is counting down). If no ID is specified or the bot does not have permission to assign the role, it will disable giving roles to users that compete. Set the competition server using `$setServer` before using this command.",
+		hidden: true,
+		function: async function(bot, msg, args){
+			if (notAllowed(msg)) return
+			if (args.length == 0) args = [""]
+
+			var role = args[0];
+			var reason = "Testing role permissions, command call by " + msg.author.username
+			var result = ""
+
+			try {
+				var self = await bot.getSelf()
+				await msg.channel.guild.addMemberRole(self.id, role, reason)
+				await msg.channel.guild.removeMemberRole(self.id, role, reason)
+				result += "Role set to `" + role + "`"
+				notifyHosts(bot, `Timed Task role has been set to \`${role}\``)
+			} catch (e) {
+				result += "Invalid Role: Role \`"+role+"\`does not exist or does not match the server. "
+				result += "Use `$setServer <id>` to set the server that contains the role. "
+				result += "**No role will be given out** \`\`\`"+e+"\`\`\`"
+				role = ""
+			}
+
+			TimedTaskRole = role;
 			module.exports.save();
 			return result
 		}
@@ -1155,12 +1193,15 @@ module.exports = {
 			info += `\n**Timed Task Info**\n`
 			info += `Task Length: ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes\n`
 			info += `Time Remaining Warnings: ${TimeRemainingWarnings.join(`, `)}\n`
-			info += `Release Date: \`${ReleaseDate.toString()}\`\n`
+			info += `Release Date: <t:${timestamp(ReleaseDate)}:F>\n`
 			info += `Task Channel: ${TaskChannel == `` ? `\`disabled\`` : `<#${TaskChannel}>`}\n`
 
 			info += `\n**Role Style:** \`${RoleStyle}\`\n`
 			info += `Server ID: \`${Guild == `` ? ` ` : Guild}\`\n`
 			info += `Submitted Role ID: \`${SubmittedRole == `` ? ` ` : SubmittedRole}\`\n`
+			info += `Timed Task Role ID: \`${TimedTaskRole == `` ? ` ` : TimedTaskRole}\`\n`
+
+			// TODO: if (info.length >= 2000) // ...
 
 			return info
 		}
@@ -1294,24 +1335,52 @@ module.exports = {
 		full_descrip: "Starts the current timed task. Once a participant calls this command they will be sent the task message (set with `$setTaskMsg`) and allowed to submit files for the allotted time (set with `$setTaskLength`). There is no confirmation, the timer will begin counting down as soon as the command is called.",
 		hidden: true,
 		function: function(bot, msg, args){
-			if (!TimedTask && !AllowSubmissions) return `There is no active timed task to participate in right now`
-			if (!TimedTask && AllowSubmissions) return `You don't need to use that command right now - just send in your files!`
+			if (LateEntrants.filter(id => id == msg.author.id).length == 0) {
+				if (!TimedTask && !AllowSubmissions) return `There is no active timed task to participate in right now`
+				if (!TimedTask && AllowSubmissions) return `You don't need to use that command right now - just send in your files!`
+			}
 			if (!miscfuncs.isDM(msg)) return `This command can only be used in DMs`
-
 			if (TimedTaskStatus.started.includes(msg.author.id)) return `You've already started Task ${Task}!`
 			if (TimedTaskStatus.completed.includes(msg.author.id)) return `You've already completed Task ${Task}! Use \`$status\` to check your files.`
 
 			TimedTaskStatus.started.push(msg.author.id)
-			TimedTaskStatus.startTimes.push([msg.author.id, (new Date()).toString()])
+			TimedTaskStatus.startTimes.push([msg.author.id, timestamp(new Date())])
 			module.exports.save()
 
 			module.exports.addTimeRemainingWarnings(bot, msg.channel.id)
 			Announcement.DelayFunction(bot, `COMP-END ${msg.author.id}`, Hours, Minutes)
+			module.exports.giveRole(bot, msg.author.id, msg.author.username, TimedTaskRole)
 
 			// send messages
 			notifyHosts(bot, `${msg.author.username} \`(${msg.author.id})\` has started Task ${Task}`, `Timer`)
 			bot.createMessage(msg.channel.id, TaskMessage)
 			bot.createMessage(msg.channel.id, `You have started Task ${Task}. You have ${Hours} hour${Hours == 1 ? "" : "s"} and ${Minutes} minutes to submit.`)
+		}
+	},
+
+	allowLateEntrants:{
+		name: "allowLateEntrants",
+		short_descrip: "Allow entering a timed task late",
+		full_descrip: "Usage: `$allowLateEntrants [id1] [id2] [...]`\n\nAllow users to use `$requesttask` so long as they have not already participated. If no IDs are given, it will remove all the currently set IDs.",
+		hidden: true,
+		function: function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			while (args.length > 0) LateEntrants.push(args.shift())
+			module.exports.save()
+			if (LateEntrants.length == 0) return "Late entrants are disabled"
+			return "The late entrants are now set to `" + LateEntrants.join(' ') + "`"
+		}
+	},
+
+	listLateEntrants:{
+		name: "listLateEntrants",
+		short_descrip: "list users who can enter anytime",
+		full_descrip: "Lists the IDs of users who can use `$requesttask` so long as they have not already participated.",
+		hidden: true,
+		function: function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			if (LateEntrants.length == 0) return "Late entrants are disabled"
+			return "The late entrants are now set to `" + LateEntrants.join(' ') + "`"
 		}
 	},
 
@@ -1337,6 +1406,14 @@ module.exports = {
 
 		var user = await Users.getUser(bot, id)
 		if (RoleStyle == "TASK-END") module.exports.giveRole(bot, id, user.username)
+
+		if (TimedTaskRole != "") {
+			try {
+				await bot.removeGuildMemberRole(Guild, id, TimedTaskRole, "Time's up!");
+			} catch (e) {
+				console.log("Could not remove role from ", user.username, user.id);
+			}
+		}
 
 		if (additionalMessage == undefined) additionalMessage = ``
 		if (notify) notifyHosts(bot, `Time's up for ${user.username}! ${additionalMessage}`, `Timer`)
@@ -1469,6 +1546,8 @@ module.exports = {
 			fileprefix: FilePrefix,
 			guild_id: Guild,
 			role_id: SubmittedRole,
+			timed_role_id: TimedTaskRole,
+			late_entrants: LateEntrants,
 			hosts: Host_IDs,
 			feed: SubmissionsChannel,
 			channel_id: Channel_ID,
@@ -1501,6 +1580,8 @@ module.exports = {
 		FilePrefix = data.fileprefix
 		Guild = data.guild_id
 		SubmittedRole = data.role_id
+		TimedTaskRole = data.timed_role_id
+		while (data.late_entrants && data.late_entrants.length > 0) LateEntrants.push(data.late_entrants.shift())
 		Host_IDs = data.hosts
 		SubmissionsChannel = data.feed
 		Channel_ID = data.channel_id
@@ -1707,13 +1788,13 @@ module.exports = {
 	},
 
 	// gives the submitted role to a user
-	giveRole:async function(bot, user_id, name){
-		if (SubmittedRole == "") return
+	giveRole:async function(bot, user_id, name, role = SubmittedRole){
+		if (role == "") return
 		try {
-			await bot.addGuildMemberRole(Guild, user_id, SubmittedRole, "Submission received");
+			await bot.addGuildMemberRole(Guild, user_id, role, "Submission received");
 		} catch (e) {
 			console.log("Could not assign role", name, e)
-			notifyHosts(bot, `Failed to assign ${name} (\`${user_id}\`) the submitted role`, `ERROR`)
+			notifyHosts(bot, `Failed to assign ${name} (\`${user_id}\`) a role (ID: \`${role}\`)`, `ERROR`)
 		}
 	},
 
@@ -1729,7 +1810,7 @@ module.exports = {
 
 		if (Users.isBanned(msg.author.id)) return
 
-		if (!AllowSubmissions) return bot.createMessage(msg.channel.id, `I am not accepting submissions at this time. `)
+		if (!AllowSubmissions && LateEntrants.filter(id => id == msg.author.id).length == 0) return bot.createMessage(msg.channel.id, `I am not accepting submissions at this time. `)
 
 		if (DQs.filter(user => user.id == msg.author.id).length) return
 
@@ -1839,7 +1920,7 @@ module.exports = {
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			var date = parseDate(msg.content)
+			var date = parseDate(args.join(' '))
 			if (date == null) return `Invalid Argument: Date not detected \`${args.join(' ')}\``
 
 			var now = new Date()
@@ -1870,7 +1951,7 @@ module.exports = {
 			AllowSubmissions = true
 			module.exports.save()
 			Announcement.DelayFunction(bot, `COMP-END`, Hours, Minutes)
-			module.exports.addTimeRemainingWarnings(bot, TaskChannel)
+			//module.exports.addTimeRemainingWarnings(bot, TaskChannel)
 		} catch (e) {
 			notifyHosts(bot, `Failed to release task \`\`\`${e}\`\`\``, `ERROR`)
 		}
@@ -1928,12 +2009,11 @@ module.exports = {
 		if (TimedTaskStatus.completed.includes(msg.author.id)) return `Your time is up! (0 minutes remaining)`
 		if (!TimedTaskStatus.started.includes(msg.author.id)) return `You have not started yet!`
 
-		var startdate = TimedTaskStatus.startTimes.filter(a => a[0] == msg.author.id)[0]
-		var end = parseDate(startdate.toString()) // bad way to make a copy
+		var startdate = TimedTaskStatus.startTimes.filter(a => a[0] == msg.author.id)[0][1]
+		var end = parseDate(startdate)
 		end.setHours(end.getHours()+Hours)
 		end.setMinutes(end.getMinutes()+Minutes)
-		var now = new Date()
-		return `You have approximately ${miscfuncs.formatSecsToStr((end - now) / 1000)} remaining to submit!`
+		return `Your deadline to submit is approximately <t:${timestamp(end)}:R>`
     }
   },
 
@@ -2080,7 +2160,7 @@ module.exports = {
 			for (var i = 0; i < timed.length; i++) {
 				var line = `${placements[i]}${ordinal_suffix(placements[i])}. `
 				line += `${await submissionName(bot, timed[i].id)} ${getTimeString(timed[i].time)} ${timed[i].info}`.trim()
-				if (num_bold-- > 0) line = `**${line}**`
+				if (placements[i] <= num_bold) line = `**${line}**`
 				result += line + `\n`
 			}
 			result += `\n`
