@@ -80,6 +80,10 @@ const HEADER = {
   0x300: [UTFString, 256, `Movie description (UTF-8)`]
 }
 
+// ===============
+// Buffer Handling
+// ===============
+
 // intToLittleEndian(int, int)
 // returns a buffer containing the base 10 int in little endian form
 // Ex: intToLittleEndian(7435, 4) => <0b 1d 00 00>
@@ -111,11 +115,11 @@ function littleEndianToInt(buffer) {
 
 // bufferToString(Buffer)
 // converts a buffer to a string and removes trailing zeros
-function bufferToString(buffer) {
+function bufferToString(buffer, encoding = "utf8") {
   while (Buffer.byteLength(buffer) > 0 && buffer[Buffer.byteLength(buffer) - 1] == 0) {
     buffer = buffer.slice(0, Buffer.byteLength(buffer) - 1)
   }
-  return buffer.toString()
+  return buffer.toString(encoding)
 }
 
 // bufferToStringLiteral(Buffer)
@@ -141,6 +145,90 @@ function bufferInsert(buffer, start, end, insert) {
     buffer.slice(end, Buffer.byteLength(buffer))
   ])
 }
+
+// stringLiteralToBuffer(string, size)
+// Converts the string to a buffer
+// pads the right with 0 to fill size
+// Any non-hex characters are set to F
+// Ex: stringLiteralToBuffer("ABG21", 8) => <AB F2 10 00>
+function stringLiteralToBuffer(str, size) {
+  str = str.toUpperCase().replace(/ /g, ``).replace(/[^0-9A-F]/, `F`)
+  if (str.length % 2 == 1) str += `0`
+  str = str.match(/.{2}/g)
+  var bytes = []
+  for (i = (size + (size % 2)) / 2 - 1; i >= 0; i--) {
+    if (i < str.length) {
+      bytes.unshift(`0x` + str[i])
+    } else {
+      bytes.unshift(`0x00`)
+    }
+  }
+  return Buffer.from(bytes)
+}
+
+function read(addr, file) {
+  if (!(addr in HEADER)) return
+  var type = HEADER[addr][0]
+  var data = file.slice(addr, addr+HEADER[addr][1])
+
+  if (type == BitField) {
+    return littleEndianToInt(data).toString(2) // todo: interpret so there's a message like "P1, P2 (mempack), P4 (mempack+rumble)"
+
+  } else if (type == UInt || type == Integer) {
+    return littleEndianToInt(data)
+
+  } else if (type == AsciiString) {
+    return bufferToString(data, "ascii")
+
+  } else if (type == UTFString) {
+    return bufferToString(data)
+
+  } else if (type == Bytes) {
+    return bufferToStringLiteral(data)
+  }
+}
+
+function write(addr, data, file) {
+  if (!(addr in HEADER)) return
+  var type = HEADER[addr][0]
+
+  if (type == BitField) {
+    if (isNaN(data)) {
+      data = 1 // default to enable P1
+    } else if (isNaN('0b'+data)) {
+      data = Number(data)
+    } else {
+      data = Number('0b'+data) // parseInt(data, 2)
+    }
+    data = intToLittleEndian(data, HEADER[addr][1])
+
+  } else if (type == UInt) {
+    if (isNaN(data) || Number(data) < 0) {
+      data = 0
+    } else {
+      data = Number(data)
+    }
+    data = intToLittleEndian(data)
+
+  } else if (type == Integer) {
+    data = isNaN(data) ? 0 : Number(data)
+    data = intToLittleEndian(data)
+
+  } else if (type == AsciiString) {
+    data = Buffer.from(data, "ascii")
+
+  } else if (type == UTFString) {
+    data = Buffer.from(data)
+
+  } else if (type == Bytes) {
+    data = stringLiteralToBuffer(data, HEADER[addr][1])
+  }
+  bufferInsert(file, addr, addr+HEADER[addr][1], data)
+}
+
+// =============
+// File Handling (this should be moved to save.js)
+// =============
 
 // check if a file has been fully downloaded
 function hasDownloaded(filename, filesize) {
@@ -316,6 +404,16 @@ function QueueAdd(bot, m64_url, st_url, cmdline_args, startup, callback, channel
 // ================
 // Discord Commands
 // ================
+
+function parseOffset(arg) {
+  var offset = parseInt(arg, 16)
+  if (isNaN(offset)) {
+    return {error: `Invalid Argument: offset must be a number`}
+  } else if (!validOffset(offset)) {
+    return {error: `Invalid Argument: offset is not a valid start location`}
+  }
+  return {offset: offset, error: false}
+}
 
 
 module.exports = {
@@ -505,6 +603,81 @@ module.exports = {
     }
   },
 
+  /*m64read:{ // shortcuts for editing m64s
+    name: `m64read`,
+    aliases: [],
+    short_descrip: `read header data`,
+    full_descrip: "Usage: `$m64read <offset> <m64>`\nReads header data given an offset and an m64. To see the list of relevant offsets use `$m64header`. An m64 attachment or url (after the address) will be accepted.",
+    hidden: true,
+    function: async function(bot, msg, args) {
+      if (args.length < 1) return "Missing Argument: `$m64read <address> <m64>`"
+      var offset = parseOffset(args.shift())
+      if (offset.error) return offset.error
+      offset = offset.offset
+      
+    }
+  },
+
+  m64write:{
+    name: `m64write`,
+    aliases: [],
+    short_descrip: ``,
+    full_descrip: "Usage: `$m64write <offset> [data] <m64 attachment>`\n.If `[data]` is nothing, an appropriate default value is used. Note: this requires an attachment to be uploaded with the command (sending a url to an m64 won't work).",
+    hidden: true,
+    function: async function(bot, msg, args) {
+      if (args.length < 1) return "Missing Arguments: "
+      var offset = parseOffset(args.shift())
+      if (offset.error) return offset.error
+      offset = offset.offset
+
+
+    }
+  },
+
+  set_jp:{
+    name: ``,
+    aliases: [],
+    short_descrip: ``,
+    full_descrip: ``,
+    hidden: true,
+    function: async function(bot, msg, args) {
+      if (args.length < 1) return "Missing Argument: "
+    }
+  },
+
+  set_us:{
+    name: ``,
+    aliases: [],
+    short_descrip: ``,
+    full_descrip: ``,
+    hidden: true,
+    function: async function(bot, msg, args) {
+      if (args.length < 1) return "Missing Argument: "
+    }
+  },
+
+  startsave:{
+    name: ``,
+    aliases: [],
+    short_descrip: ``,
+    full_descrip: ``,
+    hidden: true,
+    function: async function(bot, msg, args) {
+      if (args.length < 1) return "Missing Argument: "
+    }
+  },
+
+  startpoweron:{
+    name: ``,
+    aliases: [],
+    short_descrip: ``,
+    full_descrip: ``,
+    hidden: true,
+    function: async function(bot, msg, args) {
+      if (args.length < 1) return "Missing Argument: "
+    }
+  },*/
+
   info:{
     name: `m64info`,
     aliases: [],
@@ -646,7 +819,10 @@ module.exports = {
         st_url,
         mupen_args,
         () => {
-          if (fs.existsSync(`./encode.avi`)) fs.unlinkSync(`./encode.avi`) // remove previous encode
+          var err = null
+          if (fs.existsSync(`./encode.avi`)) {
+            fs.unlinkSync(`./encode.avi`) // ERROR HANDLE BC THIS ACTUALLY THREW AND CRASHED
+          }
           if (fs.existsSync(`./encode.mp4`)) fs.unlinkSync(`./encode.mp4`)
         },
         async () => {
@@ -664,7 +840,7 @@ module.exports = {
           bot.createMessage(msg.channel.id, `Uploading...`)
           try {
             cp.execSync(`ffmpeg -i encode.avi encode.mp4`) // TODO: detect if server is boosted (filesize limit) and pass -fs flag
-            var filesize_limit = msg.channel.guild != undefined && msg.channel.guild.premiumTier == 2 ? 50 : 8 // mb
+            var filesize_limit = msg.channel.guild != undefined && msg.channel.guild.premiumTier >= 2 ? 50 : 8 // mb
             filesize_limit = filesize_limit * 1000000 // in bytes
             stats = fs.statSync(`./encode.mp4`)
             var reply = `Encode Complete <@${msg.author.id}>`

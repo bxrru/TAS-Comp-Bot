@@ -20,7 +20,7 @@ var deleteFolderRecursive = function(path) {
     var filepath = `${path}/${file}`
     if (fs.lstatSync(filepath).isDirectory()) {
       deleteFolderRecursive(filepath) // recusive call
-    } else {
+    } else if (!filepath.toLowerCase().endsWith("conditions.lua")) { // file probably not updated on github
       fs.unlinkSync(filepath) // delete file
     }
   })
@@ -35,7 +35,7 @@ var copyFolderRecursive = function(path, destination) {
     var filepath = `${path}/${file}`
     if (fs.lstatSync(filepath).isDirectory()) {
       copyFolderRecursive(filepath, `${destination}/${file}`) // copy files in the subfolder
-    } else {
+    } else if (!filepath.toLowerCase().endsWith("conditions.lua")) {
       fs.copyFileSync(filepath, `${destination}/${file}`) // copy file
     }
   })
@@ -51,14 +51,13 @@ var updateFiles = function() {
     deleteFolderRecursive('./TAS-Comp-Bot') // just incase it's leftover
     cp.execSync(`git clone "https://github.com/bxrru/TAS-Comp-Bot"`)
 
-    // delete old files
     deleteFolderRecursive(Info.Bot_Files_Path)
-
-    // copy new files
     copyFolderRecursive('./TAS-Comp-Bot/bot-files/', Info.Bot_Files_Path)
-
-    // delete temp download
-    deleteFolderRecursive('./TAS-Comp-Bot/')
+    if (fs.existsSync("./TimingLua/")) {
+      deleteFolderRecursive("./TimingLua/")
+      copyFolderRecursive("./TAS-Comp-Bot/TimingLua/")
+    }
+    deleteFolderRecursive('./TAS-Comp-Bot/') // temp download
 
   } catch (e) {
     AllowUpdates = false
