@@ -188,13 +188,6 @@ function downloadAndRun(attachment, callback, url, filename, filesize) {
     onDownload(filename, filesize, callback);
 }
 
-// parses ffprobe output to get duration
-function parseffprobe(stderr) {
-    let ms = stderr.toString().match(/Duration: [^,]*,/g)[0];
-    ms = Date.parse(`1970-01-01T${ms.substring(10, ms.length - 1)}+00:00`);
-    return ms;
-}
-
 // ===========
 // Mupen Queue
 // ===========
@@ -695,7 +688,7 @@ module.exports = {
                         return;
                     }
 
-                    let length = parseffprobe(cp.spawnSync("ffprobe", ["encode.avi"]).stderr);
+                    let length = 1000 * Number(cp.execSync("ffprobe encode.avi -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"));
                     bot.createMessage(msg.channel.id, "Uploading...");
 
                     try {
@@ -728,9 +721,9 @@ module.exports = {
                         //console.log(cmd);
 
                         stats = fs.statSync("./encode.mp4");
-                        length -= parseffprobe(cp.spawnSync("ffprobe", ["encode.mp4"]).stderr);
+                        length -= 1000 * Number(cp.execSync("ffprobe encode.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"));
 
-                        const reply = `Encode Complete ${Math.abs(length) > 50 ? "(File size limit exceeded) " : ""}<@${msg.author.id}>`,
+                        const reply = `Encode Complete ${Math.abs(length) > 100 ? "(File size limit exceeded) " : ""}<@${msg.author.id}>`,
                             video = fs.readFileSync("./encode.mp4");
 
                         await bot.createMessage(msg.channel.id, reply, {
