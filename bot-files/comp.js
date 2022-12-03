@@ -9,7 +9,7 @@ const Announcement = require("./announcement.js")
 const Mupen = require("./m64_editor.js")
 const save = require("./save.js")
 
-const LUAPATH = "C:\\MupenServerFiles\\TimingLua\\" // TODO: put in config?
+const LUAPATH = process.cwd() + "\\TimingLua\\" // assumed bot is started from main folder
 
 var AllowSubmissions = false
 var Task = 1
@@ -360,9 +360,14 @@ module.exports = {
 	},
 
 	startTimedTask:function(bot){
-		var now = new Date()
-		Announcement.DelayFunction(bot, "COMP-RELEASE", ReleaseDate.getHours()-now.getHours(), ReleaseDate.getMinutes()-now.getMinutes())
-
+		var delta = Math.floor((ReleaseDate - new Date()) / 1000)
+		var days = Math.floor(delta / 86400)
+		delta -= days * 86400
+		var hours = Math.floor(delta / 3600) % 24
+		delta -= hours * 3600
+		var min = Math.floor(delta / 60) % 60
+		Announcement.DelayFunction(bot, "COMP-RELEASE", hours + 24*days, min)
+		
 		// this is all the now live message
 		var msg = `**__Task ${Task}__** is now live!\n\n`
 		msg += `You will have **${Hours} hour${Hours == 1 ? '' : 's'} and ${Minutes} minute${Minutes == 1 ? '' : 's'}** to complete this task.\n\n`
@@ -1284,7 +1289,7 @@ module.exports = {
 				TaskMessage = "No Task Available"
 				result = "Task message has been cleared"
 			} else {
-				TaskMessage = args.join(' ')
+				TaskMessage = msg.content.substr("$settaskmsg ".length)
 				result = "Task message has been updated. Use `$previewTask` to view it"
 			}
 
@@ -1560,7 +1565,7 @@ module.exports = {
 			taskmsg: TaskMessage,
 			timedtaskstatus: TimedTaskStatus,
 			taskchannel: TaskChannel,
-			releasedate: ReleaseDate.toString(),
+			releasedate: ReleaseDate,
 			warnings: TimeRemainingWarnings,
 			roletype: RoleStyle,
 			ignoredupdates: IgnoreUpdates,
