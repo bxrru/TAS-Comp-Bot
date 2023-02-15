@@ -4,7 +4,7 @@
   "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry",
   "main": "start.js",
   "dependencies": {
-    "@discordjs/opus": "^0.3.2",
+    "@discordjs/opus": "^0.8.0",
     "bufferutil": "^4.0.1",
     "chrono-node": "^2.2.4",
     "eris": "^0.13.4",
