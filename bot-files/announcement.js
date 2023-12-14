@@ -137,7 +137,17 @@ module.exports = {
         var dm_ac = await bot.getDMChannel(announcement.channel.substr(2))
         await dm_ac.createMessage(announcement.message)
       } else {
-			   await bot.createMessage(announcement.channel, {content: announcement.message, disableEveryone: false})
+			   await bot.createMessage(
+				   announcement.channel,
+					{
+						content: announcement.message,
+						allowedMentions: {
+								everyone: true,
+								roles: true,
+								users: true
+						}
+					}
+				)
       }
 
 		} catch (e) {

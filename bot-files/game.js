@@ -129,12 +129,13 @@ module.exports = {
         function: (bot, msg, args) => {
             if (!miscfuncs.isDM(msg) && disabled(msg.channel.guild.id)) return
 
-            const dim = Math.min(Math.max(parseInt(args[0]) || 3, 2), 7)
+            const dim = Math.min(Math.max(parseInt(args[0]) || 3, 2), 35) // max 35 so line.length <= 2000
 
             const emojis = (miscfuncs.isDM(msg) || msg.channel.guild.emojis.length === 0) ? DefaultEmoji : msg.channel.guild.emojis
             const roll = []
             let win = false
             let result = ""
+            let line = ""
 
             for (let i = 0; i < dim**2; i++) roll.push(getRandomEmoji(emojis))
 
@@ -150,8 +151,17 @@ module.exports = {
             if (!win && (new Set(roll.filter((_, i) => i % (dim + 1) === 0)).size === 1 || new Set(roll.filter((_, i) => i > 0 && i < dim**2 - 1 && i % (dim - 1) === 0)).size === 1)) win = true
 
             for (let i = 0; i < dim**2; i++) {
-                result += printEmoji(roll[i])
-                if (i % dim === dim - 1) result += "\n"
+                line += printEmoji(roll[i])
+
+                if (i % dim === dim - 1) {
+                    if (result.length + line.length > 2000) {
+                        bot.createMessage(msg.channel.id, result.replace(/\n$/, "")) // remove \n char at the end
+                        result = ""
+                    }
+
+                    result += `${line}\n`
+                    line = ""
+                }
             }
 
             bot.createMessage(msg.channel.id, result)

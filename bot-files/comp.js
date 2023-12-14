@@ -17,13 +17,14 @@ var FilePrefix = "TASCompetition"
 var Host_IDs = []
 var SubmissionsChannel = ""
 var Channel_ID = ""
-var Message_ID = ""
+var Message_IDs = [] // in case too many people submit, possibly we need multiple messages
 var DQs = [] // same as Submissions but with 'Reason' field as well // toDO: replace with bool dq field in Submissions
 var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, time, info}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
 // time is saved in VIs, info is additional info for results (rerecords, A presses, etc.)
 // Submissions will store the user_id of the most recent partner to submit (in co-op tasks)
 var Nicknames = {} // {id: name} remember custom names set with $setname between tasks
+var LockedNames = [] // ids that are not allowed to change their nickname (per user instead of per submission now)
 var Teams = {} // {id1: id2, id2: id1, "id1,id2": team_name} // hard coded teams of 2
 var TeamTask = false
 
@@ -49,25 +50,53 @@ var IgnoreUpdates = {} // id: []
 
 var AllowAutoTime = false
 
+// [AF] For April Fool's Day, randomly assign names to display on a leaderboard
+let NamesPool = ["kanef","Why","AStrongGuy","Bretaigne","manama","Lysinthia,","CeeSZee","Bagel","Brokami","emoyosh","YO_WUZ_UP","PurpleJuiceBox","Aurora112190","Jonarn","JalvinGaming","Zerolin","Gryzak","swajee","Superdavo0001","Ethan D.","FanOfNintendo","Bluely","gainai","Nis","VisionElf","Peter Griffin","Noci27","Mister Shots","Zombie","SilentSlayers","Rush57","Zyon","Core2EE","fifdspence","Blobfish Times","TheAmazingAladdin","icecream17","Experge","MineMan","Fritzafella","Soweli","Nicsi","CraftingDNA","Sunk","alex167","sm64noob","Sk3p3x","Chosis","DeRockProject","drybloxman","Coolerdude1203","Deldee/Rouge","SpeckyYT","Fraims","Brittany","Ystem","Laxenarde","FilipeTales","jolan","roblox8192","ligma","Rayon","RadixSmash","SuperSM64","Cynimal","BigBongB","Meowximum","LeonGamer_real","DanPark","Taechuk","DyllonStej","Experge25A","SuperM789","Noobtasstar","wRadion","Iwer Sonsch","SR","FeijoadaMolhada","Cabi","paper","MKDasher","Bobbybob","makayu","sear","lemon","L3dry","TelephoneMan","B4DTAS3R","NoobTASer","1Ted59","Now_wow","scuttlebug_raiser","Finn The Human","ds273","Padacuw","FireBreather","Marbler","LeddaZ","brqm","Windows X","Neicu","famicomdisksystem","2003041","Kociewie2012","enderience","Tabascoth","Adeal","Alex__","Tomatobird8","Krithalith","Niknoc","kierio04","Dazer","ShadoXFM","Dono","aquamarina","Skazzy3","mekb the turtle","Sk3p3X","Eribetra","Non5en5e","TimeTravelPenguin","SolarPrism","gameplayer","Major","Madghostek","MoonlightMirage","Somebro","Krystal","PastaGuy27","Not Plush","Jongyon","fnfnfnfnf123","Crackhex","Lim","yNotLaseyzin","superminerJG","neicu","LRFLEW","Luigihaxd","THC98","Bismuth","galoomba","Faz","Kierio04","MrPyt1001","bread","zach","Hapax","Komali","slither","LukeSaward1","Vbhnkl","Jatotz","SunkSimp","karl1043","M1NTY","speedycube64","bagel","Anastazja","Discordine","MrGatlampa","Galoomba","69420lol","LaseyApow","Cankicker8","gomitamaster1938984"]
+let NamesFree = ["TASCompBot","Frame","ERGC | Xander","RSw","Alexpalix1","tjk"] // arbitrary starting selection
+let NamesUsed = []
+const NAMES_PER_ENTRANT = 3
+function RandomName() {
+	let name = "" + Math.floor(Math.random() * 1000000000) // use random numbers if we run out of names somehow
+	if (NamesFree.length) {
+		name = NamesFree.splice(Math.floor(Math.random() * NamesFree.length), 1)[0] 
+	}
+	for (let i = 0; i < Submissions.length; ++i) {
+		if (Submissions[i].name == name) { // this name is being reused, so remove the submission
+			Submissions.splice(i, 1)
+			break
+		}
+	}
+	NamesUsed.push(name)
+	//console.log("Random Name: " + name)
+    return name
+}
+
 // TODO: Implement a confirmation of request feature that makes people
 // resend a task request with some number to actually start the task
 
 async function SubmissionsToMessage(bot, showInfo){
-	var message = "**__Current Submissions:__**\n\n"
-	if (Submissions.length == 0) message += "No Submissions (Yet)\n"
+	var msgs = ["**__Current Submissions:__**\n\n"]
+	if (Submissions.length == 0) msgs[0] += "No Submissions (Yet)\n"
+	const MAXMSGLEN = 1900//2000 - 6 - 1 // 6 allows for ```x``` and 1 extra char of leeway bc i dont trust it xd
 	for (var i = 0; i < Submissions.length; i++) {
 		var player = Submissions[i]
 		// only lists ID of most recent player to submit (when in a team)
-		message += `${i + 1}. ${await submissionName(bot, player.id)}${showInfo ? ` (${player.id})` : ``}\n`
+		let line = `${i + 1}. ${await submissionName(bot, player.id)}${showInfo ? ` (${player.id})` : ``}\n`
+		//let line = `${i + 1}. ${[player.name]}${showInfo ? ` (${player.id})` : ``}\n` // [AF] use name on submission
+		if ((msgs[msgs.length - 1] + line).length < MAXMSGLEN) {
+			msgs[msgs.length - 1] += line
+		} else {
+			msgs.push(line)
+		}
 	}
 
-	if (showInfo) {
+	/*if (showInfo) { // this DQ system is old/unused
 		for (var i = 0; i < DQs.length; i++) {
 			var player = DQs[i]
 			message += `DQ${i + 1}: ${player.name} (${player.id})\n`
 		}
-	}
-	return message
+	}*/
+	return msgs
 }
 
 // check if a message isn't allowed to have access to commands
@@ -134,11 +163,28 @@ function getTimeString(VIs) {
 }
 
 // 3min time limit by default
-function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel_id = null, err_user_id = null) {
+function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*30, err_channel_id = null, err_user_id = null) {
+	//console.log(submission_id)
+	//console.log(submission_number)
+	var getSubNum = function() { // [AF]
+		if (submission_id != null) {
+			for (let i = 0; i < Submissions.length; ++i) {
+				if (Submissions[i].id == submission_id) {
+					return i
+				}
+			}
+		} else {
+			return submission_number
+		}
+	}
+	//console.log(Submissions)
+	//console.log(getSubNum())
+	//console.log(Submissions[getSubNum()])
+	
 	return Mupen.Process( // returns position in queue
 		bot,
-		Submissions[submission_number].m64,
-		Submissions[submission_number].st,
+		Submissions[getSubNum()].m64,
+		Submissions[getSubNum()].st,
 		["-m64", LUAPATH + "submission.m64", "-lua", LUAPATH + "TASCompTiming.lua"],
 		() => {
 			if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
@@ -146,12 +192,13 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 			if (fs.existsSync(LUAPATH + "submission.st")) fs.unlinkSync(LUAPATH + "submission.st")
 			fs.copyFileSync(save.getSavePath() + "/tas.st", LUAPATH + "submission.st")
 		},
-		async (TLE) => {
+		async (TLE, MISMATCH_SETTINGS) => {
 			var admin_msg = `${await submissionName(bot, Submissions[submission_number].id)} (${submission_number+1}): `
+			//var admin_msg = `${Submissions[getSubNum()].name} (${getSubNum()+1}): ` // [AF] use name on submission
 			if (TLE) {
 				admin_msg += `time limit exceeded (their run must be timed manually)`
 				try {
-					var dm = await bot.getDMChannel(Submissions[submission_number].id)
+					var dm = await bot.getDMChannel(Submissions[getSubNum()].id)
 					dm.createMessage(`Your submission exceeds the process time limit. It will be manually timed by a host at a later time.`)
 				} catch (e) {
 					admin_msg += `**Warning:** Failed to notify user of their time update. `
@@ -159,15 +206,21 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 				notifyHosts(bot, admin_msg, "Timing")
 				return
 			}
-			var result = fs.readFileSync(LUAPATH + "result.txt").toString()
+			let result = ""
+			if (MISMATCH_SETTINGS) {
+				result = "DQ Can't playback m64. Make sure you use 1 controller with rumblepak & mempak disabled!"
+			} else {
+				result = fs.readFileSync(LUAPATH + "result.txt").toString()
+			}
 			var user_msg = ``
 			var unchanged = false
 			if (result.startsWith("DQ")) {
 				var reason = result.split(' ').slice(1).join(' ')
 				admin_msg += `DQ [${reason}]. `
-				unchanged = Submissions[submission_number].dq && Submissions[submission_number].info == reason
-				Submissions[submission_number].dq = true
-				Submissions[submission_number].info = reason
+				unchanged = Submissions[getSubNum()].dq && Submissions[getSubNum()].info == reason
+				Submissions[getSubNum()].dq = true
+				Submissions[getSubNum()].info = reason
+				Submissions[getSubNum()].time = 0 // [AF]
 				user_msg = `Your submission is currently disqualified. Reason: \`${reason}\` `
 				if (unchanged) {
 					admin_msg += `(result unchanged) `
@@ -178,13 +231,13 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 				var info = result.split(' ').slice(2).join(' ') // normally an empty string
 				admin_msg += `||${getTimeString(frames*2)} (${frames}f) ${info}||. `
 				unchanged = (
-					Submissions[submission_number].time == frames * 2 &&
-					Submissions[submission_number].info == info && // usecase: extra info is important (track A presses)
-					!Submissions[submission_number].dq // unchanged if it wasn't a DQ previously
+					Submissions[getSubNum()].time == frames * 2 &&
+					Submissions[getSubNum()].info == info && // usecase: extra info is important (track A presses)
+					!Submissions[getSubNum()].dq // unchanged if it wasn't a DQ previously
 				)
-				Submissions[submission_number].time = frames * 2
-				Submissions[submission_number].info = info
-				Submissions[submission_number].dq = false
+				Submissions[getSubNum()].time = frames * 2
+				Submissions[getSubNum()].info = info
+				Submissions[getSubNum()].dq = false
 				user_msg = `Your time has been updated: ${getTimeString(frames * 2)} (${frames}f) ${info} `
 				if (unchanged) {
 					admin_msg += `(time unchanged) `
@@ -192,16 +245,21 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 				}
 			}
 			module.exports.save()
-			fs.unlinkSync(LUAPATH + "result.txt")
+			if (fs.existsSync(LUAPATH + "results.txt")) fs.unlinkSync(LUAPATH + "result.txt")
 			admin_msg += `Auto-timed by lua. `
 			// either the time has changed, or it hasnt changed but it was a submission (not an admin timing the run)
 			if (!unchanged || (unchanged && !err_channel_id)) {
-				var dm = await bot.getDMChannel(Submissions[submission_number].id)
-				dm.createMessage(user_msg.trim()).catch(e => {
-					admin_msg += `**Warning:** Failed to notify user of their time update. ` // since this isn't awaited, I don't think this error actually shows up...
-				})
-				if (completedTeam(Submissions[submission_number].id)) { // message teammate
-					dm = await bot.getDMChannel(Teams[Submissions[submission_number].id])
+				try {
+					var dm = await bot.getDMChannel(Submissions[getSubNum()].id)
+					dm.createMessage(user_msg.trim()).catch(e => {
+						admin_msg += `**Warning:** Failed to notify user of their time update. ` // since this isn't awaited, I don't think this error actually shows up...
+					})
+				} catch (e) { // [AF] issue timing old runs since the uid has '-' at the end
+					admin_msg += `**Warning:** Failed to notify user (\`${Submissions[getSubNum()].id}\`) of their time update. `
+				}
+				
+				if (completedTeam(Submissions[getSubNum()].id)) { // message teammate
+					dm = await bot.getDMChannel(Teams[Submissions[getSubNum()].id])
 					dm.createMessage(user_msg.trim()).catch(e => {
 						admin_msg += `**Warning:** Failed to notify user's partner of their time update. `
 					})
@@ -209,6 +267,18 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 			}
 			if (err_channel_id) bot.createMessage(err_channel_id, admin_msg) // assume timing was manually requested
 			notifyHosts(bot, admin_msg, `Timing`)
+
+			// [AF] sort runs by time and update msg
+			/*var untimed = [...Submissions].filter(a => a.time == null)
+			var dqs = [...Submissions].filter(a => a.dq)
+			var timed = [...Submissions].filter(a => !a.dq && a.time != null).sort((a,b) => b.time - a.time) // reverse so pop is in right order
+			Submissions = []
+			while (timed.length) Submissions.push(timed.pop())
+			while (dqs.length) Submissions.push(dqs.pop())
+			while (untimed.length) Submissions.push(untimed.pop())*/
+			//console.log(Submissions)
+			module.exports.save()
+			module.exports.updateSubmissionMessage(bot)
 		},
 		err_channel_id,
 		err_user_id,
@@ -221,9 +291,9 @@ function AutoTimeEntry(bot, submission_number, time_limit = 3*60*30, err_channel
 function CheckAutoTiming(bot, msg) {
 	if (!AllowAutoTime) return
 	Submissions.forEach((submission, index) => {
-		if (submission.id != msg.author.id) return
+		if (submission.id != msg.author.id && !(msg.author.id in Teams && submission.id == Teams[msg.author.id])) return
 		if (submission.m64.length == 0 || submission.st.length == 0) return // make sure there is both an m64 and st
-		AutoTimeEntry(bot, index)
+		AutoTimeEntry(bot, index, submission.id) // [AF]
 	})
 }
 
@@ -285,11 +355,22 @@ function completedTeam(user_id) {
 }
 
 async function submissionName(bot, user_id, only_team_name = false) {
+	const MAXNAMELEN = 100
+	let name = ""
 	if (!completedTeam(user_id)) {
-		if (user_id in Nicknames) return Nicknames[user_id]
-		var submitted = Submissions.filter(s => s.id == user_id)
-		if (submitted.length) return submitted[0].name // instead of loading the user with the bot
-		return `` // none
+		if (user_id in Nicknames /* [AF] dont use nicknames */) {
+			name = Nicknames[user_id]
+		} else {
+			//let user = await Users.getUser(bot, user_id)
+			//name = user.username
+			let submitted = Submissions.filter(s => s.id == user_id)
+			if (submitted.length) { // instead of loading the user with the bot
+				name = submitted[0].name
+			}
+		}
+	}
+	if (name.length > 0) {
+		return name.substring(0, MAXNAMELEN)
 	}
 	try {
 		var user = await Users.getUser(bot, user_id)
@@ -298,9 +379,9 @@ async function submissionName(bot, user_id, only_team_name = false) {
 		var name2 = Teams[user_id] in Nicknames ? Nicknames[Teams[user_id]] : partner.username
 		if ([user_id,Teams[user_id]] in Teams) {
 			if (only_team_name) return Teams[[user_id,Teams[user_id]]]
-			return `${Teams[[user_id,Teams[user_id]]]} (${name1} & ${name2})`
+			return `${Teams[[user_id,Teams[user_id]]]} (${name1} & ${name2})`.substring(0, MAXNAMELEN)
 		}
-		return `${name1} & ${name2}`
+		return `${name1} & ${name2}`.substring(0, MAXNAMELEN)
 	} catch (error) {
 		console.log(`Error retrieving team name: ${error}`)
 	}
@@ -479,6 +560,8 @@ module.exports = {
 			TimedTaskStatus.completed = []
 			TimedTaskStatus.startTimes = []
 			Teams = {}
+			while (NamesUsed.length) NamesPool.push(NamesUsed.pop())
+			while (NamesFree.length > 6) NamesPool.push(NamesFree.pop())
 			module.exports.save()
 
 			notifyHosts(bot, result)
@@ -807,11 +890,15 @@ module.exports = {
 
 				if (message.author.id != self.id) return "Invalid user. Message must be sent by me"
 
-				message.edit(await SubmissionsToMessage(bot))
+				let msgs = await SubmissionsToMessage(bot)
+				message.edit(msgs[0])
 				Channel_ID = channel_id
-				Message_ID = message_id
+				Message_IDs = [message_id]
 				module.exports.save()
-				return "Message Set <#" + Channel_ID + "> " + Message_ID
+				if (msgs.length > 1) {
+					return `Message Set <#${Channel_ID}> ${Message_IDs[0]}. Warning: Submissions list is too big for one message.`
+				}
+				return `Message Set <#${Channel_ID}> ${Message_IDs[0]}`
 
 			} catch (e) {
 				return "Invalid channel or message id. Could not find message ```"+e+"```"
@@ -881,55 +968,50 @@ module.exports = {
 	lockName:{
 		name: "lockName",
 		short_descrip: "Disable a user from changing their submission name",
-		full_descrip: "Usage: `$lockname <Submission_Number> [Name]`\nPrevents the user from changing their name and sets it to `[Name]`. If no name is specified it will remain the same. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$lockname <user_id> [Name]`\nPrevents the user from changing their name and sets it to `[Name]`. If no name is specified it will remain the same.",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
-			if (Submissions.length == 0) return "There are no submissions to edit"
-			if (args.length == 0) return "Not Enough Arguments: `<Submission Number> [Name]`"
+			if (args.length == 0) return "Not Enough Arguments: `<user_id> [Name]`"
 
-			var num = getSubmissionNumber(args.shift())
-			if (num.message.length) return num.message
-
-			if (num.dq) {
-				DQs[num.number-1].namelocked = true
-				if (args.length != 0) DQs[num.number-1].name = args.join(" ")
+			let id = args.shift()
+			let nick = args.length ? args.join(' ') : undefined
+			let result  = ""
+			if (LockedNames.includes(id) && nick == undefined) {
+				if (nick !== undefined) {
+					Nicknames[id] = nick
+					result = `\`$setname\` privleges disabled for ${nick}`
+				} else {
+					result =  "Their name is already locked"
+				}
+				
 			} else {
-				Submissions[num.number-1].namelocked = true
-				if (args.length != 0) Submissions[num.number-1].name = args.join(" ")
+				LockedNames.push(id)
+				Nicknames[id] = nick
+				result = `\`$setname\` privleges disabled for ${nick}`
 			}
 			module.exports.save()
 
 			module.exports.updateSubmissionMessage(bot)
-
-			return `\`$setname\` privleges disabled for ${args.join(" ")}`
+			return result
 		}
 	},
 
 	unlockName:{
 		name: "unlockName",
 		short_descrip: "Allow users to change their submission name",
-		full_descrip: "Usage: `$unlockname <Submission_Number>`\nAllows the user to change their submission name (they can by default). To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$unlockname <user_id>`\nAllows the user to change their submission name (they can by default).",
 		hidden: true,
 		function: function(bot, msg, args){
 			if (notAllowed(msg)) return
-			if (Submissions.length == 0) return "There are no submissions to edit"
-			if (args.length == 0) return "Not Enough Arguments: `<Submission Number>`"
+			if (args.length == 0) return "Not Enough Arguments: `<user_id>`"
 
-			var num = getSubmissionNumber(args[0])
-			if (num.message.length) return num.message
-
-			if (num.dq){
-				DQs[num.number-1].namelocked = false
-			} else {
-				Submissions[num.number-1].namelocked = false
+			if (!LockedNames.includes(args[0])) {
+				return "Their name was not locked to begin with"
 			}
+			LockedNames = LockedNames.filter(id => id != args[0])
 			module.exports.save()
-
-			var result = "`$setname` privleges enabled for "
-			result += num.dq ? DQs[num.number-1].name : Submissions[num.number-1].name
-			result += num.dq ? ". They will be able to use the command once they are no longer disqualified" : ""
-			return result
+			return Nicknames[args[0]] + " can now set their own nickname"
 		}
 	},
 
@@ -1058,7 +1140,7 @@ module.exports = {
 		name: "getsubmission",
 		aliases: ["get"],
 		short_descrip: "Get submitted files (get)",
-		full_descrip: "Usage: `$get <Submission_Number or 'all'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all` the bot will upload a script that can automatically download every file. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$get <Submission_Number or 'all' or 'entry name'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all` the bot will upload a script that can automatically download every file. To see the list of Submission Numbers use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 
@@ -1066,7 +1148,7 @@ module.exports = {
 
 			try {
 				if (!Submissions.length && !DQs.length) return "No submissions found"
-				if (args.length == 0) return "Not Enough Arguments: `$get <Submission_Number>`"
+				if (args.length == 0) return "Not Enough Arguments: `$get <Submission_Number or 'all' or 'entry name'>`"
 
 				var dm = await bot.getDMChannel(msg.author.id)
 				if (args[0].toLowerCase() == "all"){
@@ -1074,7 +1156,22 @@ module.exports = {
 					module.exports.getAllSubmissions(bot, dm)
 					return
 				}
-
+				
+				if (isNaN(args[0])) { // attempt to get submission by name
+					for (let i = 0; i < Submissions.length; ++i) {
+						if (Submissions[i].name == args.join(' ')) {
+							let s = Submissions[i]
+							let result = `${i+1}. ${s.name}\nID: ${s.id}\nTime: ||${getTimeString(s.time)} (${s.time/2}f) ${s.info}||\nm64: ${s.m64}\nst: ${s.st}`
+							if (miscfuncs.isDM(msg)) {
+								return result
+							} else {
+								dm.createMessage(result)
+								return 'Submission info sent via DMs'
+							}
+						}
+					}
+					return "Invalid Argument: `$get <Submission_Number or 'all' or 'entry name'>`"
+				}
 				var num = getSubmissionNumber(args[0])
 				if (num.message.length) return num.message
 
@@ -1099,10 +1196,24 @@ module.exports = {
 		var text = ''
 		text += 'md "Task ' + Task + '"\n'
 		text += 'cd "Task ' + Task + '"\n'
-		
+		//console.log(Nicknames)
 		var addSubmission = async function(submission, dq) {
 			// make folder // go into folder
-			var name = module.exports.fileSafeName(await submissionName(bot, submission.id))
+			if (submission.id.substr(submission.id.length-1, submission.id.length) == '-') return
+			let name = await submissionName(bot, submission.id) // [AF] name = ""
+			try {
+				//console.log(submission.id)
+				let user = await Users.getUser(bot, submission.id)
+				//console.log("what")
+				//console.log(user.username)
+				name = user.username
+			} catch (e) {
+				name = await submissionName(bot, submission.id) // use alias?
+				name += "(UNKNOWN)"
+			}
+			if (Nicknames[submission.id] !== undefined) name = Nicknames[submission.id]
+			name = module.exports.fileSafeName(name)
+			//console.log(submission.id + " " + name)
 			
 			if (dq) {
 				text += 'md "DQ_' + name + '"\n'
@@ -1114,8 +1225,9 @@ module.exports = {
 
 			// download m64 + st
 			var filename = module.exports.properFileName(name)
-			if (submission.m64) text += `powershell -Command "Invoke-WebRequest ${submission.m64} -OutFile '${filename}.m64'\n`
-			if (submission.st) text += `powershell -Command "Invoke-WebRequest ${submission.st} -OutFile '${filename}.st'\n`
+			let f = (x) => x.substring(0, x.lastIndexOf('?'));
+			if (submission.m64) text += `powershell -Command "Invoke-WebRequest ${f(submission.m64)} -OutFile '${filename}.m64'\n`
+			if (submission.st) text += `powershell -Command "Invoke-WebRequest ${f(submission.st)} -OutFile '${filename}.st'\n`
 
 			// go back to main folder
 			text += 'cd ".."\n'
@@ -1155,7 +1267,14 @@ module.exports = {
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
-			return "```" + (await SubmissionsToMessage(bot, true)) + "```"
+			//if (!miscfuncs.isDM(msg)) return // [AF] dont allow this in public channels
+			let msgs = await SubmissionsToMessage(bot, true)
+			if (msgs.length == 1) {
+				return "```" + (msgs[0]) + "```"
+			}
+			for (const text of msgs) {
+				msg.channel.createMessage("```" + text + "```")
+			}
 		}
 	},
 
@@ -1176,12 +1295,12 @@ module.exports = {
 			info += `Auto-timing: ${AllowAutoTime ? `enabled` : `disabled`}\n`
 			info += `Teams: ${TeamTask ? `enabled` : `disabled`}\n`
 			try {
-				var message = await bot.getMessage(Channel_ID, Message_ID)
+				var message = await bot.getMessage(Channel_ID, Message_IDs[0])
 				info += `Submissions Message URL: https://discordapp.com/channels/${message.channel.guild.id}/${message.channel.id}/${message.id}\n`
 			} catch (e) {
 				info += `Invalid Current Submissions Message: Could not retrieve URL\n`
 				Channel_ID = ""
-				Message_ID = ""
+				Message_IDs = []
 			}
 
 			info += Host_IDs.length ? `\n**Update Recipients**\n` : `\nNo users are set to receive submission updates\n`
@@ -1447,7 +1566,7 @@ module.exports = {
 
 	// short hand for initializing a submission
 	addSubmissionName:function(user_id, name){
-		if (user_id in Nicknames) name = Nicknames[user_id]
+		if (user_id in Nicknames) name = Nicknames[user_id] // [AF] commented this out to ignore nicknames
 		module.exports.addSubmission(user_id, name, "", 0, "", 0)
 	},
 
@@ -1523,8 +1642,14 @@ module.exports = {
 
 	// checks whether a user id is linked to a submission or not
 	hasSubmitted:function(user_id){
-		if (user_id in Teams && Submissions.filter(user => user.id == Teams[user_id]).length) return true // partner submitted
-		return Submissions.filter(user => user.id == user_id).length || DQs.filter(user => user.id == user_id).length
+		//console.log(`Checking if ${user_id} has submitted: ${Submissions.filter(user => (user.id == user_id) || (user_id in Teams && user.id == Teams[user_id])).length}`)
+		//if (user_id in Teams && Submissions.filter(user => user.id == Teams[user_id]).length) return true // partner submitted
+		return (
+			Submissions.filter(
+				user => (user.id == user_id) || (user_id in Teams && user.id == Teams[user_id])
+			).length ||
+			DQs.filter(user => user.id == user_id).length
+		)
 	},
 
 	// returns the submission object and it's ID given an id
@@ -1556,7 +1681,7 @@ module.exports = {
 			hosts: Host_IDs,
 			feed: SubmissionsChannel,
 			channel_id: Channel_ID,
-			message_id: Message_ID,
+			message_ids: Message_IDs,
 			submissions: Submissions,
 			dqs: DQs,
 			timedtask: TimedTask,
@@ -1571,14 +1696,18 @@ module.exports = {
 			ignoredupdates: IgnoreUpdates,
 			autotime: AllowAutoTime,
 			nicknames: Nicknames,
+			lockednames: LockedNames,
 			teamtask: TeamTask,
-			teams: Teams
+			teams: Teams,
+			namespool: NamesPool,
+			namesfree: NamesFree,
+			namesused: NamesUsed
 		}
 		Save.saveObject("submissions.json", data)
 	},
 
 	// reads relevant information from submissions.json and stores it in memory
-	load:function(){
+	load:function(bot){
 		var data = Save.readObject("submissions.json")
 		AllowSubmissions = data.acceptingSubmissions
 		Task = data.task
@@ -1590,7 +1719,7 @@ module.exports = {
 		Host_IDs = data.hosts
 		SubmissionsChannel = data.feed
 		Channel_ID = data.channel_id
-		Message_ID = data.message_id
+		while (data.message_ids.length > 0) Message_IDs.push(data.message_ids.shift())
 		TimedTask = data.timedtask
 		Hours = data.hr
 		Minutes = data.min
@@ -1620,20 +1749,30 @@ module.exports = {
 		Object.keys(data.nicknames).forEach(id => {
 			Nicknames[id] = data.nicknames[id]
 		})
+		while (data.lockednames.length) LockedNames.push(data.lockednames.pop())
 		TeamTask = data.teamtask
 		Object.keys(data.teams).forEach(id => {
 			Teams[id] = data.teams[id]
 		})
+		NamesPool = []
+		NamesFree = []
+		NamesUsed = []
+		while(data.namespool.length) NamesPool.push(data.namespool.pop())
+		while(data.namesfree.length) NamesFree.push(data.namesfree.pop())
+		while(data.namesused.length) NamesUsed.push(data.namesused.pop())
+		module.exports.updateSubmissionMessage(bot)
 	},
 
 	// return whether an attachment is an m64 or not
 	isM64:function(attachment){
-		return attachment.filename.substr(-4).toLowerCase() == ".m64"
+		let fname = attachment.filename.substring(0, attachment.filename.lastIndexOf('?')) || attachment.filename
+		return fname.substr(-4).toLowerCase() == ".m64"
 	},
 
 	// return whether an attachment is a savestate or not
 	isSt:function(attachment){
-		return attachment.filename.substr(-3).toLowerCase() == ".st" || attachment.filename.substr(-10).toLowerCase() == ".savestate"
+		let fname = attachment.filename.substring(0, attachment.filename.lastIndexOf('?')) || attachment.filename
+		return fname.substr(-3).toLowerCase() == ".st" || fname.substr(-10).toLowerCase() == ".savestate"
 	},
 
 	// returns a string with no special characters
@@ -1641,7 +1780,7 @@ module.exports = {
 		var string = "";
 		name.split('').forEach(char => {
 			// dont allow special characters
-			if (!["\\","/",":",'?','"','<','>','|',' ','*'].includes(char)) {
+			if (!["\\","/",":",'?','"','<','>','|',' ','*', "'"].includes(char)) {
 				string += char;
 			}
 		});
@@ -1676,10 +1815,11 @@ module.exports = {
 	filterFiles:async function(bot, msg, attachment, allow_autotime){
 		
 		// make sure the file is an m64 or st
+		let extension = ""
 		if (module.exports.isM64(attachment)) {
-			var filename = ".m64"
+			extension = ".m64"
 		} else if (module.exports.isSt(attachment)) {
-			var filename = ".st"
+			extension = ".st"
 		} else {
 			bot.createMessage(msg.channel.id, "Attachment ``"+attachment.filename+"`` is not an ``m64`` or ``st``")
 			return
@@ -1687,17 +1827,47 @@ module.exports = {
 		
 		// if they have not submitted, add a new submission
 		if (!module.exports.hasSubmitted(msg.author.id)){
+			//for (let i = 0; i < NAMES_PER_ENTRANT && NamesPool.length; ++i) { // [AF] add new names to the pool
+			//	NamesFree.push(NamesPool.pop())
+			//}
+			//module.exports.addSubmissionName(msg.author.id, RandomName()) // [AF]
+			//notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length})`, `New Submission`) // [AF] no tracking userid for hosts too!
 			module.exports.addSubmissionName(msg.author.id, msg.author.username)
 			notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length}) \`(${msg.author.id})\``, `New Submission`)
-		}
+		}/* else { // [AF] 
+			let sub = Submissions.filter(s => s.id == msg.author.id)[0]
+			// if they only have half a submission, don't assign a new name
+			if (sub.m64_size && sub.st_size) {
+				// old submissions get removed from the leaderboard when the names are reused
+				// so, just append '-' to the end of the user_id so it's not detected anywhere else
+				// this might break things that try to access those particular submissions by id
+				let new_name = RandomName() // get random name before old one is freed
+				for (let i = 0; i < Submissions.length; ++i) {
+					if (Submissions[i].id == msg.author.id) {
+						let cur_name = Submissions[i].name // this name is now fair game to use again
+						NamesUsed.splice(NamesUsed.indexOf(cur_name), 1)
+						NamesFree.push(cur_name)
+						Submissions[i].id += '-'
+						// submit m64 => copy old st
+						// submit st => copy old m64
+						if (extension == ".m64") {
+							module.exports.addSubmission(msg.author.id, new_name, "", 0, Submissions[i].st, Submissions[i].st_size)
+						} else {
+							module.exports.addSubmission(msg.author.id, new_name, Submissions[i].m64, Submissions[i].m64_size, "", 0)
+						}
+						break
+					} 
+				}
+			}
+		}*/
 
 		var name = await submissionName(bot, msg.author.id, true)
-		filename = module.exports.properFileName(name) + filename
+		let filename = module.exports.properFileName(name)
 		
 		// begin downloading the file
-		Save.downloadFromUrl(attachment.url, Save.getSavePath() + "/" + filename)
-
-		module.exports.uploadFile(bot, filename, attachment.size, msg, allow_autotime)
+		Save.downloadFromUrl(attachment.url, Save.getSavePath() + "/" + filename + msg.author.id + extension)
+		
+		module.exports.uploadFile(bot, filename, attachment.size, msg, allow_autotime, extension)
 		if (RoleStyle == `ON-SUBMISSION`) {
 			if (completedTeam(msg.author.id)) module.exports.giveRole(bot, Teams[msg.author.id], msg.author.username + `'s Partner`)
 			module.exports.giveRole(bot, msg.author.id, msg.author.username)
@@ -1713,7 +1883,8 @@ module.exports = {
 			var filetype = "ST"
 			if (module.exports.isM64({filename:file.name})) filetype = "M64"
 
-			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check your submitted files", file)
+			//var name = Submissions.filter(s => s.id == msg.author.id)[0].name // [AF] let them know what their name is
+			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check your submitted files."/* Your alias is " + name [AF]*/, file)
 			var attachment = message.attachments[0]
 
 			// save the url and filesize in the submission
@@ -1738,12 +1909,13 @@ module.exports = {
 
 	// recursive function that will keep trying to upload a file until the buffer size matches
 	// this is meant to be used after a file starts to download
-	uploadFile:async function(bot, filename, filesize, msg, allow_autotime){
-
+	// the file stored locally is filename + msg.author.id + extension
+	uploadFile:async function(bot, filename, filesize, msg, allow_autotime, extension){
+		
 		try {
 			var file = {
-				file: fs.readFileSync(Save.getSavePath() + "/" + filename),
-				name: filename
+				file: fs.readFileSync(Save.getSavePath() + "/" + filename + msg.author.id + extension),
+				name: filename + extension // exclude id when uploading it back
 			}
 		} catch (e) {
 			var file = {file: {byteLength: -1}} // this causes a recursive call
@@ -1751,12 +1923,12 @@ module.exports = {
 
 		// if the file hasnt completely downloaded try again
 		if (file.file.byteLength != filesize){
-			setTimeout(function(){module.exports.uploadFile(bot, filename, filesize, msg, allow_autotime)}, 1000)
+			setTimeout(function(){module.exports.uploadFile(bot, filename, filesize, msg, allow_autotime, extension)}, 1000)
 
 		} else {
 			// upload the file then delete it locally
 			await module.exports.storeFile(bot, file, msg)
-			fs.unlinkSync(Save.getSavePath() + "/" + filename)
+			fs.unlinkSync(Save.getSavePath() + "/" + filename + msg.author.id + extension)
 			if (allow_autotime) { // sometimes disable depending on submission order
 				CheckAutoTiming(bot, msg)
 			}
@@ -1766,28 +1938,48 @@ module.exports = {
 	},
 
 	// edits the stored message with the current submissions list
-	updateSubmissionMessage:async function(bot){
+	// force_new will force a new submission message ONLY IF the SubmissionsChannel is defined
+	// this allows nickname changes to be edits [TODO], while new submissions are new messages
+	updateSubmissionMessage:async function(bot, force_new = false){
+		let msgs = await SubmissionsToMessage(bot)
+		
+		if (force_new && Channel_ID != "" && Message_IDs.length) {
+			await module.exports.deleteSubmissionMessage(bot)
+		}
 
 		// create one if none exists
-		if ((Channel_ID == "" || Message_ID == "") && SubmissionsChannel != ""){
+		if ((Channel_ID == "" || Message_IDs.length == 0) && SubmissionsChannel != ""){
 			try {
-				var message = await bot.createMessage(SubmissionsChannel, await SubmissionsToMessage(bot))
-				Channel_ID = message.channel.id
-				Message_ID = message.id
+				Channel_ID = SubmissionsChannel
+				for (const text of msgs) {
+					let message = await bot.createMessage(SubmissionsChannel, text)
+					Message_IDs.push(message.id)
+				}
 			} catch (e) {
 				console.log("Failed to send submission message")
 				notifyHosts(bot, `Failed to send submission update to <#${SubmissionsChannel}> \`(${SubmissionsChannel})\``)
 				return
 			}
 		}
-
-		if (Channel_ID != "" && Message_ID != ""){
+		if (Channel_ID != "" && Message_IDs.length){
 			try {
-				var message = await bot.getMessage(Channel_ID, Message_ID);
-				message.edit(await SubmissionsToMessage(bot));
+				for (let i = 0; i < msgs.length; ++i) {
+					if (i < Message_IDs.length) {
+						let message = await bot.getMessage(Channel_ID, Message_IDs[i])
+						message.edit(msgs[i])
+					} else {
+						let message = await bot.createMessage(Channel_ID, msgs[i])
+						Message_IDs.push(message.id)
+					}
+				}
+				while (Message_IDs.length > msgs.length) { // possibly someone removed from msg
+					let mid = Message_IDs.pop()
+					let message = await bot.getMessage(Channel_ID, mid)
+					message.delete()
+				}
 			} catch (e) {
 				console.log("Failed to edit submission message")
-				notifyHosts(bot, "Failed to edit submission message")
+				notifyHosts(bot, "Failed to edit submission message ```" + e + "```")
 			}
 		}
 	},
@@ -1844,16 +2036,25 @@ module.exports = {
 
 	// Deletes the submissions message. Returns status
 	deleteSubmissionMessage:async function(bot){
-		try {
-			var message = await bot.getMessage(Channel_ID, Message_ID);
-			message.delete();
-			Channel_ID = "";
-			Message_ID = "";
-			module.exports.save();
-			return "Deleted Message. "
-		} catch (e) {
-			return "Failed to find message to delete. "
+		if (Message_IDs.length == 0) {
+			return "No message to delete. "
 		}
+		let err = false
+		for (const mid of Message_IDs) {
+			try {
+				var message = await bot.getMessage(Channel_ID, mid);
+				message.delete();
+			} catch (e) {
+				err = true
+			}
+		}
+		Channel_ID = "";
+		Message_IDs = [];
+		module.exports.save();
+		if (err) {
+			return "Error deleting message. "
+		}
+		return "Deleted message(s)"
 	},
 
 	// Sends a file update to the host(s)
@@ -1883,8 +2084,9 @@ module.exports = {
 				}
 			}
 		}
-
-		result = user.username + " (" + submission.id + ")" + result
+		
+		// should this still use submission name in case of nicknames?
+		result = user.username + " (" + submission.id + ")" + result // [AF] submission.submission.name instead of user.username
 		notifyHosts(bot, result, `File`)
 
 	},
@@ -2091,20 +2293,35 @@ module.exports = {
 	AutoTime:{
 		name:`AutoTime`,
 		short_descrip: `Time a submission via Mupen-lua`,
-		full_descrip: `Usage: \`$autotime <submission_number or 'all'>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. If only 1 run is autotimed, this will disable the default time limit (runs longer than 3min can still be timed with the script through this command). This will DM participants if their time changes.\n\n**WARNING** this will respond with the time of the submission (do NOT use this in a public channel)`,
+		full_descrip: `Usage: \`$autotime <submission_number or 'all' or 'entry name'>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. If only 1 run is autotimed, this will disable the default time limit (runs longer than 3min can still be timed with the script through this command). This will DM participants if their time changes.\n\n**WARNING** this will respond with the time of the submission (do NOT use this in a public channel)`,
 		hidden: true,
 		function: async function(bot, msg, args) {
 			if (notAllowed(msg)) return `Missing permissions`
-			if (args.length < 1) return `Missing Argument: \`$autotime <submission_number or 'all'>\``
+			if (args.length < 1) return `Missing Argument: \`$autotime <submission_number or 'all' or 'entry name'>\``
 			if (args[0] == 'all') {
 				for (var i = 0; i < Submissions.length; ++i) {
-					AutoTimeEntry(bot, i)
+					if (Submissions[i].id.substr(Submissions[i].id.length-1,Submissions[i].id.length) != '-') { // [AF] ignore retiming these
+						AutoTimeEntry(bot, i, Submissions[i].id) // [AF] not by index
+					}
 				}
 				return `All ${Submissions.length} submissions are in queue to be timed.`
 			}
-			var submission_number = getSubmissionNumber(args[0])
-			submission_number = submission_number.number - 1 // assuming non DQ since I need to rework that anyways
-			var pos = AutoTimeEntry(bot, submission_number, -1, msg.channel.id, msg.author.id)
+			var submission_number = -1
+			if (isNaN(args[0])) { // attempt to look for name in submissions
+				for (let i = 0; i < Submissions.length; ++i) {
+					if (Submissions[i].name == args.join(' ')) {
+						submission_number = i
+						break
+					}
+				}
+				if (submission_number == -1) {
+					return `Invalid Argument: \`$autotime <submission_number or 'all' or 'entry name'>\``
+				}
+			} else {
+				var submission_number = getSubmissionNumber(args[0])
+				submission_number = submission_number.number - 1 // assuming non DQ since I need to rework that anyways
+			}
+			var pos = AutoTimeEntry(bot, submission_number, Submissions[submission_number].id, -1, msg.channel.id, msg.author.id)
 			return `Position in queue: ${pos}`
 		}
 	},
@@ -2138,7 +2355,7 @@ module.exports = {
 
 			var untimed = [...Submissions].filter(a => a.time == null)
 			var dqs = [...Submissions].filter(a => a.dq)
-			var timed = [...Submissions].filter(a => !a.dq && a.time != null).sort((a,b) => a.time - b.time)
+			var timed = [...Submissions].filter(a => !a.dq && a.time != null && !a.id.endsWith('-')).sort((a,b) => a.time - b.time)
 
 			var ordinal_suffix = function(n) {
 				if ((n % 100) in {11:1, 12:1, 13:1}) {
@@ -2286,7 +2503,7 @@ module.exports = {
 			
 			var partner = null
 			if (msg.mentions.length) partner = msg.mentions[0]
-			if (partner == null && args.length) partner = await Users.getUser(args[0])
+			if (partner == null && args.length) partner = await Users.getUser(bot, args[0])
 			if (partner && partner.id == msg.author.id) return `You're always in a team with yourself!`
 			
 			if (team_previously_complete && (partner == null || Teams[msg.author.id] != partner.id)) { // changed team

@@ -24,7 +24,7 @@ var BOT_ACCOUNT = ""
 
 var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
 	description: "List of commands",
-	owner: "Eddio0141, Barry & Xander",
+	owner: "Barry, Eddio0141, Skazzy & Xander",
 	prefix: "$"
 });
 
@@ -209,5 +209,71 @@ bot.registerCommand("log", (msg, args) => {if (users.hasCmdAccess(msg)) console.
 addCommand("uptime", function() {return miscfuncs.formatSecsToStr(process.uptime())}, "Prints uptime", "Prints how long the bot has been connected", false)
 
 addCmdObj(bf.run)
+
+addCommand(
+	"history",
+	async (bot, msg, args) => {
+		if (!users.hasCmdAccess(msg) && msg.author.id != "397688653276774403") return "You do not have permission to use this command"
+		const LIMIT = 1000
+		const FILEPATH = "./_history" + msg.id
+		let attachments = 0;
+		let info = ""
+		let dl_script = ""
+		let rcvd = LIMIT
+
+		let channel = msg.channel
+		if (args.length) {
+			channel = bot.getChannel(args[0])			
+		}
+		bot.createMessage(msg.channel.id, `Scraping file history of ${channel.mention}`)
+		let before = channel.lastMessageID
+
+		let iter = 0
+		while (rcvd == LIMIT){ // uncertain about behaviour when total % LIMIT = 0
+			//msg.channel.getMessages(1031, undefined, "820409264219750441") // tasfiles
+			//console.log("fetching msgs...")
+			let msgs = await channel.getMessages(LIMIT, before)
+			rcvd = msgs.length
+			console.log(`Received ${rcvd} #${iter++}. Attachments ${attachments}`)
+			let i = 0
+			for (const m of msgs) {
+				i++ // if this is not here, the loops dont run????? javascript pls.....
+				for (const a of m.attachments) {
+					i--
+					let ext = a.filename.substr(a.filename.lastIndexOf('.')).toLowerCase()
+					if ([".m64", ".st", ".savestate", ".zip", ".7z"].includes(ext)) {
+						++attachments
+						info += `${m.timestamp} ${m.author.username} ${m.content}\n`
+						let url = a.url.substring(0, a.url.lastIndexOf("?"))
+						let fname = `${m.timestamp}_${i}_${a.filename}`
+						if (m.attachments.length == 1) {
+							fname = `${m.timestamp}_${a.filename}`
+						}
+						dl_script += `powershell -Command "Invoke-WebRequest ${url} -OutFile '${fname}'\n`
+					}
+				}
+			}
+			//console.log(attachments)
+			before = msgs[msgs.length-1].id
+		}
+		fs.writeFileSync(FILEPATH + ".bat", dl_script)
+		fs.writeFileSync(FILEPATH + ".txt", info)
+		await bot.createMessage(
+			msg.channel.id,
+			`${attachments} attachments found`,
+			[
+				{file: fs.readFileSync(FILEPATH + ".bat"), name: "_TAS_Download.bat"},
+				{file: fs.readFileSync(FILEPATH + ".txt"), name: "_TAS_Info.txt"},
+			]
+		)
+		fs.unlinkSync(FILEPATH + ".bat")
+		fs.unlinkSync(FILEPATH + ".txt")
+		
+	},
+	"Get channel file history",
+	"Get channel history of files with st/savestate/m64/zip/7z attachments. Usage: `$history [channel id]` (uses current channel if none specified)",
+	true,
+	[]
+)
 
 bot.connect();

@@ -117,7 +117,7 @@ function littleEndianToInt(buffer) {
 // converts a buffer to a string and removes trailing zeros
 function bufferToString(buffer, encoding = "utf8") {
     while (Buffer.byteLength(buffer) > 0 && buffer[Buffer.byteLength(buffer) - 1] == 0) {
-        buffer = buffer.slice(0, Buffer.byteLength(buffer) - 1)
+        buffer = buffer.subarray(0, Buffer.byteLength(buffer) - 1)
     }
     return buffer.toString(encoding)
 }
@@ -140,9 +140,9 @@ function bufferToStringLiteral(buffer) {
 // Ex: bufferInsert(<00 01 02 03 04>, 2, 4, <06, 09>) => <00, 01, 06, 09, 04>
 function bufferInsert(buffer, start, end, insert) {
     return Buffer.concat([
-        buffer.slice(0, start),
+        buffer.subarray(0, start),
         insert,
-        buffer.slice(end, Buffer.byteLength(buffer))
+        buffer.subarray(end, Buffer.byteLength(buffer))
     ])
 }
 
@@ -169,7 +169,7 @@ function stringLiteralToBuffer(str, size) {
 function read(addr, file) {
     if (!(addr in HEADER)) return
     var type = HEADER[addr][0]
-    var data = file.slice(addr, addr+HEADER[addr][1])
+    var data = file.subarray(addr, addr+HEADER[addr][1])
 
     switch (type) {
         case BitField:
@@ -300,9 +300,11 @@ function NextProcess(bot, retry = true) {
         undefined,
         () => {
             // auto detect game
-            var m64 = fs.readFileSync(`${save.getSavePath() }/tas.m64`)
-            var crc = m64.slice(0xE4, 0xE4 + 4)
+            var m64 = fs.readFileSync(save.getSavePath() + "/tas.m64")
+            var crc = m64.subarray(0xE4, 0xE4 + 4)
             crc = bufferToStringLiteral(crc.reverse())
+			//console.log(KNOWN_CRC)
+			//console.log(crc)
             if (crc in KNOWN_CRC == false) { // what if the user is the bot (internal calls?)
                 if (crc == "") {
                     // this is a strange case... maybe I'm opening the file too many times in this code?
@@ -324,6 +326,14 @@ function NextProcess(bot, retry = true) {
                 NextProcess(bot)
                 return
             }
+			
+			var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
+			if (ctrlr_flags != 1) {
+				request.callback(false, true)
+				MupenQueue.shift()
+				NextProcess(bot)
+				return
+			}
 
             // set timelimit if it's different
             if (request.time_limit != previous_time_limit) {
@@ -332,28 +342,58 @@ function NextProcess(bot, retry = true) {
                 previous_time_limit = request.time_limit
             }
 
+            let runMupen = () => {
+                request.startup()
+                const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
+				const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
+                let Mupen = cp.exec(CMD)
+                //console.log(CMD)
+                MupenQueue[0].process = Mupen
+                Mupen.on("close", async (code, signal) => {
+
+                    if (fs.existsSync("TLE.txt")) { // currently do nothing on time limit exceeded...
+                        fs.unlinkSync("TLE.txt")
+                        request.callback(true, true) // pass true if the run timed out
+                    } else {
+                        request.callback(false, false)
+                    }
+					//if (code) console.log(`${code}: ${signal}`)
+
+                    MupenQueue.shift()
+                    NextProcess(bot)
+
+                })
+            }
+
+            let start_type = m64.subarray(0x1C, 0x1C + 1)
+            start_type = bufferToStringLiteral(start_type) // "01" = from savestate, "02" = from start
+            if (!request.st_url) { // no savestate given, skip downloading savestate
+                if (start_type == "01") { // force it to start from power on
+					// "Your movie starts from savestate, but no st was provided"
+                    m64 = bufferInsert(m64, 0x1C, 1, Buffer.from([2]))
+                    fs.unlinkSync(save.getSavePath() + "/tas.m64")
+                    fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
+                }
+				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported")//. Please provide a savestate from somewhere in this TAS.")
+				MupenQueue.shift()
+				NextProcess(bot)
+				//console.log("aaaaaaaa")
+                //runMupen()
+                return
+                
+            } else if (start_type == "02" && request.st_url) {
+				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported.")// Please provide a savestate from somewhere in this TAS.")
+				MupenQueue.shift()
+				NextProcess(bot)
+                // make it start from a savestate and jump to this state
+                m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([1]))
+                fs.unlinkSync(save.getSavePath() + "/tas.m64")
+                fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
+            }  // else: from savestate and has savestate
+
             downloadAndRun(
                 undefined,
-                () => { // run mupen
-                    request.startup()
-                    const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc]}.z64" `
-                    var Mupen = cp.exec(`"${MUPEN_PATH}"${GAME}${request.cmdflags}`)
-                    //console.log(`"${MUPEN_PATH}"${GAME}${request.cmdflags}`);
-                    MupenQueue[0].process = Mupen
-                    Mupen.on("close", async (code, signal) => {
-
-                        if (fs.existsSync("TLE.txt")) { // currently do nothing on time limit exceeded...
-                            fs.unlinkSync("TLE.txt")
-                            request.callback(true) // pass true if the run timed out
-                        } else {
-                            request.callback(false)
-                        }
-
-                        MupenQueue.shift()
-                        NextProcess(bot)
-
-                    })
-                },
+                runMupen,
                 request.st_url,
                 "tas.st"
             )
@@ -369,6 +409,7 @@ function NextProcess(bot, retry = true) {
 // if you want to run mupen with the -m64 argument that must be explicitly passed here
 // startup is called after the download is complete but before mupen is run
 // callback is called once the mupen process closes, it is passed whether the time limit was exceeded or not (bool)
+//    callback(TLE?: bool, CANT_RUN?: bool)
 // all processes are run with -lua ./timelimit.lua;
 // channel_id is used to send a message if no game matches the tas being loaded
 // user_id will be pinged if no game matches the tas being loaded (and a valid channel_id is provided)
@@ -466,7 +507,7 @@ module.exports = {
                     } else {
 
                         var rr_hex = intToLittleEndian(rerecords, SIZE)
-                        var old_rr = littleEndianToInt(m64.slice(LOCATION, LOCATION + SIZE))
+                        var old_rr = littleEndianToInt(m64.subarray(LOCATION, LOCATION + SIZE))
                         var new_m64 = bufferInsert(m64, LOCATION, LOCATION + SIZE, rr_hex)
 
                         try {
@@ -509,7 +550,7 @@ module.exports = {
 
             var descrip = Buffer.from(args.join(" "), "utf8")
             if (Buffer.byteLength(descrip) > SIZE) {
-                descrip = descrip.slice(0, SIZE)
+                descrip = descrip.subarray(0, SIZE)
                 bot.createMessage(msg.channel.id, "WARNING: Max length exceeded")
             }
             while (Buffer.byteLength(descrip) < SIZE) { // force to fill
@@ -522,7 +563,7 @@ module.exports = {
                         bot.createMessage(msg.channel.id, `Something went wrong\`\`\`${err}\`\`\``)
                     } else {
 
-                        var old_descrip = m64.slice(LOCATION, LOCATION + SIZE)
+                        var old_descrip = m64.subarray(LOCATION, LOCATION + SIZE)
                         var new_m64 = bufferInsert(m64, LOCATION, LOCATION + SIZE, descrip)
 
                         try {
@@ -564,7 +605,7 @@ module.exports = {
             const SIZE = 222
             var author = Buffer.from(args.join(" "), "utf8")
             if (Buffer.byteLength(author) > SIZE) {
-                author = author.slice(0, SIZE)
+                author = author.subarray(0, SIZE)
                 bot.createMessage(msg.channel.id, "WARNING: Max length exceeded")
             }
             while (Buffer.byteLength(author) < SIZE) { // force to fill
@@ -577,7 +618,7 @@ module.exports = {
                         bot.createMessage(msg.channel.id, `Something went wrong\`\`\`${err}\`\`\``)
                     } else {
 
-                        var old_author = m64.slice(LOCATION, LOCATION + SIZE)
+                        var old_author = m64.subarray(LOCATION, LOCATION + SIZE)
                         var new_m64 = bufferInsert(m64, LOCATION, LOCATION + SIZE, author)
 
                         try {
@@ -708,10 +749,10 @@ module.exports = {
                     if (err) {
                         bot.createMessage(msg.channel.id, `Something went wrong\`\`\`${err}\`\`\``)
                     } else {
-                        var author = bufferToString(m64.slice(0x222, 0x222 + 222))
-                        var descrip = bufferToString(m64.slice(0x300, 0x300 + 256))
-                        var rr = littleEndianToInt(m64.slice(0x10, 0x10 + 4))
-                        var crc = m64.slice(0xE4, 0xE4 + 4)
+                        var author = bufferToString(m64.subarray(0x222, 0x222 + 222))
+                        var descrip = bufferToString(m64.subarray(0x300, 0x300 + 256))
+                        var rr = littleEndianToInt(m64.subarray(0x10, 0x10 + 4))
+                        var crc = m64.subarray(0xE4, 0xE4 + 4)
                         crc = bufferToStringLiteral(crc.reverse()) // reverse
                         var rom = "?"
                         if (crc in KNOWN_CRC) rom = KNOWN_CRC[crc]
@@ -740,11 +781,11 @@ module.exports = {
         name: "encode",
         aliases: ["record"],
         short_descrip: "Encode an m64",
-        full_descrip: "Usage: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> <st/savestate>`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use `$encode cancel`.\n\nIf the bot is not processing the queue, contact an admin to use `$encode forceskip` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing\n`nolua/no-lua/disable-lua` will not run the input visualzing/ram watch lua script,\n`maxvbitrate/max-v-bitrate/maxvrate/max-v-bitrate/mb:v/m-b:v` will set the maximum video bitrate,\n`crf` will set the target constant rate factor (lower is better, defaults to not passing the parameter in ffmpeg),\n`abitrate/a-bitrate/arate/a-rate/b:a` sets the audio bitrate, and\n`constrainsize/clamp` will automatically adjust maximum bitrate such that the video will not exceed the filesize limit, overriding your bitrate settings but still targeting CRF.",
+        full_descrip: "Usage: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> [st/savestate]`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use `$encode cancel`.\n\nIf the bot is not processing the queue, contact an admin to use `$encode forceskip` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing\n`nolua/no-lua/disable-lua` will not run the input visualzing/ram watch lua script,\n`maxvbitrate/max-v-bitrate/maxvrate/max-v-bitrate/mb:v/m-b:v` will set the maximum video bitrate,\n`crf` will set the target constant rate factor (lower is better, defaults to not passing the parameter in ffmpeg),\n`abitrate/a-bitrate/arate/a-rate/b:a` sets the audio bitrate, and\n`constrainsize/clamp` will automatically adjust maximum bitrate such that the video will not exceed the filesize limit, overriding your bitrate settings but still targeting CRF.",
         hidden: true,
         function: async (bot, msg, args) => {
             //return `This command is currently disabled`
-            //if (!users.hasCmdAccess(msg)) return `You do not have permission to use this command`
+            //if (!users.hasCmdAccess(msg)) return `This command is currently disabled`//`You do not have permission to use this command`
 
             // alternate uses
             // toDo: mupen process command (users with access can cancel anything in the queue after providing an index)
@@ -769,26 +810,34 @@ module.exports = {
                         }
                         break
                     case "QUEUE": {
+                        if (MupenQueue.length == 0) {
+                            return "Queue is empty"
+                        }
                         let result = ""
                         let dm
-
-                        MupenQueue.forEach(async (process, index) => {
+                        
+                        for (let i = 0; i < MupenQueue.length; ++i) {
                             result += `${index}. `
 
-                            if (process.user_id === null) result += "[no user] "
-                            else {
-                                dm = await bot.getDMChannel(process.user_id) // no catch...
+                            if (MupenQueue[i].user_id === null) {
+                              result += "[no user] "
+                            } else {
+                                dm = await bot.getDMChannel(MupenQueue[i].user_id) // no catch...
                                 result += `${dm.recipient.username} `
                             }
 
-                            if (process.channel_id === null) result += "(no channel)"
-                            else if (process.channel_id === dm.id) result += "(DM)"
-                            else result += `(<#${process.channel_id}>)`
+                            if (MupenQueue[i].channel_id === null) {
+                              result += "(no channel)"
+                            } else if (MupenQueue[i].channel_id === dm.id) {
+                              result += "(DM)"
+                            } else {
+                              result += `(<#${MupenQueue[i].channel_id}>)`
+                            }
 
                             result += "\n"
-                        })
+                        }
 
-                        return result //`Queue length: ${EncodingQueue.length}` // TODO: maybe give more detailed info?
+                        return result
                     }
                 }
             }
@@ -798,24 +847,31 @@ module.exports = {
             let st_url = ""
 
             for (const link of [...args, ...msg.attachments.map((v) => v.url)]) {
-                if (!m64_url && link.endsWith(".m64")) m64_url = link
-                else if (!st_url && link.endsWith(".st") || link.endsWith(".savestate")) st_url = link
+				let furl = link.substring(0, link.lastIndexOf('?')) || link
+                if (!m64_url && furl.endsWith(".m64")) {
+                    m64_url = link
+                } else if (!st_url && furl.endsWith(".st") || furl.endsWith(".savestate")) {
+                    st_url = link
+                }
             }
 
-            if (!m64_url || !st_url) return "Missing/Invalid Arguments: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> <st/savestate>`"
+            if (!m64_url/* || !st_url*/) return "Missing/Invalid Arguments: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> [st/savestate]`"
 
             let filename = m64_url.split("/") // doesnt ensure it contains / because it should contain it...
             filename = filename[filename.length - 1]
             filename = filename.substring(0, filename.length - 4)
 
-            const mupen_args = ["-m64", `${process.cwd() + save.getSavePath().substring(1) }/tas.m64`, "-avi", "encode.avi", "-lua", LUA_INPUTS]
-            const ffmpeg_args = {vcodec: "libx264", acodec: "libopus", vrate: "", crf: "", arate: "128", clamp: false}
+            const mupen_args = ["-m64", `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`, "-avi", "encode.avi", "-lua", LUA_INPUTS]
+            const ffmpeg_args = {vcodec: "libx264", acodec: "aac", vrate: "", crf: "", arate: "128", clamp: false}
 
             for (const arg of args) {
-                if (["NOLUA", "NO-LUA", "DISABLE-LUA", "LUABEGONE!"].includes(arg.toUpperCase())) mupen_args.splice(mupen_args.length - 2, mupen_args.length) // remove last two args
-                else if (["H265", "H.265", "HEVC"].includes(arg.toUpperCase())) ffmpeg_args.vcodec = "libx265"
-                else if (["CLAMP", "CONSTRAINSIZE"].includes(arg.toUpperCase())) ffmpeg_args.clamp = true
-                else if (!ffmpeg_args.clamp && arg.includes("=")) {
+                if (["NOLUA", "NO-LUA", "DISABLE-LUA", "LUABEGONE!"].includes(arg.toUpperCase())) {
+                    mupen_args.splice(mupen_args.length - 2, mupen_args.length) // remove last two args
+                } else if (["H265", "H.265", "HEVC"].includes(arg.toUpperCase())) {
+                    ffmpeg_args.vcodec = "libx265"
+                } else if (["CLAMP", "CONSTRAINSIZE"].includes(arg.toUpperCase())) {
+                    ffmpeg_args.clamp = true
+                } else if (!ffmpeg_args.clamp && arg.includes("=")) {
                     const values = arg.split("=")
                     values[1] = parseInt(values[1])
 
@@ -841,15 +897,23 @@ module.exports = {
                 m64_url,
                 st_url,
                 mupen_args,
-                () => {
+                () => { // startup
                     var err = null
-                    if (fs.existsSync("./encode.avi"))
+                    if (fs.existsSync("./encode.avi")) {
                         fs.unlinkSync("./encode.avi") // ERROR HANDLE BC THIS ACTUALLY THREW AND CRASHED
-                    if (fs.existsSync("./encode.mp4")) fs.unlinkSync("./encode.mp4")
+                    }
+                    if (fs.existsSync("./encode.mp4")) {
+                        fs.unlinkSync("./encode.mp4")
+                    }
                 },
-                async () => {
+                async (tle, cant_run) => { // callback
+					if (cant_run) {
+						bot.createMessage(msg.channel.id, `Error: m64 cannot be played back. Ensure your TAS does not use rumblepak <@${msg.author.id}>`)
+						return
+					}
+				
                     if (!fs.existsSync("./encode.avi")) {
-                        bot.createMessage(msg.channel.id, `Error: avi not found <@${msg.author.id}>`)
+                        bot.createMessage(msg.channel.id, `Error: avi not found (Mupen crashed) <@${msg.author.id}>`)
                         console.trace()
                         return
                     }
@@ -857,7 +921,8 @@ module.exports = {
                     let stats = fs.statSync("./encode.avi")
 
                     if (stats.size === 0) {
-                        bot.createMessage(msg.channel.id, `Error: avi is 0 bytes. There was likely a crash when attempting to encode <@${msg.author.id}>`)
+						fs.unlinkSync("./encode.avi")
+                        bot.createMessage(msg.channel.id, `Error: avi is 0 bytes. There was likely a crash when attempting to encode <@${msg.author.id}>. If this is a repeated error, request a bot owner to reset the codec by manually recording an AVI capture.`)
                         return
                     }
 
@@ -865,7 +930,7 @@ module.exports = {
                     bot.createMessage(msg.channel.id, "Uploading...")
 
                     try {
-                        const filesize_limit = msg.channel.guild !== undefined ? [8e6, 8e6, 50e6, 100e6][msg.channel.guild.premiumTier] : 8e6 // in bytes
+                        const filesize_limit = msg.channel.guild !== undefined ? [25e6, 25e6, 50e6, 100e6][msg.channel.guild.premiumTier] : 25e6 // in bytes
                         let cmd = `ffmpeg -i encode.avi -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
 
                         if (!ffmpeg_args.clamp) {
@@ -896,7 +961,10 @@ module.exports = {
                         stats = fs.statSync("./encode.mp4")
                         length -= 1000 * Number(cp.execSync("ffprobe encode.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"))
 
-                        const reply = `Encode Complete ${Math.abs(length) > 100 ? "(File size limit exceeded) " : ""}<@${msg.author.id}>`
+                        let reply = `Encode Complete `
+                        reply += Math.abs(length) > 100 ? "(File size limit exceeded) " : ""
+                        reply += tle ? "(Time limit exceeded) " : ""
+                        reply += `<@${msg.author.id}>`
                         const video = fs.readFileSync("./encode.mp4")
 
                         await bot.createMessage(msg.channel.id, reply, {
@@ -937,7 +1005,7 @@ module.exports = {
             for (var i = 0; i < crc.length; i++) {
                 result += `${crc[i]}: ${KNOWN_CRC[crc[i]]}\n`
             }
-            return `${result}\`\`\``
+            return result + "```"
         }
 
     },
