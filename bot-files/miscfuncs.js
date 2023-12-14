@@ -15,7 +15,7 @@ module.exports = {
 
         return `${pad(day)}/${pad(month)}/${pad(year)} ${pad(hour)}:${pad(minute)}:${pad(second)}`
     },
-    isDM: (msg) => msg.channel.type === 1,
+    isDM: (msg) => !("name" in msg.channel),
     formatSecsToStr: (sec) => {
         const hours = Math.floor(sec / 3600)
         const minutes = Math.floor(sec / 60) - hours * 60

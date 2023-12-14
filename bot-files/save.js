@@ -25,10 +25,11 @@ module.exports = {
 			fs.mkdirSync(path);
 		}
 	},
-	downloadFromUrl:function(url, path) {
+	downloadFromUrl:function(url, path, callback) {
 		request.get(url)
         .on('error', console.error)
-        .pipe(fs.createWriteStream(path));
+        .pipe(fs.createWriteStream(path))
+		.on('close', callback);
 	},
 	saveObject:function(filename, object){
 		if (!filename.toUpperCase().endsWith(".JSON")) filename += ".json"

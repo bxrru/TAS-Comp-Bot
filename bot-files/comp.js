@@ -28,6 +28,11 @@ var LockedNames = [] // ids that are not allowed to change their nickname (per u
 var Teams = {} // {id1: id2, id2: id1, "id1,id2": team_name} // hard coded teams of 2
 var TeamTask = false
 
+// order matters: it will prioritize downloading the first element over the 2nd etc.
+// recursive: one of [st, savestate] is required, but either are acceptable
+// both of [st, savetate] will be saved to submission.st
+const REQUIRED_FILES = ["m64", ["st", "savestate"]] // possibly variable for other competitions?
+
 var TimedTask = false
 var Hours = 1
 var Minutes = 30
@@ -278,7 +283,7 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 			while (untimed.length) Submissions.push(untimed.pop())*/
 			//console.log(Submissions)
 			module.exports.save()
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 		},
 		err_channel_id,
 		err_user_id,
@@ -390,6 +395,254 @@ async function submissionName(bot, user_id, only_team_name = false) {
 
 function timestamp(date) {
 	return Math.floor(+date/1000)
+}
+
+// will return the extension including .
+// "a.m64" -> ".m64"
+function fileExt(attachment) {
+	let fname = attachment
+	if (typeof attachment != "string") {
+		fname = ("filename" in attachment) ? attachment.filename : attachment.name
+	}
+	fname = fname.substring(0, fname.lastIndexOf('?')) || fname
+	return fname.substring(fname.lastIndexOf('.') + 1).toLowerCase()
+}
+
+// recursively determine if ext is in REQUIRED_FILES
+// returns the first extension corresponding to this file
+function is_required_ext(ext) {
+	// only on the first level [x, x, x] do you not want to return the first element
+	let includes_recur = function(arr, first = true) {
+		let found = false
+		arr.forEach(x => {
+			if (x == ext) { // base case: found the string
+				found = ext
+			} else if (!found && typeof x != "string") {
+				found = includes_recur(x)
+			}
+		})
+		if (first && found) { // recursively find first element
+			found = arr[0]
+			while (typeof found != "string") found = found[0] 
+		}
+		return found
+	}
+	return includes_recur(REQUIRED_FILES, false)
+}
+
+function update_submission_file(user_id, new_file_url, filesize){
+	let file_type = is_required_ext(fileExt(new_file_url))
+	let partner_id = completedTeam(user_id) ? Teams[user_id] : ""
+	for (let i = 0; i < Submissions.length; i++) {
+		if (Submissions[i].id == user_id || Submissions[i].id == partner_id) {
+			Submissions[i][file_type] = new_file_url
+			Submissions[i][file_type + "_size"] = filesize
+		}
+	}
+	module.exports.save()
+}
+
+// Sends a file update to the host(s)
+async function forwardSubmission(bot, user, filename, url){
+
+	if (!module.exports.hasSubmitted(user.id)) return console.log("SOMETHING WENT WRONG: COULD NOT FORWARD SUBMISSION")
+
+	// need a better way to get the ID of the submission
+	var submission = module.exports.getSubmission(user.id)
+	var result = ` uploaded ${fileExt(filename)} ${url}`
+
+	if (completedTeam(user.id)) { // notify partner
+		try {
+			var partner_dm = await bot.getDMChannel(Teams[user.id])
+			partner_dm.createMessage(user.username + result)
+		} catch (error) {
+			try {
+				var submitter_dm = await user.getDMChannel()
+				submitter_dm.createMessage("Failed to notify your teammate of the newly submitted file")
+			} catch (error) { // I hope this never happens
+				console.log("Failed to notify task entrant that their partner was failed to be notified of a submission")
+			}
+		}
+	}
+	
+	// should this still use submission name in case of nicknames?
+	result = user.username + " (" + submission.id + ")" + result // [AF] submission.submission.name instead of user.username
+	notifyHosts(bot, result, `File`)
+
+}
+
+// Sends file back to message, stores the attachment url in the submission
+// TODO: copy files into local repo?
+async function storeFile(bot, file, msg){
+	
+	try {
+		//let name = Submissions.filter(s => s.id == msg.author.id)[0].name // [AF] let them know what their name is
+		let submitter_notif = fileExt(file) + " submitted. Use `$status` to check your submitted files. "/* Your alias is " + name [AF]*/
+		if (!AllowAutoTime) submitter_notif += "Autotiming is currently disabled."
+		let message = await bot.createMessage(msg.channel.id, submitter_notif, file)
+		var attachment = message.attachments[0]
+		update_submission_file(msg.author.id, attachment.url, attachment.size) // save the url and filesize in submission
+		forwardSubmission(bot, msg.author, file.name, attachment.url) // notify hosts of updated file
+
+	} catch (e) {
+		notifyHosts(bot, "Failed to store submission url from " + msg.author.username, `Error`)
+	}
+
+}
+
+// Deletes the submissions message and returns status
+async function deleteSubmissionMessage(bot){
+	if (Message_IDs.length == 0) {
+		return "No message to delete. "
+	}
+	let err = false
+	for (const mid of Message_IDs) {
+		try {
+			var message = await bot.getMessage(Channel_ID, mid);
+			message.delete();
+		} catch (e) {
+			err = true
+		}
+	}
+	Channel_ID = "";
+	Message_IDs = [];
+	module.exports.save();
+	if (err) {
+		return "Error deleting message. "
+	}
+	return "Deleted message(s)"
+}
+
+// edits the stored message with the current submissions list
+// force_new will force a new submission message ONLY IF the SubmissionsChannel is defined
+// this allows nickname changes to be edits [TODO], while new submissions are new messages
+async function updateSubmissionMessage(bot, force_new = false){
+	let msgs = await SubmissionsToMessage(bot)
+	let updated = false
+	
+	if (force_new && Channel_ID != "" && Message_IDs.length) {
+		await deleteSubmissionMessage(bot)
+	}
+
+	// create one if none exists
+	if ((Channel_ID == "" || Message_IDs.length == 0) && SubmissionsChannel != ""){
+		updated = true
+		Channel_ID = SubmissionsChannel
+		try {
+			for (const text of msgs) {
+				let message = await bot.createMessage(SubmissionsChannel, text)
+				Message_IDs.push(message.id)
+			}
+		} catch (e) {
+			//console.log("Failed to send submission message")
+			notifyHosts(bot, `Failed to send submission update to <#${SubmissionsChannel}> \`(${SubmissionsChannel})\``)
+		}
+	} else if (Channel_ID != "" && Message_IDs.length){
+		try {
+			for (let i = 0; i < msgs.length; ++i) {
+				if (i < Message_IDs.length) {
+					let message = await bot.getMessage(Channel_ID, Message_IDs[i])
+					message.edit(msgs[i])
+				} else {
+					let message = await bot.createMessage(Channel_ID, msgs[i])
+					Message_IDs.push(message.id)
+					updated = true
+				}
+			}
+			while (Message_IDs.length > msgs.length) { // possibly someone removed from msg
+				let mid = Message_IDs.pop()
+				updated = true
+				let message = await bot.getMessage(Channel_ID, mid)
+				message.delete()
+			}
+		} catch (e) {
+			console.log("Failed to edit submission message")
+			notifyHosts(bot, "Failed to edit submission message ```" + e + "```")
+		}
+	}
+	if (updated) {
+		module.exports.save()
+	}
+}
+
+/* Downloads m64 and st files
+Uploads them back to the person who sent it, this time with the proper file name
+Deletes the local files, and stores the discord urls
+
+attachment = {filename, url, size} */
+async function filterFiles(bot, msg, attachment, allow_autotime){
+	
+	// make sure the file is an m64 or st
+	let extension = fileExt(attachment)
+	if (!is_required_ext(extension)) {
+		bot.createMessage(msg.channel.id, "Attachment ``"+attachment.filename+"`` is not an ``m64`` or ``st``")
+		return
+	}
+	extension = '.' + extension
+	
+	// if they have not submitted, add a new submission
+	if (!module.exports.hasSubmitted(msg.author.id)){
+		//for (let i = 0; i < NAMES_PER_ENTRANT && NamesPool.length; ++i) { // [AF] add new names to the pool
+		//	NamesFree.push(NamesPool.pop())
+		//}
+		//module.exports.addSubmissionName(msg.author.id, RandomName()) // [AF]
+		//notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length})`, `New Submission`) // [AF] no tracking userid for hosts too!
+		module.exports.addSubmissionName(msg.author.id, msg.author.username)
+		updateSubmissionMessage(bot, true)
+		notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length}) \`(${msg.author.id})\``, `New Submission`)
+	}/* else { // [AF] 
+		let sub = Submissions.filter(s => s.id == msg.author.id)[0]
+		// if they only have half a submission, don't assign a new name
+		if (sub.m64_size && sub.st_size) {
+			// old submissions get removed from the leaderboard when the names are reused
+			// so, just append '-' to the end of the user_id so it's not detected anywhere else
+			// this might break things that try to access those particular submissions by id
+			let new_name = RandomName() // get random name before old one is freed
+			for (let i = 0; i < Submissions.length; ++i) {
+				if (Submissions[i].id == msg.author.id) {
+					let cur_name = Submissions[i].name // this name is now fair game to use again
+					NamesUsed.splice(NamesUsed.indexOf(cur_name), 1)
+					NamesFree.push(cur_name)
+					Submissions[i].id += '-'
+					// submit m64 => copy old st
+					// submit st => copy old m64
+					if (extension == ".m64") {
+						module.exports.addSubmission(msg.author.id, new_name, "", 0, Submissions[i].st, Submissions[i].st_size)
+					} else {
+						module.exports.addSubmission(msg.author.id, new_name, Submissions[i].m64, Submissions[i].m64_size, "", 0)
+					}
+					break
+				} 
+			}
+		}
+	}*/
+
+	var name = await submissionName(bot, msg.author.id, true)
+	let filename = module.exports.properFileName(name)
+	let filepath = Save.getSavePath() + "/" + filename + msg.author.id + extension
+	
+	Save.downloadFromUrl(
+		attachment.url,
+		filepath,
+		async () => { // upload the file then delete it locally
+			let file = {
+				file: fs.readFileSync(filepath),
+				name: filename + extension // exclude id when uploading it back
+			}
+			await storeFile(bot, file, msg)
+			fs.unlinkSync(filepath)
+			if (allow_autotime) { // sometimes disable depending on submission order
+				CheckAutoTiming(bot, msg)
+			}
+		}
+	)
+	
+	if (RoleStyle == `ON-SUBMISSION`) {
+		if (completedTeam(msg.author.id)) module.exports.giveRole(bot, Teams[msg.author.id], msg.author.username + `'s Partner`)
+		module.exports.giveRole(bot, msg.author.id, msg.author.username)
+	}
+	updateSubmissionMessage(bot)
+
 }
 
 module.exports = {
@@ -552,7 +805,7 @@ module.exports = {
 			var result = "SUBMISSIONS CLEARED by " + msg.author.username + ". "
 			if (Object.keys(Teams).length) result += "Teams removed. "
 			result += await module.exports.clearRoles(bot)
-			result += await module.exports.deleteSubmissionMessage(bot)
+			result += await deleteSubmissionMessage(bot)
 
 			Submissions = []
 			DQs = []
@@ -597,7 +850,7 @@ module.exports = {
 
 			module.exports.addSubmissionName(user_id, name)
 			module.exports.giveRole(bot, user_id, name)
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 
 			notifyHosts(bot, `${name} (${Submissions.length}) [Added by ${msg.author.username}]`, `New Submission`)
 			return `**New Submission:** ${name} (${Submissions.length}) [Added by ${msg.author.username}]`
@@ -622,7 +875,7 @@ module.exports = {
 			var deleted = num.dq ? DQs.splice(num.number - 1, 1)[0] : Submissions.splice(num.number - 1, 1)[0]
 
 			module.exports.save()
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 
 			var message = `${msg.author.username} deleted submission from ${await submissionName(bot, deleted.id)} \`(${deleted.id})\`\nm64: ${deleted.m64}\nst: ${deleted.st}`
 			notifyHosts(bot, message)
@@ -678,20 +931,13 @@ module.exports = {
 			}
 
 			// check if it was given a url
-			if (module.exports.isM64({filename:args[0]})){
-				module.exports.update_m64(user.id, args[0], 0)
-				notifyUserAndHost("M64")
-				return "Successfully updated M64"
-
-			} else if (module.exports.isSt({filename:args[0]})){
-				module.exports.update_st(user.id, args[0], 0)
-				notifyUserAndHost("ST")
-				return "Successfully updated ST"
-
-			} else {
-				return "Invalid Filetype: Must be `.m64` or `.st`"
+			let filetype = fileExt(args[0])
+			if (!is_required_ext(filetype)) {
+				return `Invalid Filetype: Must be one of ${REQUIRED_FILES}`
 			}
-
+			update_submission_file(user.id, args[0], 0)
+			notifyUserAndHost(filetype)
+			return "Successfully updated " + filetype
 
 			// UPDATE WITH ATTACHMENT: Not Working, probably dont need it to work
 			/*
@@ -992,7 +1238,7 @@ module.exports = {
 			}
 			module.exports.save()
 
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 			return result
 		}
 	},
@@ -1053,7 +1299,7 @@ module.exports = {
 
 			DQs.push(submission)
 			module.exports.save()
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 
 			var result = `${user.username} \`(${id})\` has been disqualified from Task ${Task}. `
 
@@ -1110,7 +1356,7 @@ module.exports = {
 			if (dq.m64_size || dq.st_size){
 				delete dq.reason
 				Submissions.push(dq)
-				module.exports.updateSubmissionMessage(bot)
+				updateSubmissionMessage(bot)
 			}
 			module.exports.save()
 
@@ -1289,7 +1535,7 @@ module.exports = {
 			var info = `**Task ${Task} - Settings**\n\n`
 
 			info += `**General Info**\n`
-      info += `Current status: \`${AllowSubmissions ? '' : 'Not '}Accepting Submissions${TimedTask ? ' (Timed Task)' : ''}\`\n`
+			info += `Current status: \`${AllowSubmissions ? '' : 'Not '}Accepting Submissions${TimedTask ? ' (Timed Task)' : ''}\`\n`
 			info += `Filenames: \`${FilePrefix}${Task}By<Name>.m64\`\n`
 			info += `Default Submissions Channel: ${SubmissionsChannel == `` ? `\`disabled\`` : `<#${SubmissionsChannel}>`}\n`
 			info += `Auto-timing: ${AllowAutoTime ? `enabled` : `disabled`}\n`
@@ -1334,7 +1580,7 @@ module.exports = {
 	setName:{
 		name: "setname",
 		short_descrip: "Change your name as seen in #current_submissions",
-		full_descrip: "Usage: `$setname <new name here>`\nChange your name in the submissions/filenames. Spaces and special characters are allowed. Moderators are able to remove access if this command is abused",
+		full_descrip: "Usage: `$setname <new name here>`\nChange your name in the submissions/filenames. Spaces and special characters are allowed. Moderators are able to remove access if this command is abused.",
 		hidden: true,
 		function: async function(bot, msg, args){
 
@@ -1348,7 +1594,7 @@ module.exports = {
 			var name = args.join(" ")
 			Nicknames[user_id] = name
 			module.exports.update_name(user_id, name) // calls save()
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 			return "Set name to " + name
 		}
 	},
@@ -1760,19 +2006,7 @@ module.exports = {
 		while(data.namespool.length) NamesPool.push(data.namespool.pop())
 		while(data.namesfree.length) NamesFree.push(data.namesfree.pop())
 		while(data.namesused.length) NamesUsed.push(data.namesused.pop())
-		module.exports.updateSubmissionMessage(bot)
-	},
-
-	// return whether an attachment is an m64 or not
-	isM64:function(attachment){
-		let fname = attachment.filename.substring(0, attachment.filename.lastIndexOf('?')) || attachment.filename
-		return fname.substr(-4).toLowerCase() == ".m64"
-	},
-
-	// return whether an attachment is a savestate or not
-	isSt:function(attachment){
-		let fname = attachment.filename.substring(0, attachment.filename.lastIndexOf('?')) || attachment.filename
-		return fname.substr(-3).toLowerCase() == ".st" || fname.substr(-10).toLowerCase() == ".savestate"
+		updateSubmissionMessage(bot)
 	},
 
 	// returns a string with no special characters
@@ -1807,183 +2041,6 @@ module.exports = {
 		return "Cleared roles. "
 	},
 
-	/* Downloads m64 and st files
-	Uploads them back to the person who sent it, this time with the proper file name
-	Deletes the local files, and stores the discord urls
-
-	attachment = {filename, url, size} */
-	filterFiles:async function(bot, msg, attachment, allow_autotime){
-		
-		// make sure the file is an m64 or st
-		let extension = ""
-		if (module.exports.isM64(attachment)) {
-			extension = ".m64"
-		} else if (module.exports.isSt(attachment)) {
-			extension = ".st"
-		} else {
-			bot.createMessage(msg.channel.id, "Attachment ``"+attachment.filename+"`` is not an ``m64`` or ``st``")
-			return
-		}
-		
-		// if they have not submitted, add a new submission
-		if (!module.exports.hasSubmitted(msg.author.id)){
-			//for (let i = 0; i < NAMES_PER_ENTRANT && NamesPool.length; ++i) { // [AF] add new names to the pool
-			//	NamesFree.push(NamesPool.pop())
-			//}
-			//module.exports.addSubmissionName(msg.author.id, RandomName()) // [AF]
-			//notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length})`, `New Submission`) // [AF] no tracking userid for hosts too!
-			module.exports.addSubmissionName(msg.author.id, msg.author.username)
-			notifyHosts(bot, `${await submissionName(bot, msg.author.id)} (${Submissions.length}) \`(${msg.author.id})\``, `New Submission`)
-		}/* else { // [AF] 
-			let sub = Submissions.filter(s => s.id == msg.author.id)[0]
-			// if they only have half a submission, don't assign a new name
-			if (sub.m64_size && sub.st_size) {
-				// old submissions get removed from the leaderboard when the names are reused
-				// so, just append '-' to the end of the user_id so it's not detected anywhere else
-				// this might break things that try to access those particular submissions by id
-				let new_name = RandomName() // get random name before old one is freed
-				for (let i = 0; i < Submissions.length; ++i) {
-					if (Submissions[i].id == msg.author.id) {
-						let cur_name = Submissions[i].name // this name is now fair game to use again
-						NamesUsed.splice(NamesUsed.indexOf(cur_name), 1)
-						NamesFree.push(cur_name)
-						Submissions[i].id += '-'
-						// submit m64 => copy old st
-						// submit st => copy old m64
-						if (extension == ".m64") {
-							module.exports.addSubmission(msg.author.id, new_name, "", 0, Submissions[i].st, Submissions[i].st_size)
-						} else {
-							module.exports.addSubmission(msg.author.id, new_name, Submissions[i].m64, Submissions[i].m64_size, "", 0)
-						}
-						break
-					} 
-				}
-			}
-		}*/
-
-		var name = await submissionName(bot, msg.author.id, true)
-		let filename = module.exports.properFileName(name)
-		
-		// begin downloading the file
-		Save.downloadFromUrl(attachment.url, Save.getSavePath() + "/" + filename + msg.author.id + extension)
-		
-		module.exports.uploadFile(bot, filename, attachment.size, msg, allow_autotime, extension)
-		if (RoleStyle == `ON-SUBMISSION`) {
-			if (completedTeam(msg.author.id)) module.exports.giveRole(bot, Teams[msg.author.id], msg.author.username + `'s Partner`)
-			module.exports.giveRole(bot, msg.author.id, msg.author.username)
-		}
-		module.exports.updateSubmissionMessage(bot)
-
-	},
-
-	// Sends file back to message, stores the attachment url in the submission
-	storeFile:async function(bot, file, msg){
-
-		try {
-			var filetype = "ST"
-			if (module.exports.isM64({filename:file.name})) filetype = "M64"
-
-			//var name = Submissions.filter(s => s.id == msg.author.id)[0].name // [AF] let them know what their name is
-			var message = await bot.createMessage(msg.channel.id, filetype + " submitted. Use `$status` to check your submitted files."/* Your alias is " + name [AF]*/, file)
-			var attachment = message.attachments[0]
-
-			// save the url and filesize in the submission
-			if (module.exports.isM64(attachment)){
-				module.exports.update_m64(msg.author.id, attachment.url, attachment.size)
-
-			} else if (module.exports.isSt(attachment)){
-				module.exports.update_st(msg.author.id, attachment.url, attachment.size)
-
-			} else { // this should never happen since it must be an m64 or st at this point
-				throw "Attempted to upload incorrect file: " + file.name
-			}
-
-			// notify host of updated file
-			module.exports.forwardSubmission(bot, msg.author, file.name, attachment.url)
-
-		} catch (e) {
-			notifyHosts(bot, "Failed to store submission url from " + msg.author.username, `Error`)
-		}
-
-	},
-
-	// recursive function that will keep trying to upload a file until the buffer size matches
-	// this is meant to be used after a file starts to download
-	// the file stored locally is filename + msg.author.id + extension
-	uploadFile:async function(bot, filename, filesize, msg, allow_autotime, extension){
-		
-		try {
-			var file = {
-				file: fs.readFileSync(Save.getSavePath() + "/" + filename + msg.author.id + extension),
-				name: filename + extension // exclude id when uploading it back
-			}
-		} catch (e) {
-			var file = {file: {byteLength: -1}} // this causes a recursive call
-		}
-
-		// if the file hasnt completely downloaded try again
-		if (file.file.byteLength != filesize){
-			setTimeout(function(){module.exports.uploadFile(bot, filename, filesize, msg, allow_autotime, extension)}, 1000)
-
-		} else {
-			// upload the file then delete it locally
-			await module.exports.storeFile(bot, file, msg)
-			fs.unlinkSync(Save.getSavePath() + "/" + filename + msg.author.id + extension)
-			if (allow_autotime) { // sometimes disable depending on submission order
-				CheckAutoTiming(bot, msg)
-			}
-		}
-
-
-	},
-
-	// edits the stored message with the current submissions list
-	// force_new will force a new submission message ONLY IF the SubmissionsChannel is defined
-	// this allows nickname changes to be edits [TODO], while new submissions are new messages
-	updateSubmissionMessage:async function(bot, force_new = false){
-		let msgs = await SubmissionsToMessage(bot)
-		
-		if (force_new && Channel_ID != "" && Message_IDs.length) {
-			await module.exports.deleteSubmissionMessage(bot)
-		}
-
-		// create one if none exists
-		if ((Channel_ID == "" || Message_IDs.length == 0) && SubmissionsChannel != ""){
-			try {
-				Channel_ID = SubmissionsChannel
-				for (const text of msgs) {
-					let message = await bot.createMessage(SubmissionsChannel, text)
-					Message_IDs.push(message.id)
-				}
-			} catch (e) {
-				console.log("Failed to send submission message")
-				notifyHosts(bot, `Failed to send submission update to <#${SubmissionsChannel}> \`(${SubmissionsChannel})\``)
-				return
-			}
-		}
-		if (Channel_ID != "" && Message_IDs.length){
-			try {
-				for (let i = 0; i < msgs.length; ++i) {
-					if (i < Message_IDs.length) {
-						let message = await bot.getMessage(Channel_ID, Message_IDs[i])
-						message.edit(msgs[i])
-					} else {
-						let message = await bot.createMessage(Channel_ID, msgs[i])
-						Message_IDs.push(message.id)
-					}
-				}
-				while (Message_IDs.length > msgs.length) { // possibly someone removed from msg
-					let mid = Message_IDs.pop()
-					let message = await bot.getMessage(Channel_ID, mid)
-					message.delete()
-				}
-			} catch (e) {
-				console.log("Failed to edit submission message")
-				notifyHosts(bot, "Failed to edit submission message ```" + e + "```")
-			}
-		}
-	},
-
 	// gives the submitted role to a user
 	giveRole:async function(bot, user_id, name, role = SubmittedRole){
 		if (role == "") return
@@ -2002,8 +2059,7 @@ module.exports = {
 		if (!miscfuncs.isDM(msg)) return
 		if (msg.content.startsWith("$")) return // ignore commands
 
-		var hasM64orSt = msg.attachments.filter(module.exports.isM64).length || msg.attachments.filter(module.exports.isSt).length
-		if (!hasM64orSt) return
+		if (!msg.attachments.some(file => is_required_ext(fileExt(file)))) return // contains no required files
 
 		if (Users.isBanned(msg.author.id)) return
 
@@ -2018,76 +2074,31 @@ module.exports = {
 		}
 
 		if (TimedTask && !TimedTaskStatus.started.includes(msg.author.id)) return
-
-		if (msg.attachments.length == 1) { // independent file, try to autotime (could be st or m64 change)
-			module.exports.filterFiles(bot, msg, msg.attachments[0], true)
-		} else if (msg.attachments.length > 1) { // st takes longer to download, so time the run after that
-			msg.attachments.forEach(attachment => { // Save .m64 but don't time yet
-				if (module.exports.isM64(attachment)) module.exports.filterFiles(bot, msg, attachment, false)
-			})
-			msg.attachments.forEach(attachment => { // Save .st 
-				if (module.exports.isSt(attachment)) { // arbitrary delay to try and ensure it checks autotiming after downloading both m64 & st
-					setTimeout(() => module.exports.filterFiles(bot, msg, attachment, true), 10000)
-				}
-			})
-		}
-
-	},
-
-	// Deletes the submissions message. Returns status
-	deleteSubmissionMessage:async function(bot){
-		if (Message_IDs.length == 0) {
-			return "No message to delete. "
-		}
-		let err = false
-		for (const mid of Message_IDs) {
-			try {
-				var message = await bot.getMessage(Channel_ID, mid);
-				message.delete();
-			} catch (e) {
-				err = true
-			}
-		}
-		Channel_ID = "";
-		Message_IDs = [];
-		module.exports.save();
-		if (err) {
-			return "Error deleting message. "
-		}
-		return "Deleted message(s)"
-	},
-
-	// Sends a file update to the host(s)
-	forwardSubmission:async function(bot, user, filename, url){
-
-		if (!module.exports.hasSubmitted(user.id)) return console.log("SOMETHING WENT WRONG: COULD NOT FORWARD SUBMISSION")
-
-		// need a better way to get the ID of the submission
-		var submission = module.exports.getSubmission(user.id)
-		var result = ' '
-		if (module.exports.isM64({filename: filename})){
-			result += "uploaded m64 " + url
-		} else {
-			result += "uploaded st " + url
-		}
-
-		if (completedTeam(user.id)) { // notify partner
-			try {
-				var partner_dm = await bot.getDMChannel(Teams[user.id])
-				partner_dm.createMessage(user.username + result)
-			} catch (error) {
-				try {
-					var submitter_dm = await user.getDMChannel()
-					submitter_dm.createMessage("Failed to notify your teammate of the newly submitted file")
-				} catch (error) { // I hope this never happens
-					console.log("Failed to notify task entrant that their partner was failed to be notified of a submission")
-				}
-			}
-		}
 		
-		// should this still use submission name in case of nicknames?
-		result = user.username + " (" + submission.id + ")" + result // [AF] submission.submission.name instead of user.username
-		notifyHosts(bot, result, `File`)
+		if (msg.attachments.length == 1) { // independent file, try to autotime (could be st or m64 change)
+			filterFiles(bot, msg, msg.attachments[0], true)
+			return
+		}
+		// download the files in order of priority, offset by 10s each time
+		let final_ext = msg.attachments.map(a => fileExt(a)).filter(ext => is_required_ext(ext))[0]
+		let num_files_downloaded = 0
+		let set_dl_recur = function(arr) { // recursively search through required files in order
+			arr.forEach(ext => {
+				if (typeof ext == "string") {// compare to attachments
+					msg.attachments.forEach(attachment => {
+						if (fileExt(attachment) == ext) {
+							setTimeout(
+								() => filterFiles(bot, msg, attachment, (ext == final_ext)),
+								10000 * num_files_downloaded
+							)
+						}
+					})
+				} else {
+					set_dl_recur(ext)
+				}
+			})
+		}
+		set_dl_recur(REQUIRED_FILES)
 
 	},
 
@@ -2343,7 +2354,7 @@ module.exports = {
 	GetResults:{
 		name: `GetResults`,
 		short_descrip: `Get the results for the task`,
-		full_descrip: `Usage: \`$getresults [num_bold]\`\nGets the results for a task. \`num_bold\` is the number of players who will be highlighted in the results. This uses the information provided from \`$settime\`. And produces the format: 1. Name Ti"me info, DQ: name (reason). If anyone's time has not been added to the database, they will be put at the top of the list. `,
+		full_descrip: `Usage: \`$getresults [num_bold] [header]\`\nGets the results for a task. \`num_bold\` is the number of players who will be highlighted in the results. Header adds a line "Task X Results" at the top. This uses the information provided from \`$settime\`. And produces the format: 1. Name Ti"me info, DQ: name (reason). If anyone's time has not been added to the database, they will be put at the top of the list. `,
 		hidden: true,
 		function:async function(bot, msg, args) {
 			if (notAllowed(msg)) return
@@ -2351,7 +2362,7 @@ module.exports = {
 			var num_bold = 0
 			if (args.length > 0 && !isNaN(args[0])) num_bold = args[0]
 
-			var result = `\`\`\`**__Task ${Task} Results:__**\n`
+			var result = (args.length > 1 && Boolean(args[1])) ? `**__Task ${Task} Results:__**\n` : ""
 
 			var untimed = [...Submissions].filter(a => a.time == null)
 			var dqs = [...Submissions].filter(a => a.dq)
@@ -2394,7 +2405,10 @@ module.exports = {
 				result += `\n${s.name}`
 			})
 
-			return result + `\`\`\``
+			bot.createMessage(msg.channel.id, `Task ${Task} Results:`, {
+				file: Buffer.from(result),
+				name: `SPOILER_TASCompetitionTask${Task}Results.txt`
+			})
 		}
 	},
 
@@ -2561,7 +2575,7 @@ module.exports = {
 				Teams[[msg.author.id, Teams[msg.author.id]]] = args.join(' ')
 				Teams[[Teams[msg.author.id], msg.author.id]] = args.join(' ')
 			}
-			module.exports.updateSubmissionMessage(bot)
+			updateSubmissionMessage(bot)
 			module.exports.save()
 			try {
 				var partner_dm = await bot.getDMChannel(Teams[msg.author.id])
