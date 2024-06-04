@@ -11,7 +11,7 @@ Next, rename `bot.js.template` and `saves_template` to `bot.js` and `saves`, res
 
 Then, change the channel IDs under `saves/channels.json` to ones the bot has access to. The bot will send a welcome message and be usable from those channels, so verify that these are correct.
 
-The encoding command also requires providing paths to a mupen executable, as well as a rom folder containing roms in `saves/m64.json`.
+The encoding command also requires providing paths to a mupen executable, as well as a rom folder containing roms in `saves/m64.json`. Note that roms must not contain spaces in their filenames and should use underscores (`Super Mario 64 (USA).z64` -> `Super_Mario_64_(USA).z64`) instead.   
 
 It's possible to run multiple bots from the same code by creating a new file with the same format as bot.js but with a different token. To keep their saves separate make sure to change the saves path.
 
