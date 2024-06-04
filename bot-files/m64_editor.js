@@ -345,6 +345,7 @@ function NextProcess(bot, retry = true) {
                 request.startup()
                 const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
 				const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
+                console.log(CMD);
                 let Mupen = cp.exec(CMD)
                 //console.log(CMD)
                 MupenQueue[0].process = Mupen
@@ -417,17 +418,24 @@ function QueueAdd(bot, m64_url, st_url, cmdline_args, startup, callback, channel
     //console.log(`Adding ${m64_url}\n${st_url}\n${cmdline_args}\n${channel_id} ${user_id}\n${time_limit}`)
     var cmd = ""
     for (var i = 0; i < cmdline_args.length; ++i) {
-        if (cmdline_args[i] == "-lua") {
-            cmd += `-lua "${LUA_TIME_LIMIT};${cmdline_args[++i]}"`
-        } else if (cmdline_args[i].startsWith("-")) {
+
+        // Lua scripts are included in an array formatted as follows:
+        // [ "lua", "script1.lua", "script2.lua" ]
+        if (Array.isArray(cmdline_args[i]) && cmdline_args[i][0] == "lua") {
+            const scripts = cmdline_args[i].slice(1);
+            const str = scripts.join(';')
+            cmd += ` -lua "${str}" `;
+            console.log(`Added lua scripts: ${str}`);
+            continue;
+        }
+
+        if (cmdline_args[i].startsWith("-")) {
             cmd += cmdline_args[i]
         } else {
             cmd += ` "${cmdline_args[i]}" `
         }
     }
-    if (!cmdline_args.includes("-lua")) {
-        cmd += ` -lua "${LUA_TIME_LIMIT}"` // always run a timelimit lua file
-    }
+
     //console.log(`cmd: "${cmd}"`)
     MupenQueue.push({
         m64_url: m64_url,
@@ -898,7 +906,7 @@ module.exports = {
                 "encode.avi"]
 
             if (use_lua) {
-                mupen_args.push("-lua", ...LUA_SCRIPTS)
+                mupen_args.push(["lua", ...LUA_SCRIPTS])
             }
             console.log(mupen_args)
 
