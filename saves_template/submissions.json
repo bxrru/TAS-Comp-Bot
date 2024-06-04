@@ -36,5 +36,10 @@
     "autotime": false,
     "nicknames": {},
     "teamtask": false,
-    "teams": {}
+    "teams": {},
+    "lockednames": [],
+    "namespool": [],
+    "namesfree": [],
+    "namesused": []
+    
 }
