@@ -13,8 +13,7 @@ const request = require("request")
 
 // these values are loaded from /saves/m64.json (don't edit them here)
 var MUPEN_PATH = "C:\\..."
-var LUA_INPUTS = "C:\\MupenServerFiles\\EncodeLua\\inputs.lua"
-var LUA_TIME_LIMIT = "B:\\timelimit.lua"
+var LUA_SCRIPTS = []
 var GAME_PATH = "C:\\..." // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 var KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
     //"AF 5E 2D 01": "Ghosthack v2", // depricated
@@ -861,12 +860,12 @@ module.exports = {
             filename = filename[filename.length - 1]
             filename = filename.substring(0, filename.length - 4)
 
-            const mupen_args = ["-m64", `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`, "-avi", "encode.avi", "-lua", LUA_INPUTS]
-            const ffmpeg_args = {vcodec: "libx264", acodec: "aac", vrate: "", crf: "", arate: "128", clamp: false}
+            const ffmpeg_args = { vcodec: "libx264", acodec: "aac", vrate: "", crf: "", arate: "128", clamp: false }
+            let use_lua = true
 
             for (const arg of args) {
                 if (["NOLUA", "NO-LUA", "DISABLE-LUA", "LUABEGONE!"].includes(arg.toUpperCase())) {
-                    mupen_args.splice(mupen_args.length - 2, mupen_args.length) // remove last two args
+                    use_lua = false;
                 } else if (["H265", "H.265", "HEVC"].includes(arg.toUpperCase())) {
                     ffmpeg_args.vcodec = "libx265"
                 } else if (["CLAMP", "CONSTRAINSIZE"].includes(arg.toUpperCase())) {
@@ -891,6 +890,17 @@ module.exports = {
                     }
                 }
             }
+
+            let mupen_args = [
+                "-m64", 
+                `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`,
+                "-avi", 
+                "encode.avi"]
+
+            if (use_lua) {
+                mupen_args.push("-lua", ...LUA_SCRIPTS)
+            }
+            console.log(mupen_args)
 
             const pos = QueueAdd(
                 bot,
@@ -1014,8 +1024,17 @@ module.exports = {
         var data = save.readObject("m64.json")
         MUPEN_PATH = data.MupenPath
         GAME_PATH = data.GamePath
-        LUA_INPUTS = data.InputLuaPath
-        LUA_TIME_LIMIT = data.TimeoutLuaPath
+        // We construct the lua script array from the (optional) hardcoded InputLuaPath and TimeoutLuaPath, and append the optional LuaPaths array from json to it
+        LUA_SCRIPTS = []
+        if (data.InputLuaPath && data.InputLuaPath.length > 0) {
+            LUA_SCRIPTS.push(data.InputLuaPath);
+        }
+        if (data.TimeoutLuaPath && data.TimeoutLuaPath.length > 0) {
+            LUA_SCRIPTS.push(data.TimeoutLuaPath);
+        }
+        if (data.LuaPaths && data.LuaPaths.length > 0) {
+            LUA_SCRIPTS.push(data.LuaPaths);
+        }
         Object.keys(data.CRC).forEach((crc) => {
             KNOWN_CRC[crc] = data.CRC[crc]
         })
