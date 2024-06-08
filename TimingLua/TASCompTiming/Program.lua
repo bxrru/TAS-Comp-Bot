@@ -43,7 +43,7 @@ function Program.writeResult(result)
 	os.exit(0)
 end
 
-function Program.main()
+function Program.main()  
   if State.currentState == State.SETUP then
     State.init()
     Time.init()

@@ -29,7 +29,7 @@ function RunScript()
 	function main()
 		Program.main()
 	end
-
+	
 	if CONDITION_FUNCS  ~= nil then
 		os.remove(File.RESULT_FILE)
 		File.loadM64(File.LUA_PATH .. "submission.m64")
