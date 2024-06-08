@@ -186,9 +186,10 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 	//console.log(getSubNum())
 	//console.log(Submissions[getSubNum()])
 	
-	const args = ["-m64", LUAPATH + "submission.m64", (Mupen.lua_scripts().length == 0 ? [] : ["lua", ...Mupen.lua_scripts()])]
+	let lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "TASCompTiming.lua"]
 
-	console.log(args)
+	const args = ["-m64", LUAPATH + "submission.m64", lua_args]
+	
 	return Mupen.Process( // returns position in queue
 		bot,
 		Submissions[getSubNum()].m64,
