@@ -190,7 +190,7 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 		bot,
 		Submissions[getSubNum()].m64,
 		Submissions[getSubNum()].st,
-		["-m64", LUAPATH + "submission.m64", "-lua", LUAPATH + "TASCompTiming.lua"],
+		LUA_SCRIPTS.length == 0 ? [] : ["lua", ...LUA_SCRIPTS],
 		() => {
 			if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
 			fs.copyFileSync(save.getSavePath() + "/tas.m64", LUAPATH + "submission.m64")
