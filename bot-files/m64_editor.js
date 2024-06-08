@@ -13,7 +13,7 @@ const request = require("request")
 
 // these values are loaded from /saves/m64.json (don't edit them here)
 var MUPEN_PATH = "C:\\..."
-var LUA_SCRIPTS = []
+let LUA_SCRIPTS = []
 var GAME_PATH = "C:\\..." // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 var KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
     //"AF 5E 2D 01": "Ghosthack v2", // depricated
@@ -1047,6 +1047,8 @@ module.exports = {
             KNOWN_CRC[crc] = data.CRC[crc]
         })
     },
+
+    lua_scripts: () => LUA_SCRIPTS,
 
     Process: QueueAdd
 }
