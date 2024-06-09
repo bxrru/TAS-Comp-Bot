@@ -29,7 +29,8 @@ module.exports = {
 		request.get(url)
         .on('error', console.error)
         .pipe(fs.createWriteStream(path))
-		.on('close', callback);
+		// Some callers provide no callback
+		.on('close', callback ? callback : () => {});
 	},
 	saveObject:function(filename, object){
 		if (!filename.toUpperCase().endsWith(".JSON")) filename += ".json"

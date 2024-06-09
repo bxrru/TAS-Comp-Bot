@@ -186,11 +186,15 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 	//console.log(getSubNum())
 	//console.log(Submissions[getSubNum()])
 	
+	let lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "TASCompTiming.lua"]
+
+	const args = ["-m64", LUAPATH + "submission.m64", lua_args]
+	
 	return Mupen.Process( // returns position in queue
 		bot,
 		Submissions[getSubNum()].m64,
 		Submissions[getSubNum()].st,
-		["-m64", LUAPATH + "submission.m64", "-lua", LUAPATH + "TASCompTiming.lua"],
+		args,
 		() => {
 			if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
 			fs.copyFileSync(save.getSavePath() + "/tas.m64", LUAPATH + "submission.m64")
