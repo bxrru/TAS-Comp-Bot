@@ -1,3 +1,13 @@
+/*
+Overview of the submission process
+1. User DM's the bot => call filterSubmissions
+2. Check for attachment => call filterFiles to look for REQUIRED_FILES
+2a. Create a new entry if they havent submitted yet
+3. Download the file by calling storeFile
+3a. Update submission info, notify hosts, etc
+4. Try to time the submission with CheckAutoTiming
+*/
+
 const Users = require("./users.js")
 const miscfuncs = require("./miscfuncs.js")
 const chat = require("./chatcommands.js")
@@ -8,6 +18,7 @@ const chrono = require("chrono-node")
 const Announcement = require("./announcement.js")
 const Mupen = require("./m64_editor.js")
 const save = require("./save.js")
+const archiver = require('archiver');
 
 const LUAPATH = process.cwd() + "\\TimingLua\\" // assumed bot is started from main folder
 
@@ -384,13 +395,15 @@ async function submissionName(bot, user_id, only_team_name = false) {
 	try {
 		var user = await Users.getUser(bot, user_id)
 		var partner = await Users.getUser(bot, Teams[user_id])
-		var name1 = user_id in Nicknames ? Nicknames[user_id] : user.username // player nicknames
-		var name2 = Teams[user_id] in Nicknames ? Nicknames[Teams[user_id]] : partner.username
-		if ([user_id,Teams[user_id]] in Teams) {
-			if (only_team_name) return Teams[[user_id,Teams[user_id]]]
-			return `${Teams[[user_id,Teams[user_id]]]} (${name1} & ${name2})`.substring(0, MAXNAMELEN)
+		if (user && partner) {
+			var name1 = user_id in Nicknames ? Nicknames[user_id] : user.username // player nicknames
+			var name2 = Teams[user_id] in Nicknames ? Nicknames[Teams[user_id]] : partner.username
+			if ([user_id,Teams[user_id]] in Teams) {
+				if (only_team_name) return Teams[[user_id,Teams[user_id]]]
+				return `${Teams[[user_id,Teams[user_id]]]} (${name1} & ${name2})`.substring(0, MAXNAMELEN)
+			}
+			return `${name1} & ${name2}`.substring(0, MAXNAMELEN)
 		}
-		return `${name1} & ${name2}`.substring(0, MAXNAMELEN)
 	} catch (error) {
 		console.log(`Error retrieving team name: ${error}`)
 	}
@@ -434,6 +447,7 @@ function is_required_ext(ext) {
 	return includes_recur(REQUIRED_FILES, false)
 }
 
+// TODO: track submission stats? or maybe from autotiming...
 function update_submission_file(user_id, new_file_url, filesize){
 	let file_type = is_required_ext(fileExt(new_file_url))
 	let partner_id = completedTeam(user_id) ? Teams[user_id] : ""
@@ -475,22 +489,39 @@ async function forwardSubmission(bot, user, filename, url){
 
 }
 
-// Sends file back to message, stores the attachment url in the submission
-// TODO: copy files into local repo?
-async function storeFile(bot, file, msg){
+// Sends file back in a message to the submitter and sends that url to the hosts
+// Stores the attachment url in the submission (quick access for get command)
+// Save files into local folder /saves/Submissions/userid.extension (for compiling zip)
+async function storeFile(bot, msg, attachment_url, extension, allow_autotime) {
+	var name = await submissionName(bot, msg.author.id, true)
+	let filename = module.exports.properFileName(name)
+	let filepath = Save.getSavePath() + "/Submissions/" + msg.author.id + extension
 	
-	try {
-		//let name = Submissions.filter(s => s.id == msg.author.id)[0].name // [AF] let them know what their name is
-		let submitter_notif = fileExt(file) + " submitted. Use `$status` to check your submitted files. "/* Your alias is " + name [AF]*/
-		if (!AllowAutoTime) submitter_notif += "Autotiming is currently disabled."
-		let message = await bot.createMessage(msg.channel.id, submitter_notif, file)
-		var attachment = message.attachments[0]
-		update_submission_file(msg.author.id, attachment.url, attachment.size) // save the url and filesize in submission
-		forwardSubmission(bot, msg.author, file.name, attachment.url) // notify hosts of updated file
-
-	} catch (e) {
-		notifyHosts(bot, "Failed to store submission url from " + msg.author.username, `Error`)
-	}
+	Save.downloadFromUrl(
+		attachment_url,
+		filepath,
+		async () => { // upload the file then delete it locally
+			let file = {
+				file: fs.readFileSync(filepath),
+				name: filename + extension // exclude id when uploading it back
+			}
+			try {
+				//let name = Submissions.filter(s => s.id == msg.author.id)[0].name // [AF] let them know what their name is
+				let submitter_notif = fileExt(file) + " submitted. Use `$status` to check your submitted files. "/* Your alias is " + name [AF]*/
+				if (!AllowAutoTime) submitter_notif += "Autotiming is currently disabled."
+				let message = await bot.createMessage(msg.channel.id, submitter_notif, file)
+				var attachment = message.attachments[0]
+				update_submission_file(msg.author.id, attachment.url, attachment.size) // save the url and filesize in submission
+				forwardSubmission(bot, msg.author, file.name, attachment.url) // notify hosts of updated file
+		
+			} catch (e) {
+				notifyHosts(bot, "Failed to store submission from " + msg.author.username, `Error`)
+			}
+			if (allow_autotime) { // sometimes disable depending on submission order
+				CheckAutoTiming(bot, msg)
+			}
+		}
+	)
 
 }
 
@@ -546,7 +577,7 @@ async function updateSubmissionMessage(bot, force_new = false){
 			for (let i = 0; i < msgs.length; ++i) {
 				if (i < Message_IDs.length) {
 					let message = await bot.getMessage(Channel_ID, Message_IDs[i])
-					message.edit(msgs[i])
+					await message.edit(msgs[i])
 				} else {
 					let message = await bot.createMessage(Channel_ID, msgs[i])
 					Message_IDs.push(message.id)
@@ -557,7 +588,7 @@ async function updateSubmissionMessage(bot, force_new = false){
 				let mid = Message_IDs.pop()
 				updated = true
 				let message = await bot.getMessage(Channel_ID, mid)
-				message.delete()
+				await message.delete()
 			}
 		} catch (e) {
 			console.log("Failed to edit submission message")
@@ -620,26 +651,8 @@ async function filterFiles(bot, msg, attachment, allow_autotime){
 			}
 		}
 	}*/
-
-	var name = await submissionName(bot, msg.author.id, true)
-	let filename = module.exports.properFileName(name)
-	let filepath = Save.getSavePath() + "/" + filename + msg.author.id + extension
 	
-	Save.downloadFromUrl(
-		attachment.url,
-		filepath,
-		async () => { // upload the file then delete it locally
-			let file = {
-				file: fs.readFileSync(filepath),
-				name: filename + extension // exclude id when uploading it back
-			}
-			await storeFile(bot, file, msg)
-			fs.unlinkSync(filepath)
-			if (allow_autotime) { // sometimes disable depending on submission order
-				CheckAutoTiming(bot, msg)
-			}
-		}
-	)
+	await storeFile(bot, msg, attachment.url, extension, allow_autotime)
 	
 	if (RoleStyle == `ON-SUBMISSION`) {
 		if (completedTeam(msg.author.id)) module.exports.giveRole(bot, Teams[msg.author.id], msg.author.username + `'s Partner`)
@@ -820,6 +833,9 @@ module.exports = {
 			while (NamesUsed.length) NamesPool.push(NamesUsed.pop())
 			while (NamesFree.length > 6) NamesPool.push(NamesFree.pop())
 			module.exports.save()
+
+			fs.rmSync(Save.getSavePath() + "/Submissions", {recursive:true})
+			fs.mkdirSync(Save.getSavePath() + "/Submissions")
 
 			notifyHosts(bot, result)
 			return result
@@ -1390,7 +1406,7 @@ module.exports = {
 		name: "getsubmission",
 		aliases: ["get"],
 		short_descrip: "Get submitted files (get)",
-		full_descrip: "Usage: `$get <Submission_Number or 'all' or 'entry name'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all` the bot will upload a script that can automatically download every file. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$get <Submission_Number or 'all' or 'entry name'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all [submissions_per_zip]` the bot will upload a zip every file. To see the list of Submission Numbers use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 
@@ -1402,8 +1418,15 @@ module.exports = {
 
 				var dm = await bot.getDMChannel(msg.author.id)
 				if (args[0].toLowerCase() == "all"){
-					if (!miscfuncs.isDM(msg)) bot.createMessage(msg.channel.id, "Script will be sent in DMs")
-					module.exports.getAllSubmissions(bot, dm)
+					if (!miscfuncs.isDM(msg)) bot.createMessage(msg.channel.id, "Zip will be sent in DMs")
+					let submissions_per_zip = Submissions.length + 1;
+					if (args.length > 1) {
+						args[1] = Number(args[1])
+						if (Number.isInteger(args[1])) {
+							submissions_per_zip = args[1]
+						}
+					}
+					module.exports.getAllSubmissions(bot, dm, submissions_per_zip)
 					return
 				}
 				
@@ -1493,21 +1516,68 @@ module.exports = {
 	},
 
 	// send the download script to a specified channel
-	getAllSubmissions:async function(bot, channel){
+	// if submissions_per_zip is negative, then it will put all files in a single zip
+	// KNOWN ISSUE: the zips dont save correctly??? There's a warning when extracting but the contents are fine.
+	getAllSubmissions:async function(bot, channel, submissions_per_zip){
+				
+		// Files are saved as /saves/Submissions/userid.extension
+		const FOLDER = Save.getSavePath() + "/Submissions/"
 
-		var text = await module.exports.getDownloadScript(bot)
+		// initial zip
+		let submissions_in_zip = 0;
+		let zips = [`${FilePrefix}${Task}.zip`];
+		let outputs = [fs.createWriteStream(FOLDER + zips[0])];
+		let archives = [archiver('zip')];
+		archives[0].on('error', (err) => {
+			channel.createMessage("Something went wrong```"+err+"```");	
+		});
+		archives[0].pipe(outputs[0]);
 
-		fs.writeFile("download.bat", text, (err) => {
-			if (err) {
-				channel.createMessage("Something went wrong```"+err+"```")
+		for (var i = 0; i < Submissions.length; i++) {
+			// create a new zip
+			if (submissions_in_zip == submissions_per_zip) {
+				zips.push(`${FilePrefix}${Task}_${zips.length}.zip`);
+				outputs.push(fs.createWriteStream(FOLDER + zips[zips.length - 1]));
+				archives.push(archiver('zip'));
+				archives[archives.length - 1].on('error', (err) => {
+					channel.createMessage("Something went wrong```"+err+"```");	
+				});
+				archives[archives.length - 1].pipe(outputs[outputs.length - 1]);
+				submissions_in_zip = 0;
 			}
-			var file = {
-				file: fs.readFileSync("download.bat"),
-				name: `${FilePrefix}${Task}Download.bat`
+			// add required files from submission to zip
+			let username = await submissionName(bot, Submissions[i].id)
+			for (const rf of REQUIRED_FILES) {
+				let ext = typeof rf == "string" ? rf : rf[0]; // deal with choices
+				let filepath = FOLDER + Submissions[i].id + '.' + ext;
+				if (fs.existsSync(filepath)) {
+					archives[archives.length - 1].file(
+						filepath,
+						{name:username + '/' + FilePrefix + Task + username + '.' + ext}
+					);
+				} else {
+					channel.createMessage(
+						"**[Error]** Missing File: `"+username+'.'+ext+"`. Use `$get "+i+"` to retrieve manually."
+					)
+				}
 			}
-			channel.createMessage("** **", file)
-		})
+			submissions_in_zip++;
+		}
 
+		// upload all the zips
+		channel.createMessage(`Uploading ${zips.length} zipfiles...`)
+		await Promise.all(archives.map((archive, i) => {
+			return archive.finalize().then(() => {
+				outputs[i].close(); // ensure streams are closed
+			});
+		}));
+		for (const zipname of zips) {
+			await channel.createMessage("** **", {
+				file: fs.readFileSync(FOLDER + zipname),
+				name: zipname
+			})
+			fs.rmSync(FOLDER + zipname)
+		}
 	},
 
 	listSubmissions:{
@@ -2011,6 +2081,9 @@ module.exports = {
 		while(data.namesfree.length) NamesFree.push(data.namesfree.pop())
 		while(data.namesused.length) NamesUsed.push(data.namesused.pop())
 		updateSubmissionMessage(bot)
+		if (!fs.existsSync(Save.getSavePath() + "/Submissions")) { // make sure this path exists on startup
+			fs.mkdirSync(Save.getSavePath() + "/Submissions")
+		}
 	},
 
 	// returns a string with no special characters
@@ -2051,7 +2124,7 @@ module.exports = {
 		try {
 			await bot.addGuildMemberRole(Guild, user_id, role, "Submission received");
 		} catch (e) {
-			console.log("Could not assign role", name, e)
+			console.log("Could not assign role to " + name)
 			notifyHosts(bot, `Failed to assign ${name} (\`${user_id}\`) a role (ID: \`${role}\`)`, `ERROR`)
 		}
 	},
