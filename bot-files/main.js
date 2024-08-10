@@ -33,7 +33,6 @@ bot.on("ready", async() => {
 	BOT_ACCOUNT = self.id
 	NAME = self.username
 	loadAllModules()
-	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
 	var connected_msg = `Connected (${miscfuncs.getDateTime()})`
 	if (fs.existsSync(`./crash.log`)) {
 		try {
@@ -45,6 +44,10 @@ bot.on("ready", async() => {
 		}
 	}
 	bot.createMessage(chat.chooseChannel('bot_dms'), connected_msg)
+		.catch((err) => {
+			console.log("[Error] Failed to send 'Connected' message.")
+		})
+	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
 });
 
 function addCommand(name, func, descrip, fullDescrip, hide, aliases){
@@ -142,7 +145,7 @@ bot.on("messageCreate", async(msg) => {
  	// Redirect Direct Messages that are sent to the bot
 	if (miscfuncs.isDM(msg)) {
 		var message = `[${msg.author.username} (${msg.author.id})]: ${msg.content}`
-		bot.createMessage(chat.chooseChannel('bot_dms'), message)
+		bot.createMessage(chat.chooseChannel('bot_dms'), message).catch(() => {}) // error = cannot access this channel (ignore)
 		//if (!Info.Owner_IDs.includes(msg.author.id)) bot.getDMChannel(Info.Owner_IDs[0]).then((dm) => {dm.createMessage(message);}); // Redirect to a specific user
 	}
 

@@ -819,7 +819,7 @@ function editLocalDTM(a, b, c, d, e, f, g) {
         var offset = parseOffset(args[2])
         var old_data = read(offset, dtm)
         var new_dtm = write(offset, dtm, args[3])
-        fs.saveFileSync(save_filename, new_dtm)
+        fs.writeFileSync(save_filename, new_dtm)
         console.log(`Value changed from \`${old_data}\` to \`${args[3]}\``)
         break
 
@@ -827,13 +827,13 @@ function editLocalDTM(a, b, c, d, e, f, g) {
         var key1 = stringLiteralToBuffer(args[2], 32)
         var key2 = stringLiteralToBuffer(args[3], 32)
         var new_dtm = changeControllerEncryption(dtm, key1, key2)
-        fs.saveFileSync(save_filename, new_dtm)
+        fs.writeFileSync(save_filename, new_dtm)
         console.log(`Nunchuk encryption changed from \`${bufferToStringLiteral(key1)}\` to \`${bufferToStringLiteral(key2)}\``)
         break
 
       case `removegcc`:
         var new_dtm = removeGamecubeControllers(dtm)
-        fs.saveFileSync(save_filename, new_dtm)
+        fs.writeFileSync(save_filename, new_dtm)
         console.log(`Removed GameCube controllers`)
         break
 
