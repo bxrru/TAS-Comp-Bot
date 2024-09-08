@@ -83,13 +83,11 @@ var start = function() {
 
   var CompBot = cp.exec(`node ${Info.Bot_Files_Path}/main.js ${process.argv[2]}`, (error, stdout, stderr) => {
     if (error) {
-      Started = false
-	  try {
-		fs.writeFileSync(`./crash.log`, `${error}`)
-	  } catch (e) {
-		console.error(`Failed to write crash log ${e}\n${error}`)
-	  }
-	  start() // restart anyways
+      try {
+        fs.writeFileSync(`./crash.log`, `${error}`)
+      } catch (e) {
+        console.error(`Failed to write crash log ${e}\n${error}`)
+      }
     }
   });
 
