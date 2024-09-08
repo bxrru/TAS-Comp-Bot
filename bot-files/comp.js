@@ -92,7 +92,9 @@ function RandomName() {
 
 async function SubmissionsToMessage(bot, showInfo){
 	var msgs = ["**__Current Submissions:__**\n\n"]
-	if (Submissions.length == 0) msgs[0] += "No Submissions (Yet)\n"
+	if (Submissions.length == 0) {
+		msgs[0] += AllowSubmissions ? "No Submissions (Yet)\n" : "Not accepting submissions at this time."
+	}
 	const MAXMSGLEN = 1900//2000 - 6 - 1 // 6 allows for ```x``` and 1 extra char of leeway bc i dont trust it xd
 	for (var i = 0; i < Submissions.length; i++) {
 		var player = Submissions[i]
@@ -558,6 +560,8 @@ async function updateSubmissionMessage(bot, force_new = false){
 	if (force_new && Channel_ID != "" && Message_IDs.length) {
 		await deleteSubmissionMessage(bot)
 	}
+
+	if (AllowSubmissions && !force_new) return
 
 	// create one if none exists
 	if ((Channel_ID == "" || Message_IDs.length == 0) && SubmissionsChannel != ""){
