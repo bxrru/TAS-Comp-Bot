@@ -19,12 +19,12 @@ var deleteFolderRecursive = function(path) {
   fs.readdirSync(path).forEach(function(file,index) { // loop through each subfile
     var filepath = `${path}/${file}`
     if (fs.lstatSync(filepath).isDirectory()) {
-      deleteFolderRecursive(filepath) // recusive call
-    } else if (!filepath.toLowerCase().endsWith("conditions.lua")) { // file probably not updated on github
-      fs.unlinkSync(filepath) // delete file
+      deleteFolderRecursive(filepath) // recurse
+    } else {
+      fs.unlinkSync(filepath)
     }
   })
-  fs.rmdirSync(path) // delete directory
+  fs.rmdirSync(path)
 }
 
 // Helper function
@@ -34,9 +34,9 @@ var copyFolderRecursive = function(path, destination) {
   fs.readdirSync(path).forEach(file => {
     var filepath = `${path}/${file}`
     if (fs.lstatSync(filepath).isDirectory()) {
-      copyFolderRecursive(filepath, `${destination}/${file}`) // copy files in the subfolder
-    } else if (!filepath.toLowerCase().endsWith("conditions.lua")) {
-      fs.copyFileSync(filepath, `${destination}/${file}`) // copy file
+      copyFolderRecursive(filepath, `${destination}/${file}`) // recurse
+    } else {
+      fs.copyFileSync(filepath, `${destination}/${file}`)
     }
   })
 }
@@ -47,16 +47,25 @@ var updateFiles = function() {
 
   try {
 
+    // the conditions.lua file is the task specirfic script (not updated on github)
+    // make sure this file is preserved (if it exists)
+    if (fs.existsSync("./TimingLua/Conditions.lua")) {
+      fs.copyFileSync("./TimingLua/Conditions.lua", "./saves/temp_conditions.lua")
+    }
+
     // download new files
     deleteFolderRecursive('./TAS-Comp-Bot') // just incase it's leftover
     cp.execSync(`git clone "https://github.com/bxrru/TAS-Comp-Bot"`)
 
     deleteFolderRecursive(Info.Bot_Files_Path)
     copyFolderRecursive('./TAS-Comp-Bot/bot-files/', Info.Bot_Files_Path)
-    if (fs.existsSync("./TimingLua/")) {
-      deleteFolderRecursive("./TimingLua/")
-      copyFolderRecursive("./TAS-Comp-Bot/TimingLua/")
+    
+    deleteFolderRecursive("./TimingLua/")
+    copyFolderRecursive("./TAS-Comp-Bot/TimingLua/", "./TimingLua")
+    if (fs.existsSync("./saves/temp_conditions.lua")) {
+      fs.copyFileSync("./saves/temp_conditions.lua", "./TimingLua/Conditions.lua")
     }
+
     deleteFolderRecursive('./TAS-Comp-Bot/') // temp download
 
   } catch (e) {
