@@ -6,6 +6,7 @@ const save = require("./save.js")
 const cp = require("child_process")
 const process = require("process")
 const request = require("request")
+const path = require("path")
 
 // The following are used for the encoding command
 // They will need to be manually set before running an instance of the bot
@@ -345,9 +346,8 @@ function NextProcess(bot, retry = true) {
                 request.startup()
                 const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
 				const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
-                console.log(CMD);
+                //console.log(CMD);
                 let Mupen = cp.exec(CMD)
-                //console.log(CMD)
                 MupenQueue[0].process = Mupen
                 Mupen.on("close", async (code, signal) => {
 
@@ -425,7 +425,7 @@ function QueueAdd(bot, m64_url, st_url, cmdline_args, startup, callback, channel
             const scripts = cmdline_args[i].slice(1);
             const str = scripts.join(';')
             cmd += ` -lua "${str}" `;
-            console.log(`Added lua scripts: ${str}`);
+            //console.log(`Added lua scripts: ${str}`);
             continue;
         }
 
@@ -908,7 +908,7 @@ module.exports = {
             if (use_lua) {
                 mupen_args.push(["lua", ...LUA_SCRIPTS])
             }
-            console.log(mupen_args)
+            //console.log(mupen_args)
 
             const pos = QueueAdd(
                 bot,
@@ -926,14 +926,18 @@ module.exports = {
                 },
                 async (tle, cant_run) => { // callback
 					if (cant_run) {
-						bot.createMessage(msg.channel.id, `Error: m64 cannot be played back. Ensure your TAS does not use rumblepak <@${msg.author.id}>`)
+						bot.createMessage(msg.channel.id, `Error: m64 cannot be played back. Ensure your TAS has 1 controller and does not use rumblepak <@${msg.author.id}>`)
 						return
 					}
 				
                     if (!fs.existsSync("./encode.avi")) {
-                        bot.createMessage(msg.channel.id, `Error: avi not found (Mupen crashed) <@${msg.author.id}>`)
-                        console.trace()
-                        return
+                        if (fs.existsSync(path.dirname(MUPEN_PATH) + "/encode.avi")) {
+                            fs.renameSync(path.dirname(MUPEN_PATH) + "/encode.avi", "./encode.avi")
+                        } else {
+                            bot.createMessage(msg.channel.id, `Error: avi not found (Mupen crashed) <@${msg.author.id}>`)
+                            console.trace()
+                            return
+                        }
                     }
 
                     let stats = fs.statSync("./encode.avi")
@@ -945,7 +949,7 @@ module.exports = {
                     }
 
                     let length = 1000 * Number(cp.execSync("ffprobe encode.avi -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"))
-                    bot.createMessage(msg.channel.id, "Uploading...")
+                    bot.createMessage(msg.channel.id, "Uploading...").catch(() => {})
 
                     try {
                         const filesize_limit = msg.channel.guild !== undefined ? [25e6, 25e6, 50e6, 100e6][msg.channel.guild.premiumTier] : 25e6 // in bytes
