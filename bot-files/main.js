@@ -106,6 +106,7 @@ function createHelpCommand(mod){
 			msg = ``
 		}
 	})
+	if (msg.length == 0) return; // a command was just registered for this already
 	var message = header + msg + footer
 	if (cmd_number == 1) {
 		addCommand(mod.short_name, () => message, `Lists ${mod.name} commands`, message, false)
