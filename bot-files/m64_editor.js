@@ -328,7 +328,18 @@ function NextProcess(bot, retry = true) {
             }
 			
 			var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
-			if (ctrlr_flags != 1) {
+
+            // We can only have controller 1 connected and it mustn't have rumblepak
+            // Other controllers' pak state can be ignored as long as they aren't connected
+            const controller_1_present = (ctrlr_flags >> 0) & 1
+            const controller_1_rumblepak = (ctrlr_flags >> 8) & 1
+            const controller_2_present = (ctrlr_flags >> 1) & 1
+            const controller_3_present = (ctrlr_flags >> 2) & 1
+            const controller_4_present = (ctrlr_flags >> 3) & 1
+            const controller_flags_valid = controller_1_present && !controller_1_rumblepak && !controller_2_present && !controller_3_present && !controller_4_present
+
+			if (!controller_flags_valid) {
+                console.log(`ERROR: Controller flags ${ctrlr_flags} are invalid`)
 				request.callback(false, true)
 				MupenQueue.shift()
 				NextProcess(bot)
