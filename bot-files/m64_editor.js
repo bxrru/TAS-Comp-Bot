@@ -379,19 +379,20 @@ function NextProcess(bot, retry = true) {
             let start_type = m64.subarray(0x1C, 0x1C + 1)
             start_type = bufferToStringLiteral(start_type) // "01" = from savestate, "02" = from start
             if (!request.st_url) { // no savestate given, skip downloading savestate
-                if (start_type == "01") { // force it to start from power on
+                // force it to start from power on
+                if (start_type == "01") { 
 					// "Your movie starts from savestate, but no st was provided"
                     m64 = bufferInsert(m64, 0x1C, 1, Buffer.from([2]))
                     fs.unlinkSync(save.getSavePath() + "/tas.m64")
                     fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
                 }
-				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported")//. Please provide a savestate from somewhere in this TAS.")
-				MupenQueue.shift()
-				NextProcess(bot)
-				//console.log("aaaaaaaa")
-                //runMupen()
+                downloadAndRun(
+                    undefined,
+                    runMupen,
+                    request.m64_url,
+                    "tas.m64"
+                )
                 return
-                
             } else if (start_type == "02" && request.st_url) {
 				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported.")// Please provide a savestate from somewhere in this TAS.")
 				MupenQueue.shift()
