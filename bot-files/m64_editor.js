@@ -328,7 +328,18 @@ function NextProcess(bot, retry = true) {
             }
 			
 			var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
-			if (ctrlr_flags != 1) {
+
+            // We can only have controller 1 connected and it mustn't have rumblepak
+            // Other controllers' pak state can be ignored as long as they aren't connected
+            const controller_1_present = (ctrlr_flags >> 0) & 1
+            const controller_1_rumblepak = (ctrlr_flags >> 8) & 1
+            const controller_2_present = (ctrlr_flags >> 1) & 1
+            const controller_3_present = (ctrlr_flags >> 2) & 1
+            const controller_4_present = (ctrlr_flags >> 3) & 1
+            const controller_flags_valid = controller_1_present && !controller_1_rumblepak && !controller_2_present && !controller_3_present && !controller_4_present
+
+			if (!controller_flags_valid) {
+                console.log(`ERROR: Controller flags ${ctrlr_flags} are invalid`)
 				request.callback(false, true)
 				MupenQueue.shift()
 				NextProcess(bot)
@@ -368,19 +379,20 @@ function NextProcess(bot, retry = true) {
             let start_type = m64.subarray(0x1C, 0x1C + 1)
             start_type = bufferToStringLiteral(start_type) // "01" = from savestate, "02" = from start
             if (!request.st_url) { // no savestate given, skip downloading savestate
-                if (start_type == "01") { // force it to start from power on
+                // force it to start from power on
+                if (start_type == "01") { 
 					// "Your movie starts from savestate, but no st was provided"
                     m64 = bufferInsert(m64, 0x1C, 1, Buffer.from([2]))
                     fs.unlinkSync(save.getSavePath() + "/tas.m64")
                     fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
                 }
-				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported")//. Please provide a savestate from somewhere in this TAS.")
-				MupenQueue.shift()
-				NextProcess(bot)
-				//console.log("aaaaaaaa")
-                //runMupen()
+                downloadAndRun(
+                    undefined,
+                    runMupen,
+                    request.m64_url,
+                    "tas.m64"
+                )
                 return
-                
             } else if (start_type == "02" && request.st_url) {
 				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported.")// Please provide a savestate from somewhere in this TAS.")
 				MupenQueue.shift()
