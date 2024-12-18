@@ -20,6 +20,7 @@ var KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it wi
     //"AF 5E 2D 01": "Ghosthack v2", // depricated
     //"63 83 23 38": "No Speed Limit 64 (Normal)"
 }
+var MUPEN_USES_FFMPEG = false
 
 var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user id}
 
@@ -294,7 +295,8 @@ function NextProcess(bot, retry = true) {
         MupenQueue.shift()
         request = MupenQueue[0]
     }
-    //console.log(`Running Mupen ${request}`)
+
+    const processing_start_time = process.hrtime.bigint()
 
     downloadAndRun(
         undefined,
@@ -340,7 +342,7 @@ function NextProcess(bot, retry = true) {
 
 			if (!controller_flags_valid) {
                 console.log(`ERROR: Controller flags ${ctrlr_flags} are invalid`)
-				request.callback(false, true)
+				request.callback(false, true, processing_start_time, m64)
 				MupenQueue.shift()
 				NextProcess(bot)
 				return
@@ -357,16 +359,15 @@ function NextProcess(bot, retry = true) {
                 request.startup()
                 const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
 				const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
-                //console.log(CMD);
                 let Mupen = cp.exec(CMD)
                 MupenQueue[0].process = Mupen
                 Mupen.on("close", async (code, signal) => {
 
                     if (fs.existsSync("TLE.txt")) { // currently do nothing on time limit exceeded...
                         fs.unlinkSync("TLE.txt")
-                        request.callback(true, true) // pass true if the run timed out
+                        request.callback(true, true, processing_start_time, m64) // pass true if the run timed out
                     } else {
-                        request.callback(false, false)
+                        request.callback(false, false, processing_start_time, m64)
                     }
 					//if (code) console.log(`${code}: ${signal}`)
 
@@ -421,7 +422,7 @@ function NextProcess(bot, retry = true) {
 // if you want to run mupen with the -m64 argument that must be explicitly passed here
 // startup is called after the download is complete but before mupen is run
 // callback is called once the mupen process closes, it is passed whether the time limit was exceeded or not (bool)
-//    callback(TLE?: bool, CANT_RUN?: bool)
+//    callback(TLE?: bool, CANT_RUN?: bool, START_TIME: bigint, M64: Buffer<ArrayBufferLike>)
 // all processes are run with -lua ./timelimit.lua;
 // channel_id is used to send a message if no game matches the tas being loaded
 // user_id will be pinged if no game matches the tas being loaded (and a valid channel_id is provided)
@@ -911,11 +912,13 @@ module.exports = {
                 }
             }
 
+            const out_filename = MUPEN_USES_FFMPEG ? "encode.mp4" : "encode.avi";
+
             let mupen_args = [
                 "-m64", 
                 `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`,
                 "-avi", 
-                "encode.avi"]
+                out_filename]
 
             if (use_lua) {
                 mupen_args.push(["lua", ...LUA_SCRIPTS])
@@ -936,36 +939,36 @@ module.exports = {
                         fs.unlinkSync("./encode.mp4")
                     }
                 },
-                async (tle, cant_run) => { // callback
+                async (tle, cant_run, start_time, m64) => { // callback
 					if (cant_run) {
-						bot.createMessage(msg.channel.id, `Error: m64 cannot be played back. Ensure your TAS has 1 controller and does not use rumblepak <@${msg.author.id}>`)
+                        bot.createMessage(msg.channel.id, `Error: m64 cannot be played back. Ensure your TAS has 1 controller and does not use rumblepak <@${msg.author.id}>`)
 						return
 					}
-				
-                    if (!fs.existsSync("./encode.avi")) {
-                        if (fs.existsSync(path.dirname(MUPEN_PATH) + "/encode.avi")) {
-                            fs.renameSync(path.dirname(MUPEN_PATH) + "/encode.avi", "./encode.avi")
+
+                    if (!fs.existsSync(`./${out_filename}`)) {
+                        if (fs.existsSync(path.dirname(MUPEN_PATH) + `/${out_filename}`)) {
+                            fs.renameSync(path.dirname(MUPEN_PATH) + `/${out_filename}`, `./${out_filename}`)
                         } else {
-                            bot.createMessage(msg.channel.id, `Error: avi not found (Mupen crashed) <@${msg.author.id}>`)
+                            bot.createMessage(msg.channel.id, `Error: ${out_filename} not found (Mupen crashed) <@${msg.author.id}>`)
                             console.trace()
                             return
                         }
                     }
 
-                    let stats = fs.statSync("./encode.avi")
+                    let stats = fs.statSync(`./${out_filename}`)
 
                     if (stats.size === 0) {
-						fs.unlinkSync("./encode.avi")
-                        bot.createMessage(msg.channel.id, `Error: avi is 0 bytes. There was likely a crash when attempting to encode <@${msg.author.id}>. If this is a repeated error, request a bot owner to reset the codec by manually recording an AVI capture.`)
+						fs.unlinkSync(`./${out_filename}`)
+                        bot.createMessage(msg.channel.id, `Error: ${out_filename} is 0 bytes. There was likely a crash when attempting to encode <@${msg.author.id}>. If this is a repeated error, request a bot owner to reset the codec by manually starting a capture.`)
                         return
                     }
 
-                    let length = 1000 * Number(cp.execSync("ffprobe encode.avi -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"))
+                    let length = 1000 * Number(cp.execSync(`ffprobe ${out_filename} -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1`))
                     bot.createMessage(msg.channel.id, "Uploading...").catch(() => {})
 
                     try {
                         const filesize_limit = msg.channel.guild !== undefined ? [25e6, 25e6, 50e6, 100e6][msg.channel.guild.premiumTier] : 25e6 // in bytes
-                        let cmd = `ffmpeg -i encode.avi -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
+                        let cmd = `ffmpeg -y -i ${out_filename} -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
 
                         if (!ffmpeg_args.clamp) {
                             cmd += ffmpeg_args.vrate ? `-maxrate ${ffmpeg_args.vrate}k -bufsize ${ffmpeg_args.vrate}k ` : ""
@@ -988,25 +991,30 @@ module.exports = {
                             cmd += `-maxrate ${vrate}k -bufsize ${vrate}k -b:a ${arate}k `
                         }
 
-                        cmd += `-pix_fmt yuv420p -fs ${filesize_limit * 0.9} encode.mp4` // 0.9 as a hacky workaround for ffmpeg overshoot + header
+                        cmd += `-pix_fmt yuv420p -fs ${filesize_limit * 0.9} encode-compressed.mp4` // 0.9 as a hacky workaround for ffmpeg overshoot + header
                         cp.execSync(cmd)
                         //console.log(cmd);
+                        
+                        stats = fs.statSync("./encode-compressed.mp4")
+                        length -= 1000 * Number(cp.execSync("ffprobe encode-compressed.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"))
 
-                        stats = fs.statSync("./encode.mp4")
-                        length -= 1000 * Number(cp.execSync("ffprobe encode.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1"))
+                        const elapsed_seconds = Math.max(Number.EPSILON, Number(process.hrtime.bigint() - start_time) / 1_000_000_000);
+                        const length_samples = littleEndianToInt(m64.subarray(0x18, 0x18 + 4));
+                        const effective_fps = length_samples / elapsed_seconds;
 
                         let reply = `Encode Complete `
                         reply += Math.abs(length) > 100 ? "(File size limit exceeded) " : ""
                         reply += tle ? "(Time limit exceeded) " : ""
+                        reply += `(took ${elapsed_seconds.toFixed(2)}s at roughly ${effective_fps.toFixed(0)} FPS) `
                         reply += `<@${msg.author.id}>`
-                        const video = fs.readFileSync("./encode.mp4")
-
+                        const video = fs.readFileSync("./encode-compressed.mp4")
+                        
                         await bot.createMessage(msg.channel.id, reply, {
                             file: video,
                             name: `${filename}.mp4`
                         })
 
-                        fs.unlinkSync("./encode.mp4")
+                        fs.unlinkSync("./encode-compressed.mp4")
                     } catch (err) {
                         bot.createMessage(msg.channel.id, `Something went wrong <@\${msg.author.id}> \`\`\`${err}\`\`\``)
                         console.log(err)
@@ -1048,6 +1056,7 @@ module.exports = {
         var data = save.readObject("m64.json")
         MUPEN_PATH = data.MupenPath
         GAME_PATH = data.GamePath
+        MUPEN_USES_FFMPEG = data.MupenUsesFFmpeg
         // We construct the lua script array from the (optional) hardcoded InputLuaPath and TimeoutLuaPath, and append the optional LuaPaths array from json to it
         LUA_SCRIPTS = []
         if (data.InputLuaPath && data.InputLuaPath.length > 0) {
