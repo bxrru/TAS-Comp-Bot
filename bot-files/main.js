@@ -21,6 +21,8 @@ users.setOwners(Info.Owner_IDs)
 save.setSavePath(Info.Saves_Path)
 
 var BOT_ACCOUNT = ""
+let loaded = false
+let resuming = -1
 
 var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
 	description: "List of commands",
@@ -28,12 +30,21 @@ var bot = new Eris.CommandClient(Info.Bot_Token, {}, {
 	prefix: "$"
 });
 
+bot.on("shardResume", (id) => {
+	resuming = id
+})
+
 bot.on("ready", async() => {
 	var self = await bot.getSelf()
 	BOT_ACCOUNT = self.id
 	NAME = self.username
-	loadAllModules()
-	var connected_msg = `Connected (${miscfuncs.getDateTime()})`
+	if (!loaded) { // this event can fire multiple times. Don't re-register commands
+		loadAllModules()
+		loaded = true
+	}
+	let connected_msg = `onnected (${miscfuncs.getDateTime()})`
+	connected_msg = (resuming == -1 ? 'C' : "Rec") + connected_msg
+	resuming = -1
 	if (fs.existsSync(`./crash.log`)) {
 		try {
 			var err = fs.readFileSync(`./crash.log`)
