@@ -16,5 +16,6 @@
 	"MupenPath": "C:\\MupenServerFiles\\1.0.7_2\\a.exe",
 	"GamePath": "C:\\MupenServerFiles\\ROMs\\",
 	"InputLuaPath": "C:\\MupenServerFiles\\EncodeLua\\inputs.lua",
-	"TimeoutLuaPath": "C:\\MupenServerFiles\\TimingLua\\timelimit.lua"
+	"TimeoutLuaPath": "C:\\MupenServerFiles\\TimingLua\\timelimit.lua",
+	"MupenUsesFFmpeg": true
 }
