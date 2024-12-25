@@ -44,21 +44,30 @@ bot.on("ready", async() => {
 	}
 	let connected_msg = `onnected (${miscfuncs.getDateTime()})`
 	connected_msg = (resuming == -1 ? 'C' : "Rec") + connected_msg
-	resuming = -1
 	if (fs.existsSync(`./crash.log`)) {
 		try {
 			var err = fs.readFileSync(`./crash.log`)
-			connected_msg += "\n```" + err + "```"
-			fs.unlinkSync(`./crash.log`)
+			bot.createMessage(chat.chooseChannel('bot_dms'), connected_msg, {file:err, name:"crash.log"})
+				.catch((err) => {
+					console.log("[Error] Failed to send 'Connected' message. " + err)
+				})
+				.then(
+					fs.unlinkSync(`./crash.log`)
+				)
+			console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")")
+			return
 		} catch (e) {
 			connected_msg += "\n```Unknown Error: Failed to open crash log```"
 		}
 	}
 	bot.createMessage(chat.chooseChannel('bot_dms'), connected_msg)
 		.catch((err) => {
-			console.log("[Error] Failed to send 'Connected' message.")
+			console.log("[Error] Failed to send 'Connected' message. " + err)
 		})
-	console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
+	if (resuming == -1) {
+		console.log(self.username + " Ready! (" + miscfuncs.getDateTime() + ")");
+	}
+	resuming = -1
 });
 
 function addCommand(name, func, descrip, fullDescrip, hide, aliases){
