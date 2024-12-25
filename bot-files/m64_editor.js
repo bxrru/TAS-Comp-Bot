@@ -356,6 +356,10 @@ function NextProcess(bot, retry = true) {
             }
 
             let runMupen = () => {
+                if (MupenQueue.length == 0) {
+                    //console.log("runMupen ignored (queue empty)")
+                    return
+                }
                 request.startup()
                 const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
 				const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
@@ -383,7 +387,7 @@ function NextProcess(bot, retry = true) {
                 // force it to start from power on
                 if (start_type == "01") { 
 					// "Your movie starts from savestate, but no st was provided"
-                    m64 = bufferInsert(m64, 0x1C, 1, Buffer.from([2]))
+                    m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([2]))
                     fs.unlinkSync(save.getSavePath() + "/tas.m64")
                     fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
                 }
