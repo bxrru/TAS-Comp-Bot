@@ -395,9 +395,6 @@ function NextProcess(bot, retry = true) {
                 )
                 return
             } else if (start_type == "02" && request.st_url) {
-				bot.createMessage(MupenQueue[0].channel_id, "Movies from power-on are not currently supported.")// Please provide a savestate from somewhere in this TAS.")
-				MupenQueue.shift()
-				NextProcess(bot)
                 // make it start from a savestate and jump to this state
                 m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([1]))
                 fs.unlinkSync(save.getSavePath() + "/tas.m64")
