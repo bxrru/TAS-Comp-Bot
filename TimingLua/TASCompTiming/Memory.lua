@@ -18,8 +18,16 @@ Memory = {
 		["mario_y_speed"] = {address = 0x00B3B1BC, type = "float", value = function(v) return v end},
 		["mario_z_speed"] = {address = 0x00B3B1C0, type = "float", value = function(v) return v end},
 		["mario_h_speed"] = {address = 0x00B3B1C4, type = "float", value = function(v) return v end},
+		["mario_life_count"] = {address = 0x00B3B21D, type = "byte", value = function(v) return v end},
+		["mario_coin_count"] = {address = 0x00B3B218, type = "short", value = function(v) return v end},
+		["mario_red_coin_count"] = {address = 0x00B613FE, type = "byte", value = function(v) return v end},
+		["mario_wall_tri"] = {address = 0x00B3B1D0, type = "uint", value = function(v) return v end},
 		["mario_floor_tri"] = {address = 0x00B3B1D8, type = "uint", value = function(v) return v end},
 		["mario_interact_object"] = {address = 0x8033B1E8, type = "uint", value = function(v) return v end}
+	},
+	BehaviorScriptAddress = {
+		["purple_switch"] = 0x800EC62C,
+		["item_box"] = 0x800ED3D0
 	}
 }
 
