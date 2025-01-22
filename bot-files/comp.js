@@ -232,7 +232,11 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 			if (MISMATCH_SETTINGS) {
 				result = "DQ Can't playback m64. Make sure you use 1 controller with rumblepak & mempak disabled!"
 			} else {
-				result = fs.readFileSync(LUAPATH + "result.txt").toString()
+				if (fs.existsSync(LUAPATH + "result.txt")) {
+					result = fs.readFileSync(LUAPATH + "result.txt").toString()
+				} else {
+					result = "DQ the timing script could not load, likely your m64 or st caused Mupen to crash."
+				}
 			}
 			var user_msg = ``
 			var unchanged = false

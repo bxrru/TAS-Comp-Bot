@@ -109,8 +109,8 @@ var start = function() {
     Started = false
     if (number == 42) {
       updateFiles()
-    } else if (number == 0 || number == 69){
-      start() // keep the bot alive intentionally
+    } else /*if (number == 0 || number == 69)*/{
+      start() // keep the bot alive intentionally (always)
     }
   })
 
