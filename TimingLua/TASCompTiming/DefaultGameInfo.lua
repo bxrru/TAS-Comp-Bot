@@ -26,10 +26,19 @@ function mario_h_speed() return Memory.read("mario_h_speed") end
 function mario_wall_tri() return Memory.read("mario_wall_tri") end
 function mario_floor_tri() return Memory.read("mario_floor_tri") end
 function mario_interact_object() return Memory.read("mario_interact_object") end
-function coin_count() return Memory.read("mario_coin_count") end
-function red_coin_count() return Memory.read("mario_red_coin_count") end
+local base_coin_count = Memory.read("mario_coin_count")
+local base_red_coin_count = Memory.read("mario_red_coin_count")
+local base_life_count = Memory.read("mario_life_count")
+function coin_count()
+    return math.abs(Memory.read("mario_coin_count") - base_coin_count)
+end
+function red_coin_count()
+    return math.abs(Memory.read("mario_red_coin_count") - base_red_coin_count)
+end
 -- mario_blue_coin_count
-function life_count() return Memory.read("mario_life_count") end
+function life_count()
+    return math.abs(Memory.read("mario_life_count") - base_life_count)
+end
 
 local action_counts = {}
 local previous_frame_action = nil
