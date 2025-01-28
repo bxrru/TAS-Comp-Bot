@@ -1414,7 +1414,7 @@ module.exports = {
 		name: "getsubmission",
 		aliases: ["get"],
 		short_descrip: "Get submitted files (get)",
-		full_descrip: "Usage: `$get <Submission_Number or 'all' or 'entry name'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all [submissions_per_zip]` the bot will upload a zip every file. To see the list of Submission Numbers use `$listsubmissions`",
+		full_descrip: "Usage: `$get <Submission_Number or 'all' or 'entry name'>`\nReturns the name, id, and links to the files of the submission. If you use `$get all [submissions_per_zip]` the bot will upload zip files with every submission. To see the list of Submission Numbers use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 
@@ -1579,11 +1579,21 @@ module.exports = {
 				outputs[i].close(); // ensure streams are closed
 			});
 		}));
+
+		let error_sent = false
 		for (const zipname of zips) {
-			await channel.createMessage("** **", {
-				file: fs.readFileSync(FOLDER + zipname),
-				name: zipname
-			})
+			let stats = fs.statSync(FOLDER + zipname)
+			if (stats.size >= 25e6) {
+				if (!error_sent) {
+					await channel.createMessage("Error: zip filesize is too large. Reduce the number of submissions per zipfile with `$get all [submissions_per_zipfile]`")
+					error_sent = true
+				}
+			} else {
+				await channel.createMessage("** **", {
+					file: fs.readFileSync(FOLDER + zipname),
+					name: zipname
+				})
+			}
 			fs.rmSync(FOLDER + zipname)
 		}
 	},
