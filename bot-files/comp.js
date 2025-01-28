@@ -1556,16 +1556,22 @@ module.exports = {
 			// add required files from submission to zip
 			let username = await submissionName(bot, Submissions[i].id)
 			for (const rf of REQUIRED_FILES) {
-				let ext = typeof rf == "string" ? rf : rf[0]; // deal with choices
-				let filepath = FOLDER + Submissions[i].id + '.' + ext;
-				if (fs.existsSync(filepath)) {
-					archives[archives.length - 1].file(
-						filepath,
-						{name:username + '/' + FilePrefix + Task + username + '.' + ext}
-					);
-				} else {
+				let extensions = typeof rf == "string" ? [rf] : rf; // go through all possibilities
+				let found = false;
+				for (const ext of extensions) {
+					let filepath = FOLDER + Submissions[i].id + '.' + ext;
+					if (fs.existsSync(filepath)) {
+						archives[archives.length - 1].file(
+							filepath,
+							{name:username + '/' + FilePrefix + Task + username + '.' + ext}
+						);
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
 					channel.createMessage(
-						"**[Error]** Missing File: `"+username+'.'+ext+"`. Use `$get "+i+"` to retrieve manually."
+						"**[Error]** Missing File: `"+username+'.'+rf+"`. Use `$get "+i+"` to retrieve manually."
 					)
 				}
 			}
