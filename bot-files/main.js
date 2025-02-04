@@ -182,7 +182,7 @@ bot.on("messageReactionAdd", async(msg, emoji, userID) => {
 		if (chat.chooseChannel(`flaglog`) != `flaglog`) bot.createMessage(chat.chooseChannel(`flaglog`), `${user ? `${user.username}#${user.discriminator} (\`${userID}\`)` : `Unknown User`} reacted with ${emoji.name} in ${msg.channel.mention}\n> ${msg.content}\n${url}`)
 	}
 
-	if (ReactionDisabledServers.includes(msg.channel.guild.id)) return
+	if (msg.channel.guild && ReactionDisabledServers.includes(msg.channel.guild.id)) return
 
 	reaction = emoji.name;
 	if (emoji.id != null){
