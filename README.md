@@ -19,7 +19,9 @@ For voice support you need [ffmpeg](https://ffmpeg.org/download.html) on your PA
 
 To enable updates: install [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git). Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
 
-
+For all the M64 commands to work there are some important Mupen64-rr settings to set:
+- Keep Working Directory: On
+- Silent mode: On
 
 ### Features
 All of the available functions are documented within the bot. Run it and type `$help` for more info. Here is an overview of some key functionality:
@@ -42,6 +44,7 @@ All data (such as submitted files, scheduled announcements, etc.) is saved local
 
 ### Future Development
 This project is always evolving and there are always new feature requests, but here is a current list of things I plan to implement:
+- include all mupen settings that are required
 - test interface
 - silent bans
 - voice queue

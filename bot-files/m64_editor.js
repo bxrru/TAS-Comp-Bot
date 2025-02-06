@@ -297,122 +297,141 @@ function NextProcess(bot, retry = true) {
     }
 
     const processing_start_time = process.hrtime.bigint()
-
-    downloadAndRun(
-        undefined,
-        () => {
-            // auto detect game
-            var m64 = fs.readFileSync(save.getSavePath() + "/tas.m64")
-            var crc = m64.subarray(0xE4, 0xE4 + 4)
-            crc = bufferToStringLiteral(crc.reverse())
-			//console.log(KNOWN_CRC)
-			//console.log(crc)
-            if (crc in KNOWN_CRC == false) { // what if the user is the bot (internal calls?)
-                if (crc == "") {
-                    // this is a strange case... maybe I'm opening the file too many times in this code?
-                    // for some reason, retrying immediately (0s delay) has worked every time this error has come up
-                    if (retry) {
-                        setTimeout(() => NextProcess(bot, false), 5000) // try again in 5s (just to be safe)
-                        return
-                    } else if (request.channel_id == null) {
-                        console.log(`ERROR: double empty CRC when running Mupen\n${JSON.stringify(request)}`)
-                    } else {
-                        bot.createMessage(request.channel_id, "Error: double empty CRC (could not read file?). Please contact an admin")
-                    }
-                } else if (request.channel_id == null) {
-                    console.log(`ERROR: unknown CRC ${crc} when running Mupen\n${JSON.stringify(request)}`)
-                } else {
-                    bot.createMessage(request.channel_id, `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`)
-                }
-                MupenQueue.shift() // this request cannot be run
-                NextProcess(bot)
-                return
-            }
-			
-			var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
-
-            // We can only have controller 1 connected and it mustn't have rumblepak
-            // Other controllers' pak state can be ignored as long as they aren't connected
-            const controller_1_present = (ctrlr_flags >> 0) & 1
-            const controller_1_rumblepak = (ctrlr_flags >> 8) & 1
-            const controller_2_present = (ctrlr_flags >> 1) & 1
-            const controller_3_present = (ctrlr_flags >> 2) & 1
-            const controller_4_present = (ctrlr_flags >> 3) & 1
-            const controller_flags_valid = controller_1_present && !controller_1_rumblepak && !controller_2_present && !controller_3_present && !controller_4_present
-
-			if (!controller_flags_valid) {
-                console.log(`ERROR: Controller flags ${ctrlr_flags} are invalid`)
-				request.callback(false, true, processing_start_time, m64)
-				MupenQueue.shift()
-				NextProcess(bot)
-				return
-			}
-
-            // set timelimit if it's different
-            if (request.time_limit != previous_time_limit) {
-                // open timelimit.txt and put in the number
-                // have timelimit.lua read that number
-                previous_time_limit = request.time_limit
-            }
-
-            let runMupen = () => {
-                if (MupenQueue.length == 0) {
-                    //console.log("runMupen ignored (queue empty)")
+    
+    let preprocessTAS = () => {
+        // auto detect game
+        let tasfile = request.local ? request.m64_url : save.getSavePath() + "/tas.m64"
+        var m64 = fs.readFileSync(tasfile)
+        var crc = m64.subarray(0xE4, 0xE4 + 4)
+        crc = bufferToStringLiteral(crc.reverse())
+        //console.log(KNOWN_CRC)
+        //console.log(crc)
+        if (crc in KNOWN_CRC == false) { // what if the user is the bot (internal calls?)
+            if (crc == "") {
+                // this is a strange case... maybe I'm opening the file too many times in this code?
+                // for some reason, retrying immediately (0s delay) has worked every time this error has come up
+                // Edit 2025: this error also comes up if the downloaded file is "no longer available"
+                // a future fix is to access the message containing an m64 url and get an updated url to that attachment
+                // this needs to be fixed in the command methods that call QueueAdd
+                if (retry) {
+                    setTimeout(() => NextProcess(bot, false), 5000) // try again in 5s (just to be safe)
                     return
+                } else if (request.channel_id == null) {
+                    console.log(`ERROR: double empty CRC when running Mupen\n${JSON.stringify(request)}`)
+                } else {
+                    bot.createMessage(request.channel_id, "Error: Failed to read CRC twice (could not read file?). Please ensure that links to files are not expired.")
                 }
-                request.startup()
-                const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
-				const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
-                let Mupen = cp.exec(CMD)
-                MupenQueue[0].process = Mupen
-                Mupen.on("close", async (code, signal) => {
-
-                    if (fs.existsSync("TLE.txt")) { // currently do nothing on time limit exceeded...
-                        fs.unlinkSync("TLE.txt")
-                        request.callback(true, true, processing_start_time, m64) // pass true if the run timed out
-                    } else {
-                        request.callback(false, false, processing_start_time, m64)
-                    }
-					//if (code) console.log(`${code}: ${signal}`)
-
-                    MupenQueue.shift()
-                    NextProcess(bot)
-
-                })
+            } else if (request.channel_id == null) {
+                console.log(`ERROR: unknown CRC ${crc} when running Mupen\n${JSON.stringify(request)}`)
+            } else {
+                bot.createMessage(request.channel_id, `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`)
             }
+            MupenQueue.shift() // this request cannot be run
+            NextProcess(bot)
+            return
+        }
+        
+        var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
 
-            let start_type = m64.subarray(0x1C, 0x1C + 1)
-            start_type = bufferToStringLiteral(start_type) // "01" = from savestate, "02" = from start
-            if (!request.st_url) { // no savestate given, skip downloading savestate
-                // force it to start from power on
-                if (start_type == "01") { 
-					// "Your movie starts from savestate, but no st was provided"
-                    m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([2]))
-                    fs.unlinkSync(save.getSavePath() + "/tas.m64")
-                    fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
-                }
-                downloadAndRun(
-                    undefined,
-                    runMupen,
-                    request.m64_url,
-                    "tas.m64"
-                )
+        // We can only have controller 1 connected and it mustn't have rumblepak
+        // Other controllers' pak state can be ignored as long as they aren't connected
+        const controller_1_present = (ctrlr_flags >> 0) & 1
+        const controller_1_rumblepak = (ctrlr_flags >> 8) & 1
+        const controller_2_present = (ctrlr_flags >> 1) & 1
+        const controller_3_present = (ctrlr_flags >> 2) & 1
+        const controller_4_present = (ctrlr_flags >> 3) & 1
+        const controller_flags_valid = controller_1_present && !controller_1_rumblepak && !controller_2_present && !controller_3_present && !controller_4_present
+
+        if (!controller_flags_valid) {
+            let newtas = m64.subarray(0, 0x400) // copy header
+            newtas[0x20] = 1 // set controller flags
+            newtas[0x21] = 0
+            newtas[0x23] = 0
+            for (let i = 0x400; i < tas.length; i += 0x10) { // copy controller 1 data
+                newtas = Buffer.concat([newtas, m64.subarray(i, i+4)])
+            }
+            fs.unlinkSync(tasfile)
+            fs.writeFileSync(tasfile, newtas)
+            m64 = newtas
+        }
+        
+        // set timelimit if it's different
+        if (request.time_limit != previous_time_limit) {
+            // open timelimit.txt and put in the number // edit 2025: wait do I not do this here... ???
+            // have timelimit.lua read that number
+            previous_time_limit = request.time_limit
+        }
+
+        let runMupen = () => {
+            if (MupenQueue.length == 0) {
+                //console.log("runMupen ignored (queue empty)")
                 return
-            } else if (start_type == "02" && request.st_url) {
-                // make it start from a savestate and jump to this state
-                m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([1]))
-                fs.unlinkSync(save.getSavePath() + "/tas.m64")
-                fs.writeFileSync(save.getSavePath() + "/tas.m64", m64)
-            }  // else: from savestate and has savestate
+            }
+            request.startup()
+            const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
+            const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
+            let Mupen = cp.exec(CMD)
+            MupenQueue[0].process = Mupen
+            Mupen.on("close", async (code, signal) => {
 
-            downloadAndRun(
+                if (fs.existsSync("TLE.txt")) { // currently do nothing on time limit exceeded...
+                    fs.unlinkSync("TLE.txt")
+                    request.callback(true, true, processing_start_time, m64) // pass true if the run timed out
+                } else {
+                    request.callback(false, false, processing_start_time, m64)
+                }
+                //if (code) console.log(`${code}: ${signal}`)
+
+                MupenQueue.shift()
+                NextProcess(bot)
+
+            })
+        }
+
+        let start_type = m64.subarray(0x1C, 0x1C + 1)
+        start_type = bufferToStringLiteral(start_type) // "01" = from savestate, "02" = from start
+        if (!request.st_url) { // no savestate given, skip downloading savestate
+            // force it to start from power on
+            if (start_type == "01") { 
+                // "Your movie starts from savestate, but no st was provided"
+                m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([2]))
+                fs.unlinkSync(tasfile)
+                fs.writeFileSync(tasfile, m64)
+            }
+            runMupen()
+            downloadAndRun( // should this just be runMupen(); return; ??
                 undefined,
                 runMupen,
-                request.st_url,
-                "tas.st"
+                request.m64_url,
+                "tas.m64"
             )
+            return
+        } else if (start_type == "02" && request.st_url) {
+            // make it start from a savestate and jump to this state
+            m64 = bufferInsert(m64, 0x1C, 0x1C + 1, Buffer.from([1]))
+            fs.unlinkSync(tasfile)
+            fs.writeFileSync(tasfile, m64)
+        }  // else: from savestate and has savestate
 
-        },
+        if (request.local) {
+            runMupen()
+            return
+        }
+        downloadAndRun(
+            undefined,
+            runMupen,
+            request.st_url,
+            "tas.st"
+        )
+    }
+
+    if (request.local) {
+        preprocessTAS()
+        return
+    }
+    downloadAndRun(
+        undefined,
+        preprocessTAS,
         request.m64_url,
         "tas.m64"
     )
@@ -427,10 +446,25 @@ function NextProcess(bot, retry = true) {
 // all processes are run with -lua ./timelimit.lua;
 // channel_id is used to send a message if no game matches the tas being loaded
 // user_id will be pinged if no game matches the tas being loaded (and a valid channel_id is provided)
-// Ex. QueueAdd(bot, "...m64", "...st", ["-avi", "encode.avi", "-lua", "C:\\file.lua"], ()=>{}, ()=>{}, 0, 0)
-function QueueAdd(bot, m64_url, st_url, cmdline_args, startup, callback, channel_id = null, user_id = null, time_limit = DEFAULT_TIME_LIMIT) {
+// local_files = true means that m64_url is a filepath to an existing local tas file which will be run with -m64
+// Ex. QueueAdd(bot, "...m64", "...st", ["-avi", "encode.avi", "-lua", "C:\\file.lua"], ()=>{}, ()=>{}, 0, 0, false)
+function QueueAdd(
+    bot,
+    m64_url,
+    st_url,
+    cmdline_args,
+    startup,
+    callback,
+    channel_id = null,
+    user_id = null,
+    time_limit = DEFAULT_TIME_LIMIT,
+    local_files = false
+) {
     //console.log(`Adding ${m64_url}\n${st_url}\n${cmdline_args}\n${channel_id} ${user_id}\n${time_limit}`)
     var cmd = ""
+    if (local_files && cmdline_args.indexOf("-m64") < 0) {
+        cmdline_args = ["-m64", m64_url, ...cmdline_args]
+    }
     for (var i = 0; i < cmdline_args.length; ++i) {
 
         // Lua scripts are included in an array formatted as follows:
@@ -461,6 +495,7 @@ function QueueAdd(bot, m64_url, st_url, cmdline_args, startup, callback, channel
         user_id: user_id,
         time_limit: time_limit,
         skip: false,
+        local: local_files,
         process: null
     })
     //console.log(MupenQueue)
@@ -1014,11 +1049,11 @@ module.exports = {
                             file: video,
                             name: `${filename}.mp4`
                         })
-
-                        fs.unlinkSync("./encode-compressed.mp4")
                     } catch (err) {
-                        bot.createMessage(msg.channel.id, `Something went wrong <@\${msg.author.id}> \`\`\`${err}\`\`\``)
+                        bot.createMessage(msg.channel.id, `Something went wrong <@${msg.author.id}> \`\`\`${err}\`\`\``)
                         console.log(err)
+                    } finally {
+                        fs.unlinkSync("./encode-compressed.mp4")
                     }
                 },
                 msg.channel.id,

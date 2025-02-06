@@ -4,3 +4,10 @@ node_modules/
 /bot.js
 /.eslintrc.json
 crash.log
+TimingLua/result.txt
+TimingLua/submission.m64
+TimingLua/submission.st
+TimingLua/tmp.ghost
+*.ini
+*.log
+*.cfg

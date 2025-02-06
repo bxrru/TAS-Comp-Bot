@@ -199,20 +199,22 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 	//console.log(getSubNum())
 	//console.log(Submissions[getSubNum()])
 	
-	let lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "TASCompTiming.lua"]
+	let filepath = Save.getSavePath() + "/Submissions/" + submission_id
+	let st_ext = fs.existsSync(filepath + ".st") ? ".st" : ".savestate"
 
+	let lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "TASCompTiming.lua"]
 	const args = ["-m64", LUAPATH + "submission.m64", lua_args]
 	
 	return Mupen.Process( // returns position in queue
 		bot,
-		Submissions[getSubNum()].m64,
-		Submissions[getSubNum()].st,
+		filepath + ".m64",
+		filepath + st_ext,
 		args,
-		() => {
+		() => { // move Save/Submissions/id.m64 to LUA/submission.m64
 			if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
-			fs.copyFileSync(save.getSavePath() + "/tas.m64", LUAPATH + "submission.m64")
+			fs.copyFileSync(filepath + ".m64", LUAPATH + "submission.m64")
 			if (fs.existsSync(LUAPATH + "submission.st")) fs.unlinkSync(LUAPATH + "submission.st")
-			fs.copyFileSync(save.getSavePath() + "/tas.st", LUAPATH + "submission.st")
+			fs.copyFileSync(filepath + st_ext, LUAPATH + "submission.st")
 		},
 		async (TLE, MISMATCH_SETTINGS) => {
 			var admin_msg = `${await submissionName(bot, Submissions[submission_number].id)} (${submission_number+1}): `
@@ -308,7 +310,8 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 		},
 		err_channel_id,
 		err_user_id,
-		time_limit
+		time_limit,
+		true
 	)
 }
 
@@ -1523,11 +1526,15 @@ module.exports = {
 
 	},
 
-	// send the download script to a specified channel
+	// send FILEPREFIX#.zip to a specified channel
+	// the zip will include one folder per entrant, containing userid.ext for each ext in file_extensions
+	// file_extensions has the same format as REQUIRED_FILES (so it can choose from options)
 	// if submissions_per_zip is negative, then it will put all files in a single zip
 	// KNOWN ISSUE: the zips dont save correctly??? There's a warning when extracting but the contents are fine.
-	getAllSubmissions:async function(bot, channel, submissions_per_zip){
-				
+	getAllSubmissions:async function(bot, channel, submissions_per_zip, file_extensions = null){
+		
+		if (file_extensions == null) file_extensions = REQUIRED_FILES
+
 		// Files are saved as /saves/Submissions/userid.extension
 		const FOLDER = Save.getSavePath() + "/Submissions/"
 
@@ -1555,7 +1562,7 @@ module.exports = {
 			}
 			// add required files from submission to zip
 			let username = await submissionName(bot, Submissions[i].id)
-			for (const rf of REQUIRED_FILES) {
+			for (const rf of file_extensions) {
 				let extensions = typeof rf == "string" ? [rf] : rf; // go through all possibilities
 				let found = false;
 				for (const ext of extensions) {
@@ -1571,7 +1578,7 @@ module.exports = {
 				}
 				if (!found) {
 					channel.createMessage(
-						"**[Error]** Missing File: `"+username+'.'+rf+"`. Use `$get "+i+"` to retrieve manually."
+						"**[Error]** Missing File: `"+username+'.'+rf+"` (Submission `"+i+"`)."
 					)
 				}
 			}
@@ -1591,8 +1598,8 @@ module.exports = {
 			let stats = fs.statSync(FOLDER + zipname)
 			if (stats.size >= 25e6) {
 				if (!error_sent) {
-					await channel.createMessage("Error: zip filesize is too large. Reduce the number of submissions per zipfile with `$get all [submissions_per_zipfile]`")
-					error_sent = true
+					await channel.createMessage("Error: zip filesize is too large. Reduce the number of submissions per zipfile.")
+					error_sent = true // don't exit yet so it properly deletes the zip files
 				}
 			} else {
 				await channel.createMessage("** **", {
@@ -2449,6 +2456,135 @@ module.exports = {
 			module.exports.save()
 			notifyHosts(bot, `\`Auto-timing on submission is now ${AllowAutoTime ? `enabled` : `disabled`}\``, `Update`)
 			return `Timing when a new file is received is now \`${AllowAutoTime ? 'enabled' : 'disabled'}\``
+		}
+	},
+
+	GetGhost:{
+		name: `GetGhost`,
+		short_descrip: `Get a submission ghost file`,
+		full_descrip: `Usage: \`$getghost [submission_number or 'all']\`\nReturns the ghost data file for a competition submission. If \`all\` is specified, it will send a zip all of the ghost data at once. Note: competition hosts can request data for any submission, and anyone can request their own ghost.`,
+		hidden: true,
+		function: async function(bot, msg, args) {
+
+			// on_success is a callback is sent the filename of the ghost (properly named to match competition standards)
+			// the file exists as LUAPATH + "tmp.ghost"
+			let getghost = async function(submission_id, on_success, get_ghost_name) {
+				if (get_ghost_name == null) get_ghost_name = true;
+				try {
+					var dm = await bot.getDMChannel(msg.author.id)
+				} catch (e) {
+					return `Cannot send DM. No ghost data will be generated: ${e}`
+				}
+
+				let filepath = Save.getSavePath() + "/Submissions/" + Submissions[submission_id].id
+				let st_ext = fs.existsSync(filepath+".st") ? ".st" : ".savestate"
+
+				const lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "ghost.lua"]
+				const args = ["-m64", filepath + ".m64", "--close-on-movie-end", lua_args]
+				
+				let queue_position = Mupen.Process(
+					bot,
+					filepath + ".m64",
+					filepath + st_ext,
+					args,
+					() => {
+						if (fs.existsSync(LUAPATH + "tmp.ghost")) fs.unlinkSync(LUAPATH + "tmp.ghost")
+					},
+					async (TLE, MISMATCH_SETTINGS) => {
+						let result = ""
+						if (TLE) {
+							result = `Error: Your TAS exceeded the time limit. Ghost data must be retrieved manually.`
+						} else if (MISMATCH_SETTINGS) {
+							result = `Error: Your TAS cannot be played back. Please ensure it has only 1 controller with rumblepak disabled. Ghost data must be retrieved manually.`
+						} else if (fs.existsSync(LUAPATH + "error.txt")) {
+							result = fs.readFileSync(LUAPATH + "result.txt").toString() + "\nGhost data must be retrieved manually."
+							fs.unlinkSync(LUAPATH + "error.txt")
+						} else if (!fs.existsSync(LUAPATH + "tmp.ghost")) {
+							result = `Error: something went wrong, could not produce ghost data.`
+						} else {
+							if (get_ghost_name) {
+								return on_success(await submissionName(bot, Submissions[submission_id].id))
+							}
+							return on_success()
+						}
+						dm.createMessage(result).catch(console.log)
+					},
+					dm.id,
+					msg.author.id,
+					3*60*30, // same as AutoTime
+					true // local files
+				)
+				return `Ghost data will be sent in DMs. Position in queue: ${queue_position}`
+			}
+
+			let dm_ghost_data = async function(ghost_data_filename) {
+				try {
+					let dm = await bot.getDMChannel(msg.author.id)
+					dm.createMessage(
+						"Here is your ghost data:", 
+						{
+							file: fs.readFileSync(LUAPATH + "tmp.ghost"),
+							name: ghost_data_filename + ".ghost"
+						}
+					).then(
+						fs.unlinkSync(LUAPATH + "tmp.ghost")
+					).catch(console.log)
+				} catch (e) {
+					console.log(`Failed to send DM after getting ghost: ${e}`)
+				}
+			}
+
+			if (notAllowed(msg)) { // normal users can request their own ghost
+				let allowed_number = Submissions.findIndex(s => s.id == msg.author.id)
+				if (allowed_number == -1) {
+					return `You do not have a submission to get ghost data for!`
+				} else if (args.length > 0 && args[1] != allowed_number.toString()) {
+					return `You can only request the ghost data for your own run. Please use \`$getghost ${allowed_number}\``
+				}
+				return await getghost(allowed_number, dm_ghost_data)
+			}
+
+			// hosts can request any ghost
+			if (args.length && args[0] == "all") {
+				let submissions_per_zip = -1
+				if (args.length > 1 && !isNaN(args[1])) {
+					submissions_per_zip = Number(args[1])
+				}
+				for (let i = 0; i < Submissions.length; ++i) {
+					let move_ghost = async () => {
+						let filepath = Save.getSavePath() + "/Submissions/" + Submissions[i].id + ".ghost"
+						if (fs.existsSync(filepath)) {
+							fs.unlinkSync(filepath)
+						}
+						fs.renameSync(LUAPATH + "tmp.ghost", filepath)
+						if (i == Submissions.length - 1) { // last one uploads the zips
+							try {
+								let dm = await bot.getDMChannel(msg.author.id)
+								module.exports.getAllSubmissions(bot, dm, submissions_per_zip, ["ghost"])
+							} catch (e) {
+								console.log(`[ERROR] Fail to not upload zips: ${e}`)
+							}
+						}
+					}
+					await getghost(i, move_ghost, false) // queue everything
+				}
+				return `Generating ghost data for all ${Submissions.length} submissions. Data will be sent in DMs.`
+			}
+
+			// individual ghosts
+			let ghost_submission_index = -1
+			if (args.length == 0) { // shortcut request their own ghost
+				ghost_submission_index = Submissions.findIndex(s => s.id == msg.author.id)
+			} else if (isNaN(args[0])) {
+				return `Invalid argument: \`$getghost <submission_number or 'all'>\``
+			} else {
+				ghost_submission_index = Number(args[0]) - 1
+			}
+
+			if (ghost_submission_index < 0 || Submissions.length <= ghost_submission_index) {
+				return `Invalid argument: 1 <= \`submission_number\` < ${Submissions.length}`
+			}
+			return await getghost(ghost_submission_index, dm_ghost_data)
 		}
 	},
 
