@@ -189,7 +189,7 @@ function read(addr, file) {
 function write(addr, data, file) {
     if (!(addr in HEADER)) return
     var type = HEADER[addr][0]
-
+    
     switch (type) {
         case BitField:
             if (isNaN(data)) {
@@ -207,11 +207,11 @@ function write(addr, data, file) {
             } else {
                 data = Number(data)
             }
-            data = intToLittleEndian(data)
+            data = intToLittleEndian(data, HEADER[addr][1])
             break
         case Integer:
             data = isNaN(data) ? 0 : Number(data)
-            data = intToLittleEndian(data)
+            data = intToLittleEndian(data, HEADER[addr][1])
             break
         case AsciiString:
             data = Buffer.from(data, "ascii")
@@ -222,8 +222,39 @@ function write(addr, data, file) {
         case Bytes:
             data = stringLiteralToBuffer(data, HEADER[addr][1])
     }
+    
+    return bufferInsert(file, addr, addr+HEADER[addr][1], data)
+}
 
-    bufferInsert(file, addr, addr+HEADER[addr][1], data)
+// returns true if m64 is updated
+function only_1P_no_rumblepak(m64) {
+    var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
+
+    // We can only have controller 1 connected and it mustn't have rumblepak
+    // Other controllers' pak state can be ignored as long as they aren't connected
+    const controller_1_present = (ctrlr_flags >> 0) & 1
+    const controller_1_rumblepak = (ctrlr_flags >> 8) & 1
+    const controller_2_present = (ctrlr_flags >> 1) & 1
+    const controller_3_present = (ctrlr_flags >> 2) & 1
+    const controller_4_present = (ctrlr_flags >> 3) & 1
+
+    return (controller_1_present && !controller_1_rumblepak 
+        && !controller_2_present && !controller_3_present && !controller_4_present)
+}
+
+function fix_controllers(m64) {
+    let newtas = m64.subarray(0, 0x400) // copy header
+    newtas[0x20] = 1 // set controller flags
+    newtas[0x21] = 0
+    newtas[0x23] = 0
+    let num_controllers = m64[0x15]
+    newtas[0x15] = 1 // set number of controllers
+    let sample_count = read(0x18, m64)
+    newtas = write(0x18, sample_count / num_controllers, newtas)
+    for (let i = 0x400; i < m64.length; i += 0x4 * num_controllers) { // copy controller 1 data
+        newtas = Buffer.concat([newtas, m64.subarray(i, i+4)])
+    }
+    return newtas
 }
 
 // =============
@@ -302,7 +333,7 @@ function NextProcess(bot, retry = true) {
         // auto detect game
         let tasfile = request.local ? request.m64_url : save.getSavePath() + "/tas.m64"
         var m64 = fs.readFileSync(tasfile)
-        var crc = m64.subarray(0xE4, 0xE4 + 4)
+        var crc = Buffer.copyBytesFrom(m64.subarray(0xE4, 0xE4 + 4))
         crc = bufferToStringLiteral(crc.reverse())
         //console.log(KNOWN_CRC)
         //console.log(crc)
@@ -331,28 +362,11 @@ function NextProcess(bot, retry = true) {
             return
         }
         
-        var ctrlr_flags = littleEndianToInt(m64.subarray(0x20, 0x20  + 4))
-
-        // We can only have controller 1 connected and it mustn't have rumblepak
-        // Other controllers' pak state can be ignored as long as they aren't connected
-        const controller_1_present = (ctrlr_flags >> 0) & 1
-        const controller_1_rumblepak = (ctrlr_flags >> 8) & 1
-        const controller_2_present = (ctrlr_flags >> 1) & 1
-        const controller_3_present = (ctrlr_flags >> 2) & 1
-        const controller_4_present = (ctrlr_flags >> 3) & 1
-        const controller_flags_valid = controller_1_present && !controller_1_rumblepak && !controller_2_present && !controller_3_present && !controller_4_present
-
-        if (!controller_flags_valid) {
-            let newtas = m64.subarray(0, 0x400) // copy header
-            newtas[0x20] = 1 // set controller flags
-            newtas[0x21] = 0
-            newtas[0x23] = 0
-            for (let i = 0x400; i < tas.length; i += 0x10) { // copy controller 1 data
-                newtas = Buffer.concat([newtas, m64.subarray(i, i+4)])
-            }
+        if (!only_1P_no_rumblepak(m64)) {
+            console.log(`Fixing controller flags for ${tasfile}`)
+            m64 = fix_controllers(m64)
             fs.unlinkSync(tasfile)
-            fs.writeFileSync(tasfile, newtas)
-            m64 = newtas
+            fs.writeFileSync(tasfile, m64)
         }
         
         // set timelimit if it's different
@@ -362,23 +376,24 @@ function NextProcess(bot, retry = true) {
             previous_time_limit = request.time_limit
         }
 
-        let runMupen = () => {
+        let runMupen = async () => {
             if (MupenQueue.length == 0) {
                 //console.log("runMupen ignored (queue empty)")
                 return
             }
-            request.startup()
+            await request.startup()
             const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
             const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
+            //console.log(CMD)
             let Mupen = cp.exec(CMD)
             MupenQueue[0].process = Mupen
             Mupen.on("close", async (code, signal) => {
 
                 if (fs.existsSync("TLE.txt")) { // currently do nothing on time limit exceeded...
                     fs.unlinkSync("TLE.txt")
-                    request.callback(true, true, processing_start_time, m64) // pass true if the run timed out
+                    await request.callback(true, true, processing_start_time, m64) // pass true if the run timed out
                 } else {
-                    request.callback(false, false, processing_start_time, m64)
+                    await request.callback(false, false, processing_start_time, m64)
                 }
                 //if (code) console.log(`${code}: ${signal}`)
 

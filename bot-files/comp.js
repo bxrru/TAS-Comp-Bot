@@ -202,6 +202,13 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 	let filepath = Save.getSavePath() + "/Submissions/" + submission_id
 	let st_ext = fs.existsSync(filepath + ".st") ? ".st" : ".savestate"
 
+	if (!fs.existsSync(filepath + ".m64") || !fs.existsSync(filepath + st_ext)) {
+		let err_msg = `[ERROR] Tried to autotime submission (id: ${submission_id}) with missing files.`
+		console.log(err_msg)
+		if (err_channel_id) bot.createMessage(err_channel_id, err_msg)
+		return -1
+	}
+
 	let lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "TASCompTiming.lua"]
 	const args = ["-m64", LUAPATH + "submission.m64", lua_args]
 	
@@ -526,6 +533,7 @@ async function storeFile(bot, msg, attachment_url, extension, allow_autotime) {
 			} catch (e) {
 				notifyHosts(bot, "Failed to store submission from " + msg.author.username, `Error`)
 			}
+			//console.log(`Downloaded ${filepath} (${filename+extension}) [Autotime: ${allow_autotime ? "enabled" : "disabled"}]`)
 			if (allow_autotime) { // sometimes disable depending on submission order
 				CheckAutoTiming(bot, msg)
 			}
@@ -966,7 +974,7 @@ module.exports = {
 			if (!is_required_ext(filetype)) {
 				return `Invalid Filetype: Must be one of ${REQUIRED_FILES}`
 			}
-			update_submission_file(user.id, args[0], 0)
+			storeFile(bot, {author:user, channel:msg.channel}, args[0], '.' + filetype, true)
 			notifyUserAndHost(filetype)
 			return "Successfully updated " + filetype
 
@@ -1596,7 +1604,7 @@ module.exports = {
 		let error_sent = false
 		for (const zipname of zips) {
 			let stats = fs.statSync(FOLDER + zipname)
-			if (stats.size >= 25e6) {
+			if (stats.size >= 10e6) { // 10MB upload limit
 				if (!error_sent) {
 					await channel.createMessage("Error: zip filesize is too large. Reduce the number of submissions per zipfile.")
 					error_sent = true // don't exit yet so it properly deletes the zip files
@@ -2162,7 +2170,7 @@ module.exports = {
 
 
 	// this is meant to parse every message and sort submissions
-	filterSubmissions:function(bot, msg){
+	filterSubmissions:async function(bot, msg){
 
 		if (!miscfuncs.isDM(msg)) return
 		if (msg.content.startsWith("$")) return // ignore commands
@@ -2188,7 +2196,6 @@ module.exports = {
 			return
 		}
 		// download the files in order of priority, offset by 10s each time
-		let final_ext = msg.attachments.map(a => fileExt(a)).filter(ext => is_required_ext(ext))[0]
 		let num_files_downloaded = 0
 		let set_dl_recur = function(arr) { // recursively search through required files in order
 			arr.forEach(ext => {
@@ -2196,7 +2203,9 @@ module.exports = {
 					msg.attachments.forEach(attachment => {
 						if (fileExt(attachment) == ext) {
 							setTimeout(
-								() => filterFiles(bot, msg, attachment, (ext == final_ext)),
+								// set an async call to save the file. Always try to autotime.
+								// there are safeguards later for not timing a submission that doesn't have all the files
+								() => filterFiles(bot, msg, attachment, true),
 								10000 * num_files_downloaded
 							)
 						}
@@ -2500,12 +2509,12 @@ module.exports = {
 							result = fs.readFileSync(LUAPATH + "result.txt").toString() + "\nGhost data must be retrieved manually."
 							fs.unlinkSync(LUAPATH + "error.txt")
 						} else if (!fs.existsSync(LUAPATH + "tmp.ghost")) {
-							result = `Error: something went wrong, could not produce ghost data.`
+							result = `Error: something went wrong, could not produce ghost data for #${submission_id}.`
 						} else {
 							if (get_ghost_name) {
-								return on_success(await submissionName(bot, Submissions[submission_id].id))
+								return await on_success(await submissionName(bot, Submissions[submission_id].id))
 							}
-							return on_success()
+							return await on_success()
 						}
 						dm.createMessage(result).catch(console.log)
 					},
@@ -2520,7 +2529,7 @@ module.exports = {
 			let dm_ghost_data = async function(ghost_data_filename) {
 				try {
 					let dm = await bot.getDMChannel(msg.author.id)
-					dm.createMessage(
+					await dm.createMessage(
 						"Here is your ghost data:", 
 						{
 							file: fs.readFileSync(LUAPATH + "tmp.ghost"),

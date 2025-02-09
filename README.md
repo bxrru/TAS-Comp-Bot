@@ -20,8 +20,10 @@ For voice support you need [ffmpeg](https://ffmpeg.org/download.html) on your PA
 To enable updates: install [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git). Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
 
 For all the M64 commands to work there are some important Mupen64-rr settings to set:
-- Keep Working Directory: On
-- Silent mode: On
+- Silent mode: On (Prevents popup windows from preventing the emulator from closing)
+- Keep Working Directory: On (allows running locally-stored TAS files with relative directories)
+- Core Type: Pure Interpreter
+- open a game and capture a video recording once, and set the codec to something that is not Uncompressed Frames. Then Make sure to copy avi.cfg to the folder of this project
 
 ### Features
 All of the available functions are documented within the bot. Run it and type `$help` for more info. Here is an overview of some key functionality:
