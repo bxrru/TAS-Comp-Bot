@@ -1448,31 +1448,54 @@ module.exports = {
 					module.exports.getAllSubmissions(bot, dm, submissions_per_zip)
 					return
 				}
+
+				let get_submission_text_and_files = async (submission, i) => {
+					let result = `${i+1}. ${submission.name}\nID: ${submission.id}\n`
+					if (submission.dq) {
+						result += `Time: ||${submission.name} ${submission.time ? getTimeString(submission.time) + ' ' : ''}(DQ) [${submission.info}]||`
+					} else {
+						result += `Time: ||${getTimeString(submission.time)} (${submission.time/2}f) ${submission.info}||`
+					}
+					let files = []		
+					let filename = await submissionName(bot, submission.id, true)
+					filename = module.exports.properFileName(filename)
+					// TODO: loop through REQUIRED_FILES correctly
+					let filepath = Save.getSavePath() + "/Submissions/" + submission.id
+					if (submission.m64.length) {
+						files.push({
+							file: fs.readFileSync(filepath + ".m64"),
+							name: filename + ".m64"
+						})
+					}
+					if (submission.st.length) {
+						let st_ext = fs.existsSync(filepath + ".st") ? ".st" : ".savestate"
+						files.push({
+							file: fs.readFileSync(filepath + st_ext),
+							name: filename + st_ext
+						})
+					}
+					return [result, files]
+				}
 				
 				if (isNaN(args[0])) { // attempt to get submission by name
 					for (let i = 0; i < Submissions.length; ++i) {
 						if (Submissions[i].name == args.join(' ')) {
-							let s = Submissions[i]
-							let result = `${i+1}. ${s.name}\nID: ${s.id}\nTime: ||${getTimeString(s.time)} (${s.time/2}f) ${s.info}||\nm64: ${s.m64}\nst: ${s.st}`
-							if (miscfuncs.isDM(msg)) {
-								return result
-							} else {
-								dm.createMessage(result)
+							let result = await get_submission_text_and_files(Submissions[i], i)
+							dm.createMessage(result[0], result[1])
+							if (!miscfuncs.isDM(msg)) {
 								return 'Submission info sent via DMs'
 							}
 						}
 					}
 					return "Invalid Argument: `$get <Submission_Number or 'all' or 'entry name'>`"
 				}
+
 				var num = getSubmissionNumber(args[0])
 				if (num.message.length) return num.message
-
-				var s = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
-				var result = (num.dq?`DQ`:``) + `${num.number}. ${await submissionName(bot, s.id)}\nID: ${s.id}\nTime: ||${getTimeString(s.time)} (${s.time/2}f) ${s.info}||\nm64: ${s.m64}\nst: ${s.st}`
-				if (miscfuncs.isDM(msg)) {
-					return result
-				} else {
-					dm.createMessage(result)
+				num = num.number - 1 // old system: submission = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
+				let result = await get_submission_text_and_files(Submissions[num], num)
+				dm.createMessage(result[0], result[1])
+				if (!miscfuncs.isDM(msg)) {
 					return 'Submission info sent via DMs'
 				}
 
@@ -1720,9 +1743,14 @@ module.exports = {
 		function: async function(bot, msg, args){
 			try {
 				var dm = await bot.getDMChannel(msg.author.id)
-				dm.createMessage(await module.exports.getSubmisssionStatus(bot, msg.author.id))
+				let result = await module.exports.getSubmisssionStatus(bot, msg.author.id)
+				if (result[1].length) {
+					dm.createMessage(result[0], result[1])
+				} else {
+					dm.createMessage(result[0])
+				}
 			} catch (e) {
-				return "Something went wrong: Could not DM your submission status"
+				return `Something went wrong: Could not DM your submission status: ${e}`
 			}
 		}
 	},
@@ -1974,6 +2002,7 @@ module.exports = {
 			var st = submission.st.length != 0;
 		}
 		var msg = "Submission Status: "
+		// TODO: loop through REQUIRED_FILES correctly
 		if (m64 && st) {
 			msg += "`2/2` Submission complete\n"
 			if (submission.dq) {
@@ -1985,18 +2014,36 @@ module.exports = {
 			} else {
 				msg += `Your run has not been timed yet.`
 			}
-			msg += `\nm64: ${submission.m64}\nst: ${submission.st}`
 		} else if (m64 && !st){
-			msg += "`1/2` No st received.\nm64: "+submission.m64
+			msg += "`1/2` No st received."
 		} else if (!m64 && st){
-			msg += "`1/2` No m64 received.\nst: "+submission.st
+			msg += "`1/2` No m64 received."
 		} else { // (!m64 && !st)
 			msg += "`0/2` No m64 or st received."
 		}
 		if (completedTeam(user_id)) {
 			msg += `\nTeam: ${await submissionName(bot, user_id)}`
 		}
-		return msg
+		let files = []
+		if (m64 || st) {
+			let filename = await submissionName(bot, submission.id, true)
+			filename = module.exports.properFileName(filename)
+			let filepath = Save.getSavePath() + "/Submissions/" + submission.id
+			if (m64) {
+				files.push({
+					file: fs.readFileSync(filepath + ".m64"),
+					name: filename + ".m64"
+				})
+			}
+			if (st) {
+				let st_ext = fs.existsSync(filepath + ".st") ? ".st" : ".savestate"
+				files.push({
+					file: fs.readFileSync(filepath + st_ext),
+					name: filename + st_ext
+				})
+			}
+		}
+		return [msg, files]
 	},
 
 	// checks whether a user id is linked to a submission or not
