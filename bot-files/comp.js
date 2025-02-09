@@ -87,6 +87,13 @@ function RandomName() {
     return name
 }
 
+var COMPLOG = [] // list of [timestamp, "userid", "action"]
+function LOG(uid, action) {
+	let d = new Date()
+	COMPLOG.push([d.getTime(), uid, action])
+	module.exports.save()
+}
+
 // TODO: Implement a confirmation of request feature that makes people
 // resend a task request with some number to actually start the task
 
@@ -261,6 +268,7 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 					admin_msg += `(result unchanged) `
 					user_msg += `(result unchanged) `
 				}
+				LOG(Submissions[getSubNum()].id, `Time: DQ [${reason}]`)
 			} else {
 				var frames = Number(result.split(' ')[1])
 				var info = result.split(' ').slice(2).join(' ') // normally an empty string
@@ -278,6 +286,7 @@ function AutoTimeEntry(bot, submission_number, submission_id, time_limit = 3*60*
 					admin_msg += `(time unchanged) `
 					user_msg += `(time unchanged) `
 				}
+				LOG(Submissions[getSubNum()].id, `Time: ${frames}${info.length ? `[${info}]` : ''}`)
 			}
 			module.exports.save()
 			if (fs.existsSync(LUAPATH + "results.txt")) fs.unlinkSync(LUAPATH + "result.txt")
@@ -522,6 +531,7 @@ async function storeFile(bot, msg, attachment_url, extension, allow_autotime) {
 				name: filename + extension // exclude id when uploading it back
 			}
 			try {
+				LOG(msg.author.id, "Submitted " + extension)
 				//let name = Submissions.filter(s => s.id == msg.author.id)[0].name // [AF] let them know what their name is
 				let submitter_notif = fileExt(file) + " submitted. Use `$status` to check your submitted files. "/* Your alias is " + name [AF]*/
 				if (!AllowAutoTime) submitter_notif += "Autotiming is currently disabled."
@@ -851,6 +861,7 @@ module.exports = {
 			Teams = {}
 			while (NamesUsed.length) NamesPool.push(NamesUsed.pop())
 			while (NamesFree.length > 6) NamesPool.push(NamesFree.pop())
+			COMPLOG = []
 			module.exports.save()
 
 			fs.rmSync(Save.getSavePath() + "/Submissions", {recursive:true})
@@ -1854,6 +1865,7 @@ module.exports = {
 			if (TimedTaskStatus.started.includes(msg.author.id)) return `You've already started Task ${Task}!`
 			if (TimedTaskStatus.completed.includes(msg.author.id)) return `You've already completed Task ${Task}! Use \`$status\` to check your files.`
 
+			LOG(msg.author.id, "Started Timed Task")
 			TimedTaskStatus.started.push(msg.author.id)
 			TimedTaskStatus.startTimes.push([msg.author.id, timestamp(new Date())])
 			module.exports.save()
@@ -1869,13 +1881,14 @@ module.exports = {
 		}
 	},
 
-	allowLateEntrants:{
-		name: "allowLateEntrants",
+	setLateEntrants:{
+		name: "setLateEntrants",
 		short_descrip: "Allow entering a timed task late",
-		full_descrip: "Usage: `$allowLateEntrants [id1] [id2] [...]`\n\nAllow users to use `$requesttask` so long as they have not already participated. If no IDs are given, it will remove all the currently set IDs.",
+		full_descrip: "Usage: `$setLateEntrants [id1] [id2] [...]`\n\nAllow users to use `$requesttask` so long as they have not already participated. If no IDs are given, it will remove all the currently set IDs.",
 		hidden: true,
 		function: function(bot, msg, args) {
 			if (notAllowed(msg)) return
+			LateEntrants = []
 			while (args.length > 0) LateEntrants.push(args.shift())
 			module.exports.save()
 			if (LateEntrants.length == 0) return "Late entrants are disabled"
@@ -2107,7 +2120,8 @@ module.exports = {
 			teams: Teams,
 			namespool: NamesPool,
 			namesfree: NamesFree,
-			namesused: NamesUsed
+			namesused: NamesUsed,
+			log: COMPLOG
 		}
 		Save.saveObject("submissions.json", data)
 	},
@@ -2166,6 +2180,7 @@ module.exports = {
 		while(data.namespool.length) NamesPool.push(data.namespool.pop())
 		while(data.namesfree.length) NamesFree.push(data.namesfree.pop())
 		while(data.namesused.length) NamesUsed.push(data.namesused.pop())
+		COMPLOG = data.log ? data.log.slice() : []
 		updateSubmissionMessage(bot)
 		if (!fs.existsSync(Save.getSavePath() + "/Submissions")) { // make sure this path exists on startup
 			fs.mkdirSync(Save.getSavePath() + "/Submissions")
@@ -2878,6 +2893,24 @@ module.exports = {
 			}
 			if (args.length == 0) return `Your team name has been removed`
 			return `Your team name has been set to \`${args.join(' ')}\``
+		}
+	},
+
+	getlog:{
+		name: `GetCompLog`,
+		aliases: [],
+		short_descrip: "See log file",
+		full_descrip: "Usage: \`$getcomplog\`\nReturns a text file containing a log of various competition-related actions. Each line will have a timestamp, user_id, and an action description.",
+		hidden: true,
+		function:async function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			let result = ""
+			COMPLOG.map(data => {
+				result += data.join(' ') + '\n'
+			})
+			msg.channel.createMessage(
+				"Here is the competition log:", 
+				{file: Buffer.from(result), name: "SPOILER_complog.txt"})
 		}
 	}
 }
