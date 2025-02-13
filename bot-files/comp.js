@@ -2258,6 +2258,8 @@ module.exports = {
 			return
 		}
 		// download the files in order of priority, offset by 10s each time
+		let total_files_to_download = msg.attachments.map(fileExt).filter(is_required_ext).reduce((T,t)=>T+t,0) // sum
+		msg.attachments.sort((a,b) => fileExt(a).localeCompare(fileExt(b))) // hack to make sure the m64 is downloaded first (this should be faster)
 		let num_files_downloaded = 0
 		let set_dl_recur = function(arr) { // recursively search through required files in order
 			arr.forEach(ext => {
@@ -2265,11 +2267,13 @@ module.exports = {
 					msg.attachments.forEach(attachment => {
 						if (fileExt(attachment) == ext) {
 							setTimeout(
-								// set an async call to save the file. Always try to autotime.
+								// set an async call to save the file. Autotime on the last required file to download (should be st)
 								// there are safeguards later for not timing a submission that doesn't have all the files
-								() => filterFiles(bot, msg, attachment, true),
+								// this safe guard is so that it doesn't time twice if someone submits both st+m64 at the same time
+								() => filterFiles(bot, msg, attachment, num_files_downloaded == total_files_to_download - 1),
 								10000 * num_files_downloaded
 							)
+							num_files_downloaded += 1
 						}
 					})
 				} else {
@@ -2531,9 +2535,9 @@ module.exports = {
 	},
 
 	GetGhost:{
-		name: `GetGhost`,
+		name: `GetCompGhost`,
 		short_descrip: `Get a submission ghost file`,
-		full_descrip: `Usage: \`$getghost [submission_number or 'all']\`\nReturns the ghost data file for a competition submission. If \`all\` is specified, it will send a zip all of the ghost data at once. Note: competition hosts can request data for any submission, and anyone can request their own ghost.`,
+		full_descrip: `Usage: \`$getcompghost [submission_number or 'all']\`\nReturns the ghost data file for a competition submission. If \`all\` is specified, it will send a zip all of the ghost data at once. Note: competition hosts can request data for any submission, and anyone can request their own ghost.`,
 		hidden: true,
 		function: async function(bot, msg, args) {
 
@@ -2568,7 +2572,7 @@ module.exports = {
 						} else if (MISMATCH_SETTINGS) {
 							result = `Error: Your TAS cannot be played back. Please ensure it has only 1 controller with rumblepak disabled. Ghost data must be retrieved manually.`
 						} else if (fs.existsSync(LUAPATH + "error.txt")) {
-							result = fs.readFileSync(LUAPATH + "result.txt").toString() + "\nGhost data must be retrieved manually."
+							result = fs.readFileSync(LUAPATH + "error.txt").toString() + "\nGhost data must be retrieved manually."
 							fs.unlinkSync(LUAPATH + "error.txt")
 						} else if (!fs.existsSync(LUAPATH + "tmp.ghost")) {
 							result = `Error: something went wrong, could not produce ghost data for #${submission_id}.`

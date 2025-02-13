@@ -261,28 +261,6 @@ function fix_controllers(m64) {
 // File Handling (this should be moved to save.js)
 // =============
 
-// check if a file has been fully downloaded
-function hasDownloaded(filename, filesize) {
-    try {
-        var file = fs.readFileSync(`${save.getSavePath() }/${ filename}`)
-        return file.byteLength == filesize
-    } catch (e) {
-        return false
-    }
-}
-
-// TODO: give the call back a variable amount of args
-// run a callback function when a file downloads
-function onDownload(filename, filesize, callback) {
-    if (!hasDownloaded(filename, filesize)) {
-        setTimeout(() => {
-            onDownload(filename, filesize, callback)
-        }, 1000) // recursive call after 1s
-    } else {
-        setTimeout(() => callback(filename), 1000) // wait 1s to hope file actually loads??
-    }
-}
-
 // repeated code. allows for url/filename/size to be entered manually,
 // it will use the attachment's properties if they arent passed
 function downloadAndRun(attachment, callback, url, filename, filesize) {
@@ -296,15 +274,13 @@ function downloadAndRun(attachment, callback, url, filename, filesize) {
                 url: url,
                 method: "HEAD"
             }, (err, response) => { // find the filesize
-                save.downloadFromUrl(url, `${save.getSavePath() }/${ filename}`)
-                onDownload(filename, response.headers["content-length"], callback)
+                save.downloadFromUrl(url, `${save.getSavePath()}/${filename}`, () => callback(filename))
             })
             return
         }
     }
 
-    save.downloadFromUrl(url, `${save.getSavePath() }/${ filename}`)
-    onDownload(filename, filesize, callback)
+    save.downloadFromUrl(url, `${save.getSavePath()}/${filename}`, () => callback(filename))
 }
 
 // ===========
@@ -523,6 +499,23 @@ function QueueAdd(
 // ================
 // Discord Commands
 // ================
+
+// return a list of urls to files that end with something in extensions
+function parse_urls(extensions, msg, args) {
+    if (!Array.isArray(extensions)) { // allow ".txt" or [".txt"]
+        extensions = [extensions]
+    }
+    let urls = []
+    for (const link of [...args, ...msg.attachments.map((v) => v.url)]) {
+        let url = link.substring(0, link.lastIndexOf('?')) || link
+        for (const ext of extensions) {
+            if (url.endsWith(ext)) {
+                urls.push(link)
+            }
+        }
+    }
+    return urls
+}
 
 /*function parseOffset(arg) {
     var offset = parseInt(arg, 16);
@@ -914,19 +907,15 @@ module.exports = {
             }
 
             // look for m64 & st as either a URL in the arguments, or an attachment
-            let m64_url = ""
-            let st_url = ""
+            let m64_url = parse_urls(".m64", msg, args)
+            let st_url = parse_urls([".st", ".savestate"], msg, args)
+            let ghost_urls = parse_urls(".ghost", msg, args)
+            let ghost_paths = []
 
-            for (const link of [...args, ...msg.attachments.map((v) => v.url)]) {
-				let furl = link.substring(0, link.lastIndexOf('?')) || link
-                if (!m64_url && furl.endsWith(".m64")) {
-                    m64_url = link
-                } else if (!st_url && furl.endsWith(".st") || furl.endsWith(".savestate")) {
-                    st_url = link
-                }
-            }
-
-            if (!m64_url/* || !st_url*/) return "Missing/Invalid Arguments: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> [st/savestate]`"
+            if (m64_url.length == 0/* || !st_url*/) return "Missing/Invalid Arguments: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> [st/savestate]`"
+            m64_url = m64_url[0]
+            st_url = st_url.length ? st_url[0] : ""
+            ghost_urls = ghost_urls.slice(0, 5) // max limit of 5 ghosts just to be safe
 
             let filename = m64_url.split("/") // doesnt ensure it contains / because it should contain it...
             filename = filename[filename.length - 1]
@@ -972,7 +961,11 @@ module.exports = {
                 out_filename]
 
             if (use_lua) {
-                mupen_args.push(["lua", ...LUA_SCRIPTS])
+                if (ghost_urls.length) {
+                    mupen_args.push(["lua", ...LUA_SCRIPTS, process.cwd() + "\\TimingLua\\PlayGhosts.lua"])
+                } else {
+                    mupen_args.push(["lua", ...LUA_SCRIPTS])
+                }
             }
             //console.log(mupen_args)
 
@@ -981,13 +974,28 @@ module.exports = {
                 m64_url,
                 st_url,
                 mupen_args,
-                () => { // startup
+                async () => { // startup
                     var err = null
                     if (fs.existsSync("./encode.avi")) {
                         fs.unlinkSync("./encode.avi") // ERROR HANDLE BC THIS ACTUALLY THREW AND CRASHED
                     }
                     if (fs.existsSync("./encode.mp4")) {
                         fs.unlinkSync("./encode.mp4")
+                    }
+                    if (ghost_urls.length) {
+                        if (fs.existsSync("./TimingLua/ghostlist.txt")) {
+                            fs.unlinkSync("./TimingLua/ghostlist.txt")
+                        }
+                        ghost_paths = []
+                        for (let i = 0; i < ghost_urls.length; i++) {
+                            let ghostpath = `${save.getSavePath()}/${i}.ghost`
+                            if (fs.existsSync(ghostpath)) {
+                                fs.unlinkSync(ghostpath)
+                            }
+                            ghost_paths.push(ghostpath)
+                        }
+                        fs.writeFileSync("./TimingLua/ghostlist.txt", ghost_paths.join('\n'))
+                        await save.downloadAllFromUrl(ghost_urls, ghost_paths)
                     }
                 },
                 async (tle, cant_run, start_time, m64) => { // callback
@@ -1069,6 +1077,11 @@ module.exports = {
                         console.log(err)
                     } finally {
                         fs.unlinkSync("./encode-compressed.mp4")
+                        for (const ghostpath of ghost_paths) {
+                            if (fs.existsSync(ghostpath)) { // should exist but just to be safe...
+                                fs.unlinkSync(ghostpath)
+                            }
+                        }
                     }
                 },
                 msg.channel.id,
@@ -1083,6 +1096,77 @@ module.exports = {
             }
 
             return `Queue position ${pos}`
+        }
+    },
+
+    getghost: {
+        name: "GetGhost",
+        aliases: [],
+        short_descrip: "Generate ghost data",
+        full_descrip: "Usage: \`$getghost <m64> <st/savestate>\`\nReturns a tas.ghost file that can be used with the Ghost hack while playing back TASes.",
+        hidden: true,
+        function: async function(bot, msg, args) {
+            let m64s = parse_urls(".m64", msg, args)
+            let sts = parse_urls([".st", ".savestate"], msg, args)
+
+            if (m64s.length == 0 || sts.length == 0) {
+                return `Missing/Invalid Arguments: \`$getghost <m64> <st/savestate>\` both an m64 and savestate are required.`
+            }
+
+            const LUAPATH = process.cwd() + "\\TimingLua\\"
+            const mupen_args = [
+                "-m64", `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`,
+                "--close-on-movie-end",
+                ["lua", ...LUA_SCRIPTS, LUAPATH + "ghost.lua"]
+            ]
+            
+            let queue_position = QueueAdd(
+                bot,
+                m64s[0],
+                sts[0],
+                mupen_args,
+                () => {
+                    if (fs.existsSync(LUAPATH + "tmp.ghost")) fs.unlinkSync(LUAPATH + "tmp.ghost")
+                },
+                async (TLE, MISMATCH_SETTINGS, start_time, m64) => {
+                    let result = ""
+                    if (TLE) {
+                        result = `Error: Your TAS exceeded the time limit. Ghost data cannot be generated. <@${msg.author.id}>`
+                    } else if (MISMATCH_SETTINGS) {
+                        result = `Error: Your TAS cannot be played back. Please ensure it has only 1 controller with rumblepak disabled. <@${msg.author.id}>`
+                    } else if (fs.existsSync(LUAPATH + "error.txt")) {
+                        result = fs.readFileSync(LUAPATH + "error.txt").toString() + "\nGhost data cannot be generated. <@${msg.author.id}>"
+                        fs.unlinkSync(LUAPATH + "error.txt")
+                    } else if (!fs.existsSync(LUAPATH + "tmp.ghost")) {
+                        result = `Error: something went wrong, could not produce ghost data (ghost file doesn't exist?). <@${msg.author.id}>`
+                    } else { // success
+
+                        let filename = m64s[0].split("/")
+                        filename = filename[filename.length - 1].split("?")[0]
+                        filename = filename.substring(0, filename.length - 4)
+
+                        const elapsed_seconds = Math.max(Number.EPSILON, Number(process.hrtime.bigint() - start_time) / 1_000_000_000);
+                        const length_samples = littleEndianToInt(m64.subarray(0x18, 0x18 + 4));
+                        const effective_fps = length_samples / elapsed_seconds;
+
+                        await bot.createMessage(
+                            msg.channel.id,
+                            `Here's your ghost <@${msg.author.id}> (took ${elapsed_seconds.toFixed(2)}s at roughly ${effective_fps.toFixed(0)} FPS)`,
+                            {
+                                file: fs.readFileSync(LUAPATH + "tmp.ghost"),
+                                name: filename + ".ghost"
+                            }
+                        )
+                        fs.unlinkSync(LUAPATH + "tmp.ghost")
+                        return
+                    }
+                    await bot.createMessage(msg.channel.id, result).catch(console.error)
+                },
+                msg.channel.id,
+                msg.author.id,
+                2 * 60 * 30 + 30 * 30 // 2.5 min
+            )
+            return `Generating ghost data. Position in queue: ${queue_position}`
         }
     },
 

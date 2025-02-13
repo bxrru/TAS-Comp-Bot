@@ -32,6 +32,17 @@ module.exports = {
 		// Some callers provide no callback
 		.on('close', callback ? callback : () => {});
 	},
+	downloadAllFromUrl:async function(urls, paths, callback) {
+		for (let i = 0; i < urls.length; i++) {
+			await new Promise((resolve, reject) => {
+				request.get(urls[i])
+				.pipe(fs.createWriteStream(paths[i]))
+				.on('error', console.error)
+				.on('close', resolve)
+			})
+		}
+		if (callback) callback()
+	},
 	saveObject:function(filename, object){
 		if (!filename.toUpperCase().endsWith(".JSON")) filename += ".json"
 		if (LOG_LOADS) console.log(`Saving ${filename}...`)
