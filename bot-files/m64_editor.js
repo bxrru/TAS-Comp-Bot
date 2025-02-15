@@ -336,6 +336,11 @@ function NextProcess(bot, retry = true) {
             MupenQueue.shift() // this request cannot be run
             NextProcess(bot)
             return
+        } else if (KNOWN_CRC[crc] != "Super Mario 64 (USA)" && request.cmdflags.indexOf("PlayGhosts.lua") > -1) {
+            bot.createMessage(request.channel_id, `<@${request.user_id}> Your encode was skipped: ghosts are only supported on the \`Super Mario 64 (USA)\` ROM.`)
+            MupenQueue.shift()
+            NextProcess(bot)
+            return
         }
         
         if (!only_1P_no_rumblepak(m64)) {
