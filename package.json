@@ -17,6 +17,7 @@
     "fs": "0.0.1-security",
     "node-gyp": "^10.0.1",
     "request": "^2.88.2",
+    "rgb-color": "^2.1.2",
     "sodium-native": "^3.1.1",
     "utf-8-validate": "^5.0.2",
     "ytdl-core": "^2.1.5",

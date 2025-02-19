@@ -7,6 +7,7 @@ const cp = require("child_process")
 const process = require("process")
 const request = require("request")
 const path = require("path")
+const rgbcolor = require("rgb-color")
 
 // The following are used for the encoding command
 // They will need to be manually set before running an instance of the bot
@@ -522,6 +523,14 @@ function parse_urls(extensions, msg, args) {
     return urls
 }
 
+// "discordapp.com/serverid/channelid/messageid/filename.extension?ex=code" => filename
+function getDiscordFilename(discord_url) {
+    let name = discord_url.split('/')
+    name = name[name.length - 1] // "filename.extension?ex=code"
+    name = name.substring(0, name.lastIndexOf('?')) || name // "filename.extension"
+    return name.substring(0, name.lastIndexOf('.')) || name // "filename"
+}
+
 /*function parseOffset(arg) {
     var offset = parseInt(arg, 16);
     if (isNaN(offset)) {
@@ -848,9 +857,9 @@ module.exports = {
 
     encode: {
         name: "encode",
-        aliases: ["record"],
+        aliases: [],
         short_descrip: "Encode an m64",
-        full_descrip: "Usage: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> [st/savestate]`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use `$encode cancel`.\n\nIf the bot is not processing the queue, contact an admin to use `$encode forceskip` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing\n`nolua/no-lua/disable-lua` will not run the input visualzing/ram watch lua script,\n`maxvbitrate/max-v-bitrate/maxvrate/max-v-bitrate/mb:v/m-b:v` will set the maximum video bitrate,\n`crf` will set the target constant rate factor (lower is better, defaults to not passing the parameter in ffmpeg),\n`abitrate/a-bitrate/arate/a-rate/b:a` sets the audio bitrate, and\n`constrainsize/clamp` will automatically adjust maximum bitrate such that the video will not exceed the filesize limit, overriding your bitrate settings but still targeting CRF.",
+        full_descrip: "Usage: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize/transparent/colors=<colors>] <m64> [st/savestate] [ghosts]`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use `$encode cancel`.\n\nIf the bot is not processing the queue, contact an admin to use `$encode forceskip` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing\n`nolua/no-lua/disable-lua` will not run the input visualzing/ram watch lua script,\n`maxvbitrate/max-v-bitrate/maxvrate/max-v-bitrate/mb:v/m-b:v` will set the maximum video bitrate,\n`crf` will set the target constant rate factor (lower is better, defaults to not passing the parameter in ffmpeg),\n`abitrate/a-bitrate/arate/a-rate/b:a` sets the audio bitrate, and\n`constrainsize/clamp` will automatically adjust maximum bitrate such that the video will not exceed the filesize limit, overriding your bitrate settings but still targeting CRF.\n\nUse \`$getghost\` to create a .ghost file, and upload it with this command to encode both TAS files at once. Include \`transparent\` or \`invis\` to make the ghosts semi-transparent. Use \`c=list,of,colours\` to define the colours for the ghosts. Colours can be RGB codes or standard colour names.",
         hidden: true,
         function: async (bot, msg, args) => {
             //return `This command is currently disabled`
@@ -915,16 +924,17 @@ module.exports = {
             let m64_url = parse_urls(".m64", msg, args)
             let st_url = parse_urls([".st", ".savestate"], msg, args)
             let ghost_urls = parse_urls(".ghost", msg, args)
-            let ghost_paths = []
 
             if (m64_url.length == 0/* || !st_url*/) return "Missing/Invalid Arguments: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize] <m64> [st/savestate]`"
             m64_url = m64_url[0]
             st_url = st_url.length ? st_url[0] : ""
-            ghost_urls = ghost_urls.slice(0, 5) // max limit of 5 ghosts just to be safe
 
-            let filename = m64_url.split("/") // doesnt ensure it contains / because it should contain it...
-            filename = filename[filename.length - 1]
-            filename = filename.substring(0, filename.length - 4)
+            ghost_urls = ghost_urls.slice(0, 5) // max limit of 5 ghosts just to be safe
+            let ghost_paths = []
+            let ghosts_transparent = false
+            let ghost_colours = []
+
+            let filename = getDiscordFilename(m64_url)
 
             const ffmpeg_args = { vcodec: "libx264", acodec: "aac", vrate: "", crf: "", arate: "128", clamp: false }
             let use_lua = true
@@ -936,22 +946,29 @@ module.exports = {
                     ffmpeg_args.vcodec = "libx265"
                 } else if (["CLAMP", "CONSTRAINSIZE"].includes(arg.toUpperCase())) {
                     ffmpeg_args.clamp = true
+                } else if (["TRANSPARENT", "INVIS"].includes(arg.toUpperCase())) {
+                    ghosts_transparent = true
                 } else if (!ffmpeg_args.clamp && arg.includes("=")) {
                     const values = arg.split("=")
-                    values[1] = parseInt(values[1])
 
                     switch (values[0].toUpperCase()) {
                         case "MAXVRATE": case "MAX-V-RATE": case "MAXVBITRATE": case "MAX-V-BITRATE": case "MB:V": case "M-B:V":
+                            values[1] = parseInt(values[1])
                             if (values[1] !== values[1] || values[1] < 64) return "Invalid value for maximum video bitrate."
                             ffmpeg_args.vrate = values[1]
                             break
                         case "CRF":
+                            values[1] = parseInt(values[1])
                             if (values[1] !== values[1] || values[1] < 0 || values[1] > 51) return "Invalid value for CRF."
                             ffmpeg_args.crf = values[1]
                             break
                         case "ARATE": case "A-RATE": case "ABITRATE": case "A-BITRATE": case "B:A":
+                            values[1] = parseInt(values[1])
                             if (values[1] !== values[1] || values[1] < 8 && values[1] !== 0) return "Invalid value for audio bitrate."
                             ffmpeg_args.arate = values[1]
+                            break
+                        case "C": case "COL": case "COLS": case "COLOR": case "COLORS": case "COLOUR": case "COLOURS":
+                            ghost_colours = values[1].split(",").map(rgbcolor).filter(c => c.ok)
                             break
                     }
                 }
@@ -999,7 +1016,14 @@ module.exports = {
                             }
                             ghost_paths.push(ghostpath)
                         }
-                        fs.writeFileSync("./TimingLua/ghostlist.txt", ghost_paths.join('\n'))
+                        fs.writeFileSync(
+                            "./TimingLua/ghostlist.txt",
+                            [ // data read by PlayGhosts.lua
+                                ghosts_transparent.toString(),
+                                ghost_colours.map(c => c.ok ? c.r + " " + c.g + " " + c.b : "").join(" "),
+                                ...ghost_paths
+                            ].join('\n')
+                        )
                         await save.downloadAllFromUrl(ghost_urls, ghost_paths)
                     }
                 },
@@ -1071,6 +1095,22 @@ module.exports = {
                         reply += tle ? "(Time limit exceeded) " : ""
                         reply += `(took ${elapsed_seconds.toFixed(2)}s at roughly ${effective_fps.toFixed(0)} FPS) `
                         reply += `<@${msg.author.id}>`
+
+                        if (ghost_urls.length) {
+                            reply += `\nGhosts: ${filename}=#FF0000`
+                            // ghosts are assigned these colours in PlayGhosts.lua
+                            let DEFAULTS = ["#FF7F00", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FFFFFF", "#333333", "#FF0000"]
+                            for (let i = 0; i < ghost_urls.length; i++) {
+                                reply += ", " + getDiscordFilename(ghost_urls[i]) + "="
+                                if (i >= ghost_colours.length) {
+                                    reply += DEFAULTS[(i - ghost_colours.length) % DEFAULTS.length]
+                                } else {
+                                    let c = ghost_colours[i]
+                                    reply += ("#" + c.r.toString(16) + c.g.toString(16) + c.b.toString(16)).toUpperCase()
+                                }
+                            }
+                        }
+
                         const video = fs.readFileSync("./encode-compressed.mp4")
                         
                         await bot.createMessage(msg.channel.id, reply, {
