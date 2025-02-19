@@ -1106,7 +1106,7 @@ module.exports = {
                                     reply += DEFAULTS[(i - ghost_colours.length) % DEFAULTS.length]
                                 } else {
                                     let c = ghost_colours[i]
-                                    reply += ("#" + c.r.toString(16) + c.g.toString(16) + c.b.toString(16)).toUpperCase()
+                                    reply += ("#" + c.r.toString(16).padStart(2, '0') + c.g.toString(16).padStart(2, '0') + c.b.toString(16).padStart(2, '0')).toUpperCase()
                                 }
                             }
                         }
