@@ -585,7 +585,10 @@ function parseOffset(arg) {
 function parseFile(msg) {
   if (msg.attachments.length == 0) {
     return {error: `Missing Arguments: No dtm specified`}
-  } else if (!msg.attachments[0].url.endsWith(`.dtm`)) {
+  }
+  let url = msg.attachments[0].url
+  url = url.substring(0, url.lastIndexOf('?')) || url
+  if (!url.endsWith(`.dtm`)) {
     return {error: `Invalid Argument: file is not a dtm`}
   }
   msg.attachments[0].error = false
