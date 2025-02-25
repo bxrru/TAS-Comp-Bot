@@ -156,7 +156,23 @@ module.exports = {
     mentionChannel: (channel_id) => `<#${channel_id}>`,
     getChannelID: (arg) => chat.chooseChannel(arg),
     mentionUser: (user_id) => `<@${user_id}>`,
-    getUserID: (arg) => (arg.startsWith("<@") && arg.endsWith(">")) ? arg.substr(2, -3) : arg
+    getUserID: (arg) => (arg.startsWith("<@") && arg.endsWith(">")) ? arg.substr(2, -3) : arg,
+    // return a list of urls to files that end with something in extensions
+    parse_urls: (extensions, msg, args) => {
+        if (!Array.isArray(extensions)) { // allow ".txt" or [".txt"]
+            extensions = [extensions]
+        }
+        let urls = []
+        for (const link of [...args, ...msg.attachments.map((v) => v.url)]) {
+            let url = link.substring(0, link.lastIndexOf('?')) || link
+            for (const ext of extensions) {
+                if (url.endsWith(ext)) {
+                    urls.push(link)
+                }
+            }
+        }
+        return urls
+    }
 }
 
 function pad(s) {

@@ -2753,6 +2753,83 @@ module.exports = {
 		}
 	},
 
+	testTimingScript:{
+		name: `TestTimingScript`,
+		aliases: [`TestConditions`, `TestConditionsLua`, `TestTimingLua`],
+		short_descrip: `Test a conditions.lua file`,
+		full_descrip: `Usage: \`$TestConditions <m64> <st> [conditions.lua]\`\nThis returns the result of running the timing script with the provided m64+st. If a lua file is provided it is used as \`Conditions.lua\`. This will not overwrite the current timing script.`,
+		hidden: true,
+		function:function(bot, msg, args) {
+			if (notAllowed(msg)) return
+			let lua = miscfuncs.parse_urls(".lua", msg, args)
+			let m64 = miscfuncs.parse_urls(".m64", msg, args)
+			let st = miscfuncs.parse_urls([".st", ".savestate"], msg, args)
+			if (m64.length == 0 || st.length == 0) {
+				return `Missing Arguments: \`$TestConditions <m64> <st> [conditions.lua]\``
+			}
+			let files = [m64[0], st[0]]
+			let paths = [Save.getSavePath() + "/testconditions.m64", Save.getSavePath() + "/testconditions.st"]
+			if (lua.length > 0) {
+				files.push(lua[0])
+				paths.push(Save.getSavePath() + "/testconditions.lua")
+			}
+			Save.downloadAllFromUrl(
+				files, paths, () => {
+					let queue_pos = Mupen.Process( // returns position in queue
+						bot,
+						paths[0],
+						paths[1],
+						["-m64", LUAPATH + "submission.m64", ["lua", ...Mupen.lua_scripts(), LUAPATH + "TASCompTiming.lua"]],
+						() => { // move files to LUA/submission.m64
+							if (fs.existsSync(LUAPATH + "submission.m64")) fs.unlinkSync(LUAPATH + "submission.m64")
+							fs.renameSync(paths[0], LUAPATH + "submission.m64")
+							if (fs.existsSync(LUAPATH + "submission.st")) fs.unlinkSync(LUAPATH + "submission.st")
+							fs.renameSync(paths[1], LUAPATH + "submission.st")
+							if (lua.length > 0) { // temporarily move the actual timing script
+								fs.renameSync(LUAPATH + "Conditions.lua", LUAPATH + "Conditions0.lua")
+								fs.renameSync(paths[2], LUAPATH + "Conditions.lua")
+							}
+						},
+						async (TLE, MISMATCH_SETTINGS) => {
+							let result = ""
+							if (TLE) {
+								result = "DQ Error: time limit exceeded (the run must be timed manually)."
+							} else if (MISMATCH_SETTINGS) {
+								result = "DQ Can't playback m64."
+							} else if (fs.existsSync(LUAPATH + "result.txt")) {
+								result = fs.readFileSync(LUAPATH + "result.txt").toString()
+								fs.unlinkSync(LUAPATH + "result.txt")
+							} else {
+								result = "DQ the timing script could not load, likely your m64 or st caused Mupen to crash."
+							}
+
+							let result_msg = `<@${msg.author.id}> the result of the timing script is: `
+							if (result.startsWith("DQ")) {
+								let reason = result.split(' ').slice(1).join(' ')
+								result_msg += `DQ [${reason}]`
+							} else {
+								let frames = Number(result.split(' ')[1])
+								let info = result.split(' ').slice(2).join(' ') // normally an empty string
+								result_msg += `${getTimeString(frames*2)} (${frames}f) ${info}`
+							}
+
+							bot.createMessage(msg.channel.id, result_msg) // assume timing was manually requested
+
+							if (lua.length > 0) { // move the actual timing script back
+								fs.renameSync(LUAPATH + "Conditions0.lua", LUAPATH + "Conditions.lua")
+							}
+						},
+						msg.channel.id,
+						msg.author.id,
+						3*60*30,
+						true
+					)
+					bot.createMessage(msg.channel.id, `Testing timing script. Position in queue: ${queue_pos}`)
+				}
+			)
+		}
+	},
+
 	toggleTeamTask:{
 		name: `ToggleTeamTask`,
 		aliases: [`ToggleCoopTask`, `ToggleTeams`],
