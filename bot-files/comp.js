@@ -30,7 +30,7 @@ var SubmissionsChannel = ""
 var Channel_ID = ""
 var Message_IDs = [] // in case too many people submit, possibly we need multiple messages
 var DQs = [] // same as Submissions but with 'Reason' field as well // toDO: replace with bool dq field in Submissions
-var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, time, info}
+var Submissions = [] // {name, id = user_id, m64, m64_size, st, st_size, namelocked, time, info, dq: bool}
 // filesize is stored but never used. If the bot were to store the files locally it would be important
 // time is saved in VIs, info is additional info for results (rerecords, A presses, etc.)
 // Submissions will store the user_id of the most recent partner to submit (in co-op tasks)
@@ -1315,66 +1315,36 @@ module.exports = {
 		name: "disqualify",
 		aliases: ["dq"],
 		short_descrip: "DQs a user",
-		full_descrip: "Usage: `$dq <user_id> [reason]`\nDisqualifies a submission given a user id. This prevents the user from resubmitting to the current task and excludes their name from #current_submissions. This will not remove their files. It will send them a DM telling them that they've been DQ'd. If they are partifipating in a timed task their timer will be stopped. To see the list of users and IDs of those who have already submitted use `$listsubmissions`",
+		full_descrip: "Usage: `$dq <submission number> [reason]`\nDisqualifies a submission. This will not remove their files and the user can still resubmit. It will send them a DM telling them that they've been DQ'd. To see the list of submission numbers use `$listsubmissions`. To prevent someone from submitting, use `$ban`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			if (args.length == 0) return "Not Enough Arguments: `<user_id> [reason]`"
+			if (args.length == 0) return "Not Enough Arguments: `<submission number> [reason]`"
 
-			var id = args.shift()
-			var reason = args.length ? args.join(` `) : ``
+			let num = getSubmissionNumber(args.shift())
+			if (num.message.length) return num.message
+			num = num.number - 1
+			let reason = args.length ? args.join(` `) : ``
 
-			var user = await Users.getUser(bot, id)
-			if (user === null) return `User ID \`${id}\` Not Recognized`
+			Submissions[num].dq = true
+			Submissions[num].info = reason
 
-			var submission = false
-			for (var i = 0; i < Submissions.length; i++) {
-				if (Submissions[i].id == user.id) {
-					submission = Submissions.splice(i, 1)[0] // remove them if they've submitted
-					submission.reason = reason
-					break
-				}
-			}
-			if (!submission) {
-				submission = {
-					name: user.username,
-					id: user.id,
-					m64: '', m64_size: 0,
-					st: '', st_size: 0,
-					namelocked: true,
-					reason: reason
-				}
-			}
-
-			DQs.push(submission)
 			module.exports.save()
-			updateSubmissionMessage(bot)
 
-			var result = `${user.username} \`(${id})\` has been disqualified from Task ${Task}. `
+			reason = reason.length ? "No reason was provided" : "Provided reason: " + reason
+			let modupdate = `${Submissions[num].name} \`(${num + 1})\` has been disqualified. ` + reason
+			let userupdate = `Your run has been disqualified. ` + reason
 
 			// DM the person to tell them
 			try {
-				Announcement.KillDelayedFunction(`COMP-END ${id}`, true)
-				var notif = `You have been disqualified from Task ${Task}. `
-				if (AllowSubmissions && !TimedTaskStatus.completed.includes(id)) {
-					notif += `Submissions you send in for this task will no longer be accepted. `
-				}
-				if (reason.length) {
-					notif += `Provided Reason: ${reason}`
-				} else {
-					notif += `No reason has been provided`
-				}
-				var dm = await bot.getDMChannel(id)
-				Announcement.KillDelayedFunction(`COMP-WARN ${dm.id}`, true)
-				dm.createMessage(notif)
-
+				let dm = await bot.getDMChannel(Submissions[num].id)
+				dm.createMessage(userupdate)
 			} catch (e) {
-				result += `Failed to notify user. `
-
+				modupdate += `. Failed to notify user. `
 			} finally {
-				notifyHosts(bot, result + `[disqualified by ${msg.author.username}]`, `DQ`)
-				return result
+				notifyHosts(bot, modupdate + `[disqualified by ${msg.author.username}]`, `DQ`)
+				return modupdate
 			}
 		}
 	},
@@ -1383,48 +1353,33 @@ module.exports = {
 		name: "undoDisqualify",
 		aliases: ["undq"],
 		short_descrip: "Revokes a DQ",
-		full_descrip: "Usage: `$undq <user_id>`\nUndoes the effects of a DQ given a user id. This DMs the user telling them they're no longer DQ'd and allows the user to resubmit to the current task. To see the list of DQs with user IDs use `$listsubmissions`",
+		full_descrip: "Usage: `$undq <submission number>`\nMarks their run as not disqualified and clears the info field of their run. This DMs the user telling them they're no longer disqualified. To see the list of submission numbers use `$listsubmissions`",
 		hidden: true,
 		function: async function(bot, msg, args){
 			if (notAllowed(msg)) return
 
-			if (args.length == 0) return "Not Enough Arguments: `<user_id>`"
+			if (args.length == 0) return "Not Enough Arguments: `<submission number>`"
 
-			var id = args[0]
-			var user = await Users.getUser(bot, id)
-			if (user === null) return `User ID \`${id}\` Not Recognized`
+			let num = getSubmissionNumber(args.shift())
+			if (num.message.length) return num.message
+			num = num.number - 1
 
-			var dq = false
-			for (var i = 0; i < DQs.length; i++) {
-				if (DQs[i].id == user.id) {
-					dq = DQs.splice(i, 1)[0] // remove DQ
-				}
-			}
-			if (!dq) return `${user.username} \`(${user.id})\` was not disqualified`
+			if (!Submissions[num].dq) return `${Submissions[num].name} \`(${num + 1})\` was not disqualified`
 
-			// Move their submission out of DQs if they have one
-			if (dq.m64_size || dq.st_size){
-				delete dq.reason
-				Submissions.push(dq)
-				updateSubmissionMessage(bot)
-			}
+			Submissions[num].dq = false
+			Submissions[num].info = ""
 			module.exports.save()
 
-			var result = `${user.username} \`(${user.id})\` is no longer disqualified from Task ${Task}. `
+			let result = `${Submissions[num].name} \`(${num + 1})\` is no longer disqualified. `
 
 			// DM the person to tell them
 			try {
-				var dm = await bot.getDMChannel(id)
-				var notif = `You are no longer disqualified from Task ${Task}. `
-				if (AllowSubmissions && !TimedTaskStatus.completed.includes(id)) {
-					notif += `Submissions you send in will now be accepted`
-				}
-				dm.createMessage(notif)
+				let dm = await bot.getDMChannel(Submissions[num].id)
+				dm.createMessage("Your run is no longer disqualified.")
 			} catch (e) {
 				result += `Failed to notify user. `
 			} finally {
 				notifyHosts(bot, result + `[undisqualified by ${msg.author.username}]`, `DQ`)
-				if (Users.isBanned(id)) result += `WARNING: ${user.username} is still banned and cannot submit.`
 				return result
 			}
 		}
