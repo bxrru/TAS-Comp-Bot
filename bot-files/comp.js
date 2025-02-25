@@ -1332,8 +1332,8 @@ module.exports = {
 
 			module.exports.save()
 
-			reason = reason.length ? "No reason was provided" : "Provided reason: " + reason
-			let modupdate = `${Submissions[num].name} \`(${num + 1})\` has been disqualified. ` + reason
+			reason = reason.length == 0 ? "No reason was provided" : "Provided reason: " + reason
+			let modupdate = `${Submissions[num].name} (${num + 1}) has been disqualified. ` + reason
 			let userupdate = `Your run has been disqualified. ` + reason
 
 			// DM the person to tell them
@@ -1343,7 +1343,7 @@ module.exports = {
 			} catch (e) {
 				modupdate += `. Failed to notify user. `
 			} finally {
-				notifyHosts(bot, modupdate + `[disqualified by ${msg.author.username}]`, `DQ`)
+				notifyHosts(bot, modupdate + ` [disqualified by ${msg.author.username}]`, `DQ`)
 				return modupdate
 			}
 		}
@@ -1364,13 +1364,13 @@ module.exports = {
 			if (num.message.length) return num.message
 			num = num.number - 1
 
-			if (!Submissions[num].dq) return `${Submissions[num].name} \`(${num + 1})\` was not disqualified`
+			if (!Submissions[num].dq) return `${Submissions[num].name} (${num + 1}) was not disqualified`
 
 			Submissions[num].dq = false
 			Submissions[num].info = ""
 			module.exports.save()
 
-			let result = `${Submissions[num].name} \`(${num + 1})\` is no longer disqualified. `
+			let result = `${Submissions[num].name} (${num + 1}) is no longer disqualified. `
 
 			// DM the person to tell them
 			try {
@@ -1379,7 +1379,7 @@ module.exports = {
 			} catch (e) {
 				result += `Failed to notify user. `
 			} finally {
-				notifyHosts(bot, result + `[undisqualified by ${msg.author.username}]`, `DQ`)
+				notifyHosts(bot, result + ` [undisqualified by ${msg.author.username}]`, `DQ`)
 				return result
 			}
 		}
@@ -2213,25 +2213,28 @@ module.exports = {
 			filterFiles(bot, msg, msg.attachments[0], true)
 			return
 		}
-		// download the files in order of priority, offset by 10s each time
-		let total_files_to_download = msg.attachments.map(fileExt).filter(is_required_ext).reduce((T,t)=>T+t,0) // sum
+		// download the files in order of priority, offset by 5s each time
+		let total_files_to_download = msg.attachments.map(fileExt).filter(is_required_ext).length
 		msg.attachments.sort((a,b) => fileExt(a).localeCompare(fileExt(b))) // hack to make sure the m64 is downloaded first (this should be faster)
 		let num_files_downloaded = 0
 		let set_dl_recur = function(arr) { // recursively search through required files in order
 			arr.forEach(ext => {
 				if (typeof ext == "string") {// compare to attachments
-					msg.attachments.forEach(attachment => {
+					for (const attachment of msg.attachments) {
 						if (fileExt(attachment) == ext) {
 							setTimeout(
 								// set an async call to save the file. Autotime on the last required file to download (should be st)
 								// there are safeguards later for not timing a submission that doesn't have all the files
 								// this safe guard is so that it doesn't time twice if someone submits both st+m64 at the same time
-								() => filterFiles(bot, msg, attachment, num_files_downloaded == total_files_to_download - 1),
-								10000 * num_files_downloaded
+								(num_files_downloaded == total_files_to_download - 1) ?
+									() => filterFiles(bot, msg, attachment, true) :
+									() => filterFiles(bot, msg, attachment, false),
+								5000 * num_files_downloaded
 							)
 							num_files_downloaded += 1
+							break
 						}
-					})
+					}
 				} else {
 					set_dl_recur(ext)
 				}
