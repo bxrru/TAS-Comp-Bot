@@ -1682,7 +1682,7 @@ module.exports = {
 	setName:{
 		name: "setname",
 		short_descrip: "Change your name as seen in #current_submissions",
-		full_descrip: "Usage: `$setname <new name here>`\nChange your name in the submissions/filenames. Spaces and special characters are allowed. Moderators are able to remove access if this command is abused.",
+		full_descrip: "Usage: `$setname <new name here>`\nChange your name in the submissions/filenames. Spaces and special characters are allowed. Moderators are able to remove access if this command is abused. Passing no arguments will reset it to your discord id.",
 		hidden: true,
 		function: async function(bot, msg, args){
 
@@ -1694,6 +1694,7 @@ module.exports = {
 
 			// change their name
 			var name = args.join(" ")
+			if (name.replace(/\s/g, "").length == 0) name = msg.author.username
 			Nicknames[user_id] = name
 			module.exports.update_name(user_id, name) // calls save()
 			updateSubmissionMessage(bot)
