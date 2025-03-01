@@ -1559,6 +1559,7 @@ module.exports = {
 			}
 			// add required files from submission to zip
 			let username = await submissionName(bot, Submissions[i].id)
+			username = module.exports.fileSafeName(username)
 			for (const rf of file_extensions) {
 				let extensions = typeof rf == "string" ? [rf] : rf; // go through all possibilities
 				let found = false;
