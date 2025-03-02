@@ -2928,7 +2928,7 @@ module.exports = {
 			module.exports.save()
 			try {
 				var partner_dm = await bot.getDMChannel(Teams[msg.author.id])
-				partner_dm.createMessage(`Your partner has updated your team name to \`${args.join(' ')}\``)
+				await partner_dm.createMessage(`Your partner has updated your team name to \`${args.join(' ')}\``)
 			} catch (error) {
 				bot.createMessage(msg.channel.id, `Failed to notify partner of team name change`)
 			}
