@@ -86,50 +86,60 @@ function purple_switch_activated()
     end)
     return purple_switch_active
 end
-local broken_yellow_box_count = 0
-local broken_wing_box_count = 0
-local broken_metal_box_count = 0
-local broken_vanish_box_count = 0
-local function box_broken_count(counter, subtype)
-    -- Check if Mario is interacting with an item box
-    if memory.readdword(Memory.read("mario_interact_object") + 0x20C)
-       == Memory.BehaviorScriptAddress["item_box"] then
-        iterateObjects(function(obj)
-            if memory.readdword(obj + 0x20C) == 0x800ED3D0 then
-                if memory.readdword(obj + 0x144) == subtype
-                   and memory.readdword(obj + 0x14C) == 4 then
-                    counter = counter + 1
-                end
-            end
-        end)
+local prev_interact_obj = 0x00000000
+local box_broken_counts = {
+    wing   = 0,
+    metal  = 0,
+    vanish = 0,
+    yellow = 0,
+}
+local function subtype_to_name(subtype)
+    if subtype == 0 then
+        return "wing"
+    elseif subtype == 1 then
+        return "metal"
+    elseif subtype == 2 then
+        return "vanish"
+    else
+        return "yellow"
     end
-    return counter
-end
--- Separate because there are multiple subtypes for yellow boxes
-function yellow_box_broken_count()
-    if memory.readdword(Memory.read("mario_interact_object") + 0x20C)
-       == Memory.BehaviorScriptAddress["item_box"] then
-        iterateObjects(function(obj)
-            if memory.readdword(obj + 0x20C) == 0x800ED3D0 then
-                if (memory.readdword(obj + 0x144) == 3 or
-                    memory.readdword(obj + 0x144) == 5 or
-                    memory.readdword(obj + 0x144) == 6 or
-                    memory.readdword(obj + 0x144) == 7 or
-                    memory.readdword(obj + 0x144) == 9) and
-                    memory.readdword(obj + 0x14C) == 4 then
-                        broken_yellow_box_count = broken_yellow_box_count + 1
-                end
-            end
-        end)
-    end
-    return broken_yellow_box_count
 end
 function wing_box_broken_count()
-    return box_broken_count(broken_wing_box_count, 0)
+    return box_broken_counts["wing"]
 end
 function metal_box_broken_count()
-    return box_broken_count(broken_metal_box_count, 1)
+    return box_broken_counts["metal"]
 end
 function vanish_box_broken_count()
-    return box_broken_count(broken_vanish_box_count, 2)
+    return box_broken_counts["vanish"]
+end
+function yellow_box_broken_count()
+    return box_broken_counts["yellow"]
+end
+function update_box_broken_counts()
+    local obj = Memory.read("mario_interact_object")
+    if obj == prev_interact_obj then
+        return
+    end
+    -- Check if Mario is interacting with an item box
+    if memory.readdword(obj + 0x20C) == Memory.BehaviorScriptAddress["item_box"] then
+        -- Update the wing, metal, and vanish cap box broken counts
+        for i = 0, 2 do
+            if memory.readdword(obj + 0x144) == i then
+                box_broken_counts[subtype_to_name(i)]
+                    = box_broken_counts[subtype_to_name(i)] + 1
+                print(subtype_to_name(i).." broken: "..box_broken_counts[subtype_to_name(i)])
+            end
+        end
+        -- Update the yellow box broken count (separate because there are multiple subtypes for yellow boxes)
+        if (memory.readdword(obj + 0x144) == 3 or
+            memory.readdword(obj + 0x144) == 5 or
+            memory.readdword(obj + 0x144) == 6 or
+            memory.readdword(obj + 0x144) == 7 or
+            memory.readdword(obj + 0x144) == 9) and
+            memory.readdword(obj + 0x14C) == 4 then
+                box_broken_counts["yellow"] = box_broken_counts["yellow"] + 1
+        end
+    end
+    prev_interact_obj = obj
 end
