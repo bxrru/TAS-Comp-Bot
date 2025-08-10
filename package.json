@@ -10,7 +10,7 @@
     "chrono-node": "^2.2.4",
     "eris": "^0.17.2",
     "eris-additions": "^1.4.1",
-    "erlpack": "github:abalabahaha/erlpack",
+    "erlpack": "^0.1.4",
     "eventemitter3": "^4.0.4",
     "ffmpeg": "^0.0.4",
     "fluent-ffmpeg": "^2.1.2",
