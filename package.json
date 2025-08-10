@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry",
   "main": "start.js",
+  "type": "commonjs",
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
     "archiver": "^7.0.1",
