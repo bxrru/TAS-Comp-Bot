@@ -4,29 +4,56 @@ This is a discord bot meant to help automate SM64 TAS Competitions by handling s
 Join the SM64 TASing server to keep up to date on the latest competitions: https://discord.gg/ECskvyF
 
 
-### Running the Bot
-Assuming you have a [bot application](https://discord.com/developers/applications) and [Node.js](https://nodejs.org/en/download/) (Note: there is a runtime deprication warning on node v21 or higher), download the files for this repository, then install the dependencies by opening a command prompt in the folder containing this readme and running `npm i`. If you have build errors try downloading the [Visual Studio Community 2017](https://visualstudio.microsoft.com/vs/older-downloads/) Node.js build tools and running `npm i --msvs_version=2017`.
+# Quickstart
 
-Next, rename `bot.js.template` and `saves_template` to `bot.js` and `saves`, respectively, put your token in `bot.js` and run `node ./bot-files/main.js ./bot.js` to start the bot! Any user ids in the list of "Owner_IDs" will be able to use all of the commands, so make sure to add yours.
+## Setting up
 
-Then, change the channel IDs under `saves/channels.json` to ones the bot has access to. The bot will send a welcome message and be usable from those channels, so verify that these are correct.
+1. Rename `/bot.js.template` to `/bot.js` and fill in your bot token
 
-The encoding command also requires providing paths to a mupen executable, as well as a rom folder containing roms in `saves/m64.json`. Note that roms must not contain spaces in their filenames and should use underscores (`Super Mario 64 (USA).z64` -> `Super_Mario_64_(USA).z64`) instead.   
+2. Rename `/saves_template` to `/saves`
 
-It's possible to run multiple bots from the same code by creating a new file with the same format as bot.js but with a different token. To keep their saves separate make sure to change the saves path.
+3. Add your own Discord user ID to the admin list in `/saves/admin.json`
 
-For voice support you need [ffmpeg](https://ffmpeg.org/download.html) on your PATH environment variable.
+4. Change the bot's target channels in `/saves/channels.json` to ones it has access to
 
-To enable updates: install [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git). Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
+5. Change the paths in `/saves/m64.json` to match your filesystem structure
 
-For all the M64 commands to work there are some important Mupen64-rr settings to set:
-- Silent mode: On (Prevents popup windows from preventing the emulator from closing)
-- Keep Working Directory: On (allows running locally-stored TAS files with relative directories)
-- Core Type: Pure Interpreter
-- open a game and capture a video recording once, and set the codec to something that is not Uncompressed Frames. Then Make sure to copy avi.cfg to the folder of this project
+    Note that the ROM filenames associated with CRCs will have their spaces replaced with underscores when utilized by the bot (e.g. `Super Mario 64 (USA).z64` -> `Super_Mario_64_(USA).z64`)
 
-### Features
-All of the available functions are documented within the bot. Run it and type `$help` for more info. Here is an overview of some key functionality:
+6. (optional) For voice support, you need [ffmpeg](https://ffmpeg.org/download.html) on your PATH environment variable.
+
+7. (optional) Enable update support by installing [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
+        
+    Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
+
+8. (optional) For encoding support, set up Mupen64.
+
+    a. Enable "Silent Mode" in the Mupen settings (prevents popup windows from preventing the emulator from closing).
+
+    b. Enable "Keep Working Directory" in the Mupen settings (allows running locally-stored TAS files with relative directories).
+
+    c. Set "Core Type" to "Pure Interpreter"
+
+    d. Open a game and start a video capture using "Utilities > Video Capture > Start Capture...", and set the codec to [x264vfw](https://sourceforge.net/projects/x264vfw/). Make sure to copy the generated `avi.cfg` to the bot project root.
+
+## Starting the Bot
+
+1. Install [Deno](https://deno.com/)
+
+2. Install the packages using `deno i`
+
+3. Run the bot using `deno --allow-all ./bot-files/main.js ./bot.js`
+
+> [!NOTE]
+> It's possible to run multiple bots from the same code by creating a new file with the same format as `bot.js` but with a different token. 
+>
+> Additionally, you should keep their saves separate by changing the saves path.
+
+# Features
+
+All of the available functions are documented within the bot. Run it and type `$help` for more info. 
+
+Here is an overview of some key functionality:
 
 When a competition is running, the bot will collect and store information on the submissions from the competitors. This makes it easy to get all of the files at once and to see how many people have entered. You can set up a list of "hosts" who will receive competition updates such as when someone new enters, when files are updated, or if someone's run has been timed. All of these notifications can be toggled for the individual hosts (IE someone can choose to see new submissions but not when any files are updated).
 
