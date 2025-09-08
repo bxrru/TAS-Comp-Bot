@@ -1,8 +1,8 @@
 # TAS-Comp-Bot
+
 This is a discord bot meant to help automate SM64 TAS Competitions by handling submissions, scores, and much much more!
 
 Join the SM64 TASing server to keep up to date on the latest competitions: https://discord.gg/ECskvyF
-
 
 # Quickstart
 
@@ -23,7 +23,7 @@ Join the SM64 TASing server to keep up to date on the latest competitions: https
 6. (optional) For voice support, you need [ffmpeg](https://ffmpeg.org/download.html) on your PATH environment variable.
 
 7. (optional) Enable update support by installing [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
-        
+
     Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
 
 8. (optional) For encoding support, set up Mupen64.
@@ -45,13 +45,13 @@ Join the SM64 TASing server to keep up to date on the latest competitions: https
 3. Run the bot using `deno --allow-all ./bot-files/main.js ./bot.js`
 
 > [!NOTE]
-> It's possible to run multiple bots from the same code by creating a new file with the same format as `bot.js` but with a different token. 
+> It's possible to run multiple bots from the same code by creating a new file with the same format as `bot.js` but with a different token.
 >
 > Additionally, you should keep their saves separate by changing the saves path.
 
 # Features
 
-All of the available functions are documented within the bot. Run it and type `$help` for more info. 
+All of the available functions are documented within the bot. Run it and type `$help` for more info.
 
 Here is an overview of some key functionality:
 
@@ -69,10 +69,10 @@ All data (such as submitted files, scheduled announcements, etc.) is saved local
 
 `$slots` is the #1 most used command by far. Try it. You will become addicted.
 
-
-
 ### Future Development
+
 This project is always evolving and there are always new feature requests, but here is a current list of things I plan to implement:
+
 - include all mupen settings that are required
 - test interface
 - silent bans
@@ -82,6 +82,7 @@ This project is always evolving and there are always new feature requests, but h
 - automatically load all files in bot-files directory
 
 Low priority:
+
 - generalize prefix
 - refactor score for consistent formatting
 - fix brainfuck compiler TLE

@@ -1,49 +1,49 @@
 {
-  "name": "compbot",
-  "version": "1.0.0",
-  "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry",
-  "main": "start.js",
-  "type": "commonjs",
-  "devDependencies": {
-    "prettier": "^3.6.2"
-  },
-  "dependencies": {
-    "@discordjs/opus": "^0.9.0",
-    "archiver": "^7.0.1",
-    "bufferutil": "^4.0.1",
-    "chrono-node": "^2.2.4",
-    "eris": "^0.17.2",
-    "eris-additions": "^1.4.1",
-    "erlpack": "^0.1.4",
-    "eventemitter3": "^4.0.4",
-    "ffmpeg": "^0.0.4",
-    "fluent-ffmpeg": "^2.1.2",
-    "fs": "0.0.1-security",
-    "node-gyp": "^10.0.1",
-    "request": "^2.88.2",
-    "rgb-color": "^2.1.2",
-    "sodium-native": "^3.1.1",
-    "utf-8-validate": "^5.0.2",
-    "ytdl-core": "^2.1.5",
-    "zlib-sync": "^0.1.7"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "format": "prettier --write ."
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Barryyyyyy/TAS-Comp-Bot.git"
-  },
-  "keywords": [
-    "bot",
-    "SM64",
-    "discord"
-  ],
-  "author": "ERGC Xander / Eddio0141 / Barry",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Barryyyyyy/TAS-Comp-Bot/issues"
-  },
-  "homepage": "https://github.com/Barryyyyyy/TAS-Comp-Bot#readme"
+    "name": "compbot",
+    "version": "1.0.0",
+    "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry",
+    "main": "start.js",
+    "type": "commonjs",
+    "devDependencies": {
+        "prettier": "^3.6.2"
+    },
+    "dependencies": {
+        "@discordjs/opus": "^0.9.0",
+        "archiver": "^7.0.1",
+        "bufferutil": "^4.0.1",
+        "chrono-node": "^2.2.4",
+        "eris": "^0.17.2",
+        "eris-additions": "^1.4.1",
+        "erlpack": "^0.1.4",
+        "eventemitter3": "^4.0.4",
+        "ffmpeg": "^0.0.4",
+        "fluent-ffmpeg": "^2.1.2",
+        "fs": "0.0.1-security",
+        "node-gyp": "^10.0.1",
+        "request": "^2.88.2",
+        "rgb-color": "^2.1.2",
+        "sodium-native": "^3.1.1",
+        "utf-8-validate": "^5.0.2",
+        "ytdl-core": "^2.1.5",
+        "zlib-sync": "^0.1.7"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "format": "prettier --write ."
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Barryyyyyy/TAS-Comp-Bot.git"
+    },
+    "keywords": [
+        "bot",
+        "SM64",
+        "discord"
+    ],
+    "author": "ERGC Xander / Eddio0141 / Barry",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/Barryyyyyy/TAS-Comp-Bot/issues"
+    },
+    "homepage": "https://github.com/Barryyyyyy/TAS-Comp-Bot#readme"
 }
