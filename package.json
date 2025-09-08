@@ -4,6 +4,9 @@
   "description": "TAS Comp Bot made by Xander, Eddio0141 and Barry",
   "main": "start.js",
   "type": "commonjs",
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  },
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
     "archiver": "^7.0.1",
@@ -25,7 +28,8 @@
     "zlib-sync": "^0.1.7"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format": "prettier --write ."
   },
   "repository": {
     "type": "git",
