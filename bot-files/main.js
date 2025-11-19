@@ -215,12 +215,24 @@ var toggleReactions = function(bot, msg, args) {
 
 async function restart(bot, msg, args) {
 	if (!users.hasCmdAccess(msg)) return
+	let update = args.length > 0
+	let useDev = args.length == 1 && args[0].toLowerCase() == "dev"
+	let exitCode = 0
+	let response = "Restarting"
+	if (useDev) {
+		response = "Restarting... Downloading dev branch"
+		exitCode = 43
+	} else if (update) {
+		response = "Restarting... Downloading latest files"
+		exitCode = 42
+	}
+	console.log(response)
 	try {
-		await bot.createMessage(msg.channel.id, args.length ? `Restarting... Downloading updated files` : `Restarting`)
+		await bot.createMessage(msg.channel.id, response)
 	} catch (e) {
 		console.log(`Error: Failed to send message`)
 	} finally {
-		process.exit(args.length ? 42 : 0)
+		process.exit(exitCode)
 	}
 }
 

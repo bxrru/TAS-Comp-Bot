@@ -41,13 +41,13 @@ var copyFolderRecursive = function(path, destination) {
   })
 }
 
-var updateFiles = function() {
+var updateFiles = function(useDev = false) {
 
   if (!AllowUpdates) return
 
   try {
 
-    // the conditions.lua file is the task specirfic script (not updated on github)
+    // the conditions.lua file is the task specific script (not updated on github)
     // make sure this file is preserved (if it exists)
     if (fs.existsSync("./TimingLua/Conditions.lua")) {
       fs.copyFileSync("./TimingLua/Conditions.lua", "./saves/temp_conditions.lua")
@@ -55,7 +55,11 @@ var updateFiles = function() {
 
     // download new files
     deleteFolderRecursive('./TAS-Comp-Bot') // just incase it's leftover
-    cp.execSync(`git clone "https://github.com/bxrru/TAS-Comp-Bot"`)
+    if (useDev) {
+      cp.execSync(`git clone "https://github.com/bxrru/TAS-Comp-Bot" --branch dev`)
+    } else {
+      cp.execSync(`git clone "https://github.com/bxrru/TAS-Comp-Bot"`)
+    }
 
     deleteFolderRecursive(Info.Bot_Files_Path)
     copyFolderRecursive('./TAS-Comp-Bot/bot-files/', Info.Bot_Files_Path)
@@ -105,10 +109,12 @@ var start = function() {
 
   // State exit code & update bot-files on custom exit code
   CompBot.on('close', (number, signal) => {
-    console.log(`Exit Code: ${number}` + (number == 42 ? ` UPDATING` : ` (No Update)`))
+    console.log(`Exit Code: ${number}` + (number == 42 || number == 43 ? ` UPDATING` : ` (No Update)`))
     Started = false
     if (number == 42) {
       updateFiles()
+    } else if (number == 43) {
+      updateFiles(true)
     } else /*if (number == 0 || number == 69)*/{
       start() // keep the bot alive intentionally (always)
     }
