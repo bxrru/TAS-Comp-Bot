@@ -3,11 +3,13 @@
 const fs = require('fs')
 const users = require('./users.js')
 const save = require('./save.js')
+const roms = require('./roms.js')
 const cp = require('child_process')
 const process = require('process')
 const request = require('request')
 const path = require('path')
 const rgbcolor = require('rgb-color')
+const crypto = require("crypto");
 
 // The following are used for the encoding command
 // They will need to be manually set before running an instance of the bot
@@ -17,14 +19,12 @@ const rgbcolor = require('rgb-color')
 var MUPEN_PATH = 'C:\\...'
 let LUA_SCRIPTS = []
 var GAME_PATH = 'C:\\...' // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
-var KNOWN_CRC = {
-    // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
-    //"AF 5E 2D 01": "Ghosthack v2", // depricated
-    //"63 83 23 38": "No Speed Limit 64 (Normal)"
-}
+var KNOWN_CRC = {}
 var MUPEN_USES_FFMPEG = false
 
 var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user id}
+
+const SM64_USA_CRC = "1666853887"
 
 // Note: the lua script needs to have a built in failsafe. Sample code:
 /*
@@ -349,7 +349,7 @@ function NextProcess(bot, retry = true) {
             : save.getSavePath() + '/tas.m64'
         var m64 = fs.readFileSync(tasfile)
         var crc = Buffer.copyBytesFrom(m64.subarray(0xe4, 0xe4 + 4))
-        crc = bufferToStringLiteral(crc.reverse())
+        crc = crc.readUInt32BE(0).toString()
         //console.log(KNOWN_CRC)
         //console.log(crc)
         if (crc in KNOWN_CRC == false) {
@@ -378,16 +378,17 @@ function NextProcess(bot, retry = true) {
                     `ERROR: unknown CRC ${crc} when running Mupen\n${JSON.stringify(request)}`
                 )
             } else {
+                const formattedCRC = roms.formatCRC(Number(crc))
                 bot.createMessage(
                     request.channel_id,
-                    `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`
+                    `<@${request.user_id}> The movie you provided belongs to an unsupported ROM with CRC \`${formattedCRC}\`.\nFor a list of supported ROMs, use the \`$ListCRC\` command.`
                 )
             }
             MupenQueue.shift() // this request cannot be run
             NextProcess(bot)
             return
         } else if (
-            KNOWN_CRC[crc] != 'Super Mario 64 (USA)' &&
+            KNOWN_CRC[crc] != SM64_USA_CRC &&
             request.cmdflags.indexOf('PlayGhosts.lua') > -1
         ) {
             bot.createMessage(
@@ -419,7 +420,7 @@ function NextProcess(bot, retry = true) {
                 return
             }
             await request.startup()
-            const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc].replace(/ /g, `_`)}.z64" `
+            const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc]}.z64" `
             const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
             //console.log(CMD)
             let Mupen = cp.exec(CMD)
@@ -1527,12 +1528,17 @@ module.exports = {
             'Shows a list of ROM CRCs that the `$encode` command supports. If there is a game that you would like added to this list, please contact the owner of this bot',
         hidden: true,
         function: async function (bot, msg, args) {
-            var result = 'CRC: ROM Name\n' + '```'
-            var crc = Object.keys(KNOWN_CRC)
-            for (var i = 0; i < crc.length; i++) {
-                result += `${crc[i]}: ${KNOWN_CRC[crc[i]]}\n`
-            }
-            return result + '```'
+            let result = 'CRC: ROM Name\n'
+
+            result += '```\n'
+            Object.keys(KNOWN_CRC).forEach((pair) => {
+                const formattedCRC = roms.formatCRC(Number(pair))
+                const filename = KNOWN_CRC[pair]
+                result += `${formattedCRC}: ${filename}\n`
+            });
+            result += '```'
+            
+            return result
         },
     },
 
@@ -1552,9 +1558,23 @@ module.exports = {
         if (data.LuaPaths && data.LuaPaths.length > 0) {
             LUA_SCRIPTS.push(data.LuaPaths)
         }
-        Object.keys(data.CRC).forEach((crc) => {
-            KNOWN_CRC[crc] = data.CRC[crc]
-        })
+
+        // Build list of known CRCs from ROM directory
+        const romFilenames = fs.readdirSync(data.GamePath)
+        romFilenames.forEach(file => {
+            const filePath = path.join(data.GamePath, file)
+            const fileBuffer = fs.readFileSync(filePath)
+
+            if (fileBuffer.length < 20) {
+                console.error(`File too small: ${file} (${fileBuffer.length} bytes)`);
+                return;
+            }
+
+            const crc = fileBuffer.readUInt32BE(16)
+            const romName = path.parse(file).name
+
+            KNOWN_CRC[crc] = romName
+        });
     },
 
     lua_scripts: () => LUA_SCRIPTS,
