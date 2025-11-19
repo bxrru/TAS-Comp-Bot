@@ -3,6 +3,7 @@
 const fs = require('fs')
 const users = require('./users.js')
 const save = require('./save.js')
+const roms = require('./roms.js')
 const cp = require('child_process')
 const process = require('process')
 const request = require('request')
@@ -377,9 +378,10 @@ function NextProcess(bot, retry = true) {
                     `ERROR: unknown CRC ${crc} when running Mupen\n${JSON.stringify(request)}`
                 )
             } else {
+                const formattedCRC = roms.formatCRC(Number(crc))
                 bot.createMessage(
                     request.channel_id,
-                    `<@${request.user_id}> Unknown CRC: ${crc}. For a list of supported games, use $ListCRC`
+                    `<@${request.user_id}> The movie you provided belongs to an unsupported ROM with CRC \`${formattedCRC}\`.\nFor a list of supported ROMs, use the \`$ListCRC\` command.`
                 )
             }
             MupenQueue.shift() // this request cannot be run
@@ -1526,12 +1528,17 @@ module.exports = {
             'Shows a list of ROM CRCs that the `$encode` command supports. If there is a game that you would like added to this list, please contact the owner of this bot',
         hidden: true,
         function: async function (bot, msg, args) {
-            var result = 'CRC: ROM Name\n' + '```'
-            var crc = Object.keys(KNOWN_CRC)
-            for (var i = 0; i < crc.length; i++) {
-                result += `${crc[i]}: ${KNOWN_CRC[crc[i]]}\n`
-            }
-            return result + '```'
+            let result = 'CRC: ROM Name\n'
+
+            result += '```\n'
+            Object.keys(KNOWN_CRC).forEach((pair) => {
+                const formattedCRC = roms.formatCRC(Number(pair))
+                const filename = KNOWN_CRC[pair]
+                result += `${formattedCRC}: ${filename}\n`
+            });
+            result += '```'
+            
+            return result
         },
     },
 
