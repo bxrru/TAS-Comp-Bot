@@ -13,7 +13,13 @@ module.exports = {
         const romFilenames = fs.readdirSync(directoryPath)
         romFilenames.forEach(file => {
             const filePath = path.join(directoryPath, file)
-            const fileBuffer = fs.readFileSync(filePath)
+
+            // ignore folders
+            if (fs.lstatSync(filePath).isDirectory()) {
+                return
+            }
+
+            const fileBuffer = fs.readFileSync(filePath);
 
             if (fileBuffer.length < 20) {
                 console.error(`File too small: ${file} (${fileBuffer.length} bytes)`);
