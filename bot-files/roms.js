@@ -42,5 +42,14 @@ module.exports = {
         return [0, 8, 16, 24]
             .map(shift => ((crc >>> shift) & 0xFF).toString(16).padStart(2, '0').toUpperCase())
             .join(' ');
+    },
+
+    /**
+     * Converts a ROM name into a more user-friendly format.
+     * @param {string} name 
+     * @returns {string}
+     */
+    toFriendlyRomName: (name) => {
+        return name.replace(/\x00+$/g, '')
     }
 }
