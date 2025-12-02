@@ -1574,22 +1574,7 @@ module.exports = {
             LUA_SCRIPTS.push(data.LuaPaths)
         }
 
-        // Build list of known CRCs from ROM directory
-        const romFilenames = fs.readdirSync(data.GamePath)
-        romFilenames.forEach(file => {
-            const filePath = path.join(data.GamePath, file)
-            const fileBuffer = fs.readFileSync(filePath)
-
-            if (fileBuffer.length < 20) {
-                console.error(`File too small: ${file} (${fileBuffer.length} bytes)`);
-                return;
-            }
-
-            const crc = fileBuffer.readUInt32BE(16)
-            const romName = path.parse(file).name
-
-            KNOWN_CRC[crc] = romName
-        });
+        KNOWN_CRC = roms.getKnownCRCsFromROMsInDirectory(data.GamePath)
     },
 
     lua_scripts: () => LUA_SCRIPTS,
