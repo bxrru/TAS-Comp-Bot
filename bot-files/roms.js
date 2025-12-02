@@ -12,19 +12,34 @@ module.exports = {
         const known_crcs = {}
 
         const romFilenames = fs.readdirSync(directoryPath)
+
         romFilenames.forEach(file => {
-            const filePath = path.join(directoryPath, file)
-            const fileBuffer = fs.readFileSync(filePath)
+            const filePath = path.join(directoryPath, file);
 
-            if (fileBuffer.length < 20) {
-                console.error(`File too small: ${file} (${fileBuffer.length} bytes)`);
-                return;
+            let fd;
+            try {
+                fd = fs.openSync(filePath, "r");
+
+                const { size } = fs.statSync(filePath);
+                if (size < 20) {
+                    console.error(`File too small: ${file} (${size} bytes)`);
+                    return;
+                }
+
+                const buffer = Buffer.alloc(4);
+
+                fs.readSync(fd, buffer, 0, 4, 16);
+
+                const crc = buffer.readUInt32BE(0);
+                const romName = path.parse(file).name;
+
+                known_crcs[crc] = romName;
+
+            } catch (e) {
+                console.error(`Error reading ${file}:`, e);
+            } finally {
+                if (fd !== undefined) fs.closeSync(fd);
             }
-
-            const crc = fileBuffer.readUInt32BE(16)
-            const romName = path.parse(file).name
-
-            known_crcs[crc] = romName
         });
         return known_crcs
     },
