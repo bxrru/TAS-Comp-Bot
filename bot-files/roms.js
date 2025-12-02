@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const levenshtein = require('fast-levenshtein');
 
 module.exports = {
     /**
@@ -36,5 +37,35 @@ module.exports = {
         return [0, 8, 16, 24]
             .map(shift => ((crc >>> shift) & 0xFF).toString(16).padStart(2, '0').toUpperCase())
             .join(' ');
-    }
+    },
+
+
+    /**
+     * Finds and returns a list of name-CRC pairs similar to the given query.
+     * @param {Array<{crc: string, name: string}>} known_crcs 
+     * @param {string} query 
+     * @param {number} max_results 
+     * @returns {{elements: Array<{crc: string, name: string}>, count: number}}
+     */
+    getNameCRCPairsSimilarTo: (known_crcs, query, max_results = 5) => {
+        const pairs = Object.entries(known_crcs).map(([crc, name]) => ({ crc, name }));
+
+        const lowerQuery = query.toLowerCase();
+
+        pairs.sort((a, b) => {
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+
+            const aContains = aName.includes(lowerQuery) ? -1 : 0;
+            const bContains = bName.includes(lowerQuery) ? -1 : 0;
+            if (aContains !== bContains) return aContains - bContains;
+
+            const distA = levenshtein.get(lowerQuery, aName) / Math.max(lowerQuery.length, aName.length);
+            const distB = levenshtein.get(lowerQuery, bName) / Math.max(lowerQuery.length, bName.length);
+
+            return distA - distB;
+        });
+
+        return { elements: pairs.slice(0, max_results), count: pairs.length };
+    },
 }

@@ -1525,17 +1525,32 @@ module.exports = {
         aliases: [],
         short_descrip: 'See recognized games',
         full_descrip:
-            'Shows a list of ROM CRCs that the `$encode` command supports. If there is a game that you would like added to this list, please contact the owner of this bot',
+            'Usage: \`$listcrc <rom name>\`\nShows a list of ROMs supported by the `$encode` command similar to the specified one. If there is a game that you would like added to this list, please contact the owner of this bot',
         hidden: true,
         function: async function (bot, msg, args) {
+            if (args.length == 0) {
+                return 'Missing Argument: `$listcrc <rom name>`'
+            }
+
+            const query = args.join(' ')
+
+            const similarResult = roms.getNameCRCPairsSimilarTo(
+                KNOWN_CRC,
+                query,
+                20
+            )
+
             let result = 'CRC: ROM Name\n'
 
             result += '```\n'
-            Object.keys(KNOWN_CRC).forEach((pair) => {
-                const formattedCRC = roms.formatCRC(Number(pair))
-                const filename = KNOWN_CRC[pair]
+            similarResult.elements.forEach((pair) => {
+                const formattedCRC = roms.formatCRC(Number(pair.crc))
+                const filename = pair.name
                 result += `${formattedCRC}: ${filename}\n`
             });
+            if(similarResult.count > similarResult.elements.length) {
+                result += `...and ${similarResult.count - similarResult.elements.length} more results\n`
+            }
             result += '```'
             
             return result
