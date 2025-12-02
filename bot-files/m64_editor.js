@@ -379,9 +379,10 @@ function NextProcess(bot, retry = true) {
                 )
             } else {
                 const formattedCRC = roms.formatCRC(Number(crc))
+                const romName = roms.getRomNameFromM64Buffer(m64)
                 bot.createMessage(
                     request.channel_id,
-                    `<@${request.user_id}> The movie you provided belongs to an unsupported ROM with CRC \`${formattedCRC}\`.\nFor a list of supported ROMs, use the \`$ListCRC\` command.`
+                    `<@${request.user_id}> The movie you provided belongs to the unsupported ROM \`${romName}\` (\`${formattedCRC}\`).\nFor a list of similar supported ROMs, try \`$ListCRC ${romName}\`.`
                 )
             }
             MupenQueue.shift() // this request cannot be run

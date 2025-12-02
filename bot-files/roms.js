@@ -83,4 +83,15 @@ module.exports = {
 
         return { elements: pairs.slice(0, max_results), count: pairs.length };
     },
+
+    /**
+     * Gets a well-formatted ROM name from an M64 buffer.
+     * @param {Buffer} buffer
+     * @returns {string}
+     */
+    getRomNameFromM64Buffer: (buffer) => {
+        return (Buffer.copyBytesFrom(buffer.subarray(0xC4, 0xC4 + 32)).toString())
+            .replace(/\x00+$/, "")
+            .trim();
+    }
 }
