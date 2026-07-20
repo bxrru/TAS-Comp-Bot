@@ -463,13 +463,6 @@ function NextProcess(bot, retry = true) {
                 fs.writeFileSync(tasfile, m64)
             }
             runMupen()
-            downloadAndRun(
-                // should this just be runMupen(); return; ??
-                undefined,
-                runMupen,
-                request.m64_url,
-                'tas.m64'
-            )
             return
         } else if (start_type == '02' && request.st_url) {
             // make it start from a savestate and jump to this state
@@ -1553,7 +1546,7 @@ module.exports = {
                 result += `...and ${similarResult.count - similarResult.elements.length} more results\n`
             }
             result += '```'
-            
+
             return result
         },
     },
