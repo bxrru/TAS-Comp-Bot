@@ -283,13 +283,10 @@ async function onDownload(filename, filesize, callback) {
 // repeated code. allows for url/filename/size to be entered manually,
 // it will use the attachment's properties if they arent passed
 function downloadAndRun(attachment, callback, url, filename, filesize) {
-  if (!url) url = attachment.url
-  if (!filename) filename = attachment.filename
-  if (!filesize) filesize = attachment.size
-
-  save.downloadFromUrl(url, save.getSavePath() + `/` + filename)
-
-  onDownload(filename, filesize, callback)
+    if (!url) url = attachment.url
+    if (!filename) filename = getDiscordFilename(url) + ".dtm"
+    save.downloadFromUrl(url, `${save.getSavePath()}/${filename}`,
+      () => callback(fs.readFileSync(`${save.getSavePath()}/${filename}`), filename))
 }
 
 
@@ -581,18 +578,38 @@ function parseOffset(arg) {
   return {offset: offset, error: false}
 }
 
+// return a list of urls to files that end with something in extensions
+function parse_urls(extensions, msg, args) {
+  if (!Array.isArray(extensions)) { // allow ".txt" or [".txt"]
+    extensions = [extensions]
+  }
+  let urls = []
+  for (const link of [...args, ...msg.attachments.map((v) => v.url)]) {
+    let url = link.substring(0, link.lastIndexOf('?')) || link
+    for (const ext of extensions) {
+      if (url.endsWith(ext)) {
+        urls.push(link)
+      }
+    }
+  }
+  return urls
+}
+
 // returns {url: String, error: String}
-function parseFile(msg) {
-  if (msg.attachments.length == 0) {
-    return {error: `Missing Arguments: No dtm specified`}
+function parseFile(msg, args) {
+  let urls = parse_urls(".dtm", msg, args)
+  if (urls.length == 0) {
+    return {error: `Missing/Invalid Arguments: No dtm found`}
   }
-  let url = msg.attachments[0].url
-  url = url.substring(0, url.lastIndexOf('?')) || url
-  if (!url.endsWith(`.dtm`)) {
-    return {error: `Invalid Argument: file is not a dtm`}
-  }
-  msg.attachments[0].error = false
-  return msg.attachments[0]
+  return {error: false, url: urls[0]}
+}
+
+// "discordapp.com/serverid/channelid/messageid/filename.extension?ex=code" => filename
+function getDiscordFilename(discord_url) {
+  let name = discord_url.split('/')
+  name = name[name.length - 1] // "filename.extension?ex=code"
+  name = name.substring(0, name.lastIndexOf('?')) || name // "filename.extension"
+  return name.substring(0, name.lastIndexOf('.')) || name // "filename"
 }
 
 
@@ -632,7 +649,7 @@ module.exports = {
       if (offset.error) return offset.error
       offset = offset.offset
 
-      var attachment = parseFile(msg)
+      var attachment = parseFile(msg, args)
       if (attachment.error) return attachment.error
 
       async function readdata(dtm, filename) {
@@ -642,6 +659,7 @@ module.exports = {
         } catch (e) {
           console.log(e)
         }
+        fs.unlinkSync(`${save.getSavePath()}/${filename}`)
       }
 
       downloadAndRun(attachment, readdata)
@@ -656,7 +674,7 @@ module.exports = {
     hidden: true,
     function: async function(bot, msg, args) {
 
-      var attachment = parseFile(msg)
+      var attachment = parseFile(msg, args)
       if (attachment.error) return attachment.error
 
       async function readheader(dtm, filename) {
@@ -665,6 +683,7 @@ module.exports = {
           result += `${Header[offset][2]}: ${read(offset, dtm)}\n`
         })
         await bot.createMessage(msg.channel.id, "```" + result + "```")
+        fs.unlinkSync(`${save.getSavePath()}/${filename}`)
       }
 
       downloadAndRun(attachment, readheader)
@@ -686,7 +705,7 @@ module.exports = {
       if (offset.error) return offset.error
       offset = offset.offset
 
-      var attachment = parseFile(msg)
+      var attachment = parseFile(msg, args)
       if (attachment.error) return attachment.error
 
       // verify input is of the right type
@@ -720,6 +739,7 @@ module.exports = {
         } catch (e) {
           console.log(e)
         }
+        fs.unlinkSync(`${save.getSavePath()}/${filename}`)
       }
 
       downloadAndRun(attachment, writedata)
@@ -736,7 +756,7 @@ module.exports = {
 
       if (args.length < 2) return `Missing Arguments: \`$recrypt <old_key> <new_key> <dtm attachment>\``
 
-      var attachment = parseFile(msg)
+      var attachment = parseFile(msg, args)
       if (attachment.error) return attachment.error
 
       async function recrypt(dtm, filename) {
@@ -752,6 +772,7 @@ module.exports = {
         } catch (e) {
           console.log(e)
         }
+        fs.unlinkSync(`${save.getSavePath()}/${filename}`)
       }
 
       downloadAndRun(attachment, recrypt)
@@ -766,7 +787,7 @@ module.exports = {
     hidden: true,
     function: async function(bot, msg, args) {
 
-      var attachment = parseFile(msg)
+      var attachment = parseFile(msg, args)
       if (attachment.error) return attachment.error
 
       async function removegcc(dtm, filename) {
@@ -784,6 +805,7 @@ module.exports = {
             console.log(e)
           }
         }
+        fs.unlinkSync(`${save.getSavePath()}/${filename}`)
       }
 
       downloadAndRun(attachment, removegcc)
