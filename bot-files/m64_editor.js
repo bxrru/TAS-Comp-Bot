@@ -1342,10 +1342,12 @@ module.exports = {
                             Number(process.hrtime.bigint() - start_time) /
                                 1_000_000_000
                         )
-                        const length_samples = littleEndianToInt(
-                            m64.subarray(0x18, 0x18 + 4)
+                        const encode_frame_count = Number(
+                            cp.execSync(
+                                'ffprobe encode-compressed.mp4 -v quiet -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1'
+                            )
                         )
-                        const effective_fps = length_samples / elapsed_seconds
+                        const effective_fps = encode_frame_count / elapsed_seconds
 
                         let reply = `Encode Complete `
                         reply +=
