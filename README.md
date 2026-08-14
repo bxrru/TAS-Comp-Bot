@@ -26,15 +26,11 @@ Join the SM64 TASing server to keep up to date on the latest competitions: https
 
     Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
 
-8. (optional) For encoding support, set up Mupen64.
+8. (optional) For encoding support, set up Mupen64 1.4.0-8 or newer
 
     a. Enable "Silent Mode" in the Mupen settings (prevents popup windows from preventing the emulator from closing).
 
     b. Enable "Keep Working Directory" in the Mupen settings (allows running locally-stored TAS files with relative directories).
-
-    c. Set "Core Type" to "Pure Interpreter"
-
-    d. Open a game and start a video capture using "Utilities > Video Capture > Start Capture...", and set the codec to [x264vfw](https://sourceforge.net/projects/x264vfw/). Make sure to copy the generated `avi.cfg` to the bot project root.
 
 ## Starting the Bot
 
