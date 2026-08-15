@@ -389,7 +389,7 @@ function NextProcess(bot, retry = true) {
             NextProcess(bot)
             return
         } else if (
-            KNOWN_CRC[crc] != SM64_USA_CRC &&
+            crc != SM64_USA_CRC &&
             request.cmdflags.indexOf('PlayGhosts.lua') > -1
         ) {
             bot.createMessage(
