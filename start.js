@@ -1,9 +1,10 @@
-const cp = require('child_process')
-const fs = require('fs')
-var bar = '\n====================================================\n'
-var AllowUpdates = true
-var Started = false
-var CompBot
+const cp = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const BAR = '\n====================================================\n'
+let AllowUpdates = true
+let Started = false
+let CompBot = null
 
 if (process.argv.length < 3) {
     console.log(
@@ -16,35 +17,35 @@ if (!process.argv[2].startsWith(`./`)) process.argv[2] = `./` + process.argv[2]
 const Info = require(process.argv[2])
 
 // Helper function
-var deleteFolderRecursive = function (path) {
-    if (!fs.existsSync(path)) return // if it doesnt exist, end
-    fs.readdirSync(path).forEach(function (file, index) {
+function deleteFolderRecursive(folderpath) {
+    if (!fs.existsSync(folderpath)) return // if it doesnt exist, end
+    fs.readdirSync(folderpath).forEach(function (file, index) {
         // loop through each subfile
-        var filepath = `${path}/${file}`
+        const filepath = path.join(folderpath, file)
         if (fs.lstatSync(filepath).isDirectory()) {
             deleteFolderRecursive(filepath) // recurse
         } else {
             fs.unlinkSync(filepath)
         }
     })
-    fs.rmdirSync(path)
+    fs.rmdirSync(folderpath)
 }
 
 // Helper function
-var copyFolderRecursive = function (path, destination) {
-    if (!fs.existsSync(path)) return
+function copyFolderRecursive(folder, destination) {
+    if (!fs.existsSync(folder)) return
     if (!fs.existsSync(destination)) fs.mkdirSync(destination) // create destination folder if none exists
-    fs.readdirSync(path).forEach((file) => {
-        var filepath = `${path}/${file}`
+    fs.readdirSync(folder).forEach((file) => {
+        const filepath = path.join(folder, file)
         if (fs.lstatSync(filepath).isDirectory()) {
-            copyFolderRecursive(filepath, `${destination}/${file}`) // recurse
+            copyFolderRecursive(filepath, path.join(destination, file)) // recurse
         } else {
-            fs.copyFileSync(filepath, `${destination}/${file}`)
+            fs.copyFileSync(filepath, path.join(destination, file))
         }
     })
 }
 
-var updateFiles = function () {
+function updateFiles() {
     if (!AllowUpdates) return
 
     try {
@@ -78,16 +79,16 @@ var updateFiles = function () {
         AllowUpdates = false
         console.log('UPDATE FAILED. Updates disabled', e)
     } finally {
-        start()
+        CompBot = start()
     }
 }
 
-var start = function () {
+function start() {
     if (Started) return
 
     if (Info.Bot_Token == '') {
         console.log(
-            `${bar}No Bot Token found in ${process.argv[2]}\nUnable to start bot${bar}`
+            `${BAR}No Bot Token found in ${process.argv[2]}\nUnable to start bot${BAR}`
         )
         process.exit()
     }
@@ -95,7 +96,7 @@ var start = function () {
     console.log('Starting Bot...')
     Started = true
 
-    var CompBot = cp.exec(
+    const newCompBot = cp.exec(
         `node ${Info.Bot_Files_Path}/main.js ${process.argv[2]}`,
         (error, stdout, stderr) => {
             if (error) {
@@ -109,10 +110,10 @@ var start = function () {
     )
 
     // forward STDOUT to console
-    CompBot.stdout.on('data', (data) => console.log(data.toString()))
+    newCompBot.stdout.on('data', (data) => console.log(data.toString()))
 
     // State exit code & update bot-files on custom exit code
-    CompBot.on('close', (number, signal) => {
+    newCompBot.on('close', (number, signal) => {
         console.log(
             `Exit Code: ${number}` +
                 (number == 42 ? ` UPDATING` : ` (No Update)`)
@@ -121,29 +122,31 @@ var start = function () {
         if (number == 42) {
             updateFiles()
         } /*if (number == 0 || number == 69)*/ else {
-            start() // keep the bot alive intentionally (always)
+            CompBot = start() // keep the bot alive intentionally (always)
         }
     })
+
+    return newCompBot
 }
 
-var gitTest = function () {
+function gitTest() {
     try {
-        var git = cp.execSync('git --version')
+        cp.execSync('git --version')
         console.log('git installed. Auto-updates enabled')
     } catch (e) {
         AllowUpdates = false
         console.log(
-            `${bar}WARNING: git is not installed. Auto-updates disabled${bar}`
+            `${BAR}WARNING: git is not installed. Auto-updates disabled${BAR}`
         )
     }
 }
 
 gitTest()
-start()
+CompBot = start()
 
 // Restart on key press if there's an error
-var readline = require('readline')
-var rl = readline.createInterface({
+const readline = require('node:readline')
+const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: false,

@@ -24,8 +24,6 @@ Join the SM64 TASing server to keep up to date on the latest competitions: https
 
 7. (optional) Enable update support by installing [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
 
-    Additionally, for Windows Users: change "/" to "\\" on line 20 & 35 in `start.js`. This is because filepaths are hardcoded for linux.
-
 8. (optional) For encoding support, set up Mupen64 1.4.0-8 or newer
 
     a. Enable "Silent Mode" in the Mupen settings (prevents popup windows from preventing the emulator from closing).
