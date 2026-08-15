@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require('path')
 const request = require("request");
 const LOG_LOADS = false;
 var SAVE_PATH = "./saves"
@@ -13,22 +14,28 @@ function saveFile(filename, content){
 }
 
 module.exports = {
-	setSavePath:function(path) {
-		if (path == undefined) path = "./saves"
-		SAVE_PATH = path
+	setSavePath:function(newpath) {
+		if (newpath == undefined) newpath = "./saves"
+		SAVE_PATH = newpath
 	},
 	getSavePath:function() {
 		return SAVE_PATH
 	},
-	makeFolderIfNotExist:function(path) {
-		if (!fs.existsSync(path)){
-			fs.mkdirSync(path);
+	getFullSavePath:function() {
+		if (SAVE_PATH.startsWith("./")) {
+			return path.join(process.cwd(), SAVE_PATH)
+		}
+		return SAVE_PATH
+	},
+	makeFolderIfNotExist:function(folderpath) {
+		if (!fs.existsSync(folderpath)){
+			fs.mkdirSync(folderpath);
 		}
 	},
-	downloadFromUrl:function(url, path, callback) {
+	downloadFromUrl:function(url, savepath, callback) {
 		request.get(url)
         .on('error', console.error)
-        .pipe(fs.createWriteStream(path))
+        .pipe(fs.createWriteStream(savepath))
 		// Some callers provide no callback
 		.on('close', callback ? callback : () => {});
 	},

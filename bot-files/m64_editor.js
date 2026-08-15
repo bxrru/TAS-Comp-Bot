@@ -16,6 +16,7 @@ const rgbcolor = require("rgb-color")
 // these values are loaded from /saves/m64.json (don't edit them here)
 var MUPEN_PATH = "C:\\..."
 let LUA_SCRIPTS = []
+let LUA_TIMEOUT_PATH = []
 var GAME_PATH = "C:\\..." // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 var KNOWN_CRC = { // supported ROMS // when the bot tries to run the ROMs, it will replace the spaces in the names here with underscores
     //"AF 5E 2D 01": "Ghosthack v2", // depricated
@@ -859,7 +860,7 @@ module.exports = {
         name: "encode",
         aliases: [],
         short_descrip: "Encode an m64",
-        full_descrip: "Usage: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize/transparent/colors=<colors>] <m64> [st/savestate] [ghosts]`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use `$encode cancel`.\n\nIf the bot is not processing the queue, contact an admin to use `$encode forceskip` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing\n`nolua/no-lua/disable-lua` will not run the input visualzing/ram watch lua script,\n`maxvbitrate/max-v-bitrate/maxvrate/max-v-bitrate/mb:v/m-b:v` will set the maximum video bitrate,\n`crf` will set the target constant rate factor (lower is better, defaults to not passing the parameter in ffmpeg),\n`abitrate/a-bitrate/arate/a-rate/b:a` sets the audio bitrate, and\n`constrainsize/clamp` will automatically adjust maximum bitrate such that the video will not exceed the filesize limit, overriding your bitrate settings but still targeting CRF.\n\nUse \`$getghost\` to create a .ghost file, and upload it with this command to encode both TAS files at once. Include \`transparent\` or \`invis\` to make the ghosts semi-transparent. Use \`c=list,of,colours\` to define the colours for the ghosts. Colours can be RGB codes or standard colour names.",
+        full_descrip: "Usage: `$encode [cancel/forceskip/queue/nolua/maxvbitrate=<bitrate>/crf=<crf>/abitrate=<bitrate>/constrainsize/transparent/colors=<colors>] <m64> [st/savestate] [ghosts]`\nDownloads the files, makes an encode, and uploads the recording.\n\nIf your encode is queued and you want to cancel it, use `$encode cancel`.\n\nIf the bot is not processing the queue, contact an admin to use `$encode forceskip` to skip the encode at the front of the queue (you cannot cancel your own encode if it is currently processing, you will need to use forceskip instead).\n\nPassing\n`nolua/no-lua/disable-lua` will not run the input visualzing/ram watch lua script,\n`maxvbitrate/max-v-bitrate/maxvrate/max-v-bitrate/mb:v/m-b:v` will set the maximum video bitrate,\n`crf` will set the target constant rate factor (lower is better, defaults to not passing the parameter in ffmpeg),\n`abitrate/a-bitrate/arate/a-rate/b:a` sets the audio bitrate, and\n`constrainsize/clamp` will automatically adjust maximum bitrate such that the video will not exceed the filesize limit, overriding your bitrate settings but still targeting CRF.\n\nUse \`$getghost\` to create a .ghost file, and upload it with this command to encode both TAS files at once. Include \`transparent\` or \`invis\` to make the ghosts semi-transparent. Use \`c=list,of,colours\` to define the colours for the ghosts. Colours can be RGB codes or standard colour names. By default it will sync to the first time the animation changes, to choose a specific animation to sync on, use \`sync=#\` or \`sync=none\`.",
         hidden: true,
         function: async (bot, msg, args) => {
             //return `This command is currently disabled`
@@ -932,6 +933,7 @@ module.exports = {
             ghost_urls = ghost_urls.slice(0, 5) // max limit of 5 ghosts just to be safe
             let ghost_paths = []
             let ghosts_transparent = false
+            let ghost_sync_animation = ''
             let ghost_colours = []
 
             let filename = getDiscordFilename(m64_url)
@@ -969,6 +971,9 @@ module.exports = {
                             break
                         case "C": case "COL": case "COLS": case "COLOR": case "COLORS": case "COLOUR": case "COLOURS":
                             ghost_colours = values[1].split(",").map(rgbcolor).filter(c => c.ok)
+                            break
+                        case "SYNC":
+                            ghost_sync_animation = values[1]
                             break
                     }
                 }
@@ -1010,7 +1015,7 @@ module.exports = {
                         }
                         ghost_paths = []
                         for (let i = 0; i < ghost_urls.length; i++) {
-                            let ghostpath = `${save.getSavePath()}/${i}.ghost`
+                            let ghostpath = `${save.getFullSavePath()}/${i}.ghost`
                             if (fs.existsSync(ghostpath)) {
                                 fs.unlinkSync(ghostpath)
                             }
@@ -1020,6 +1025,7 @@ module.exports = {
                             "./TimingLua/ghostlist.txt",
                             [ // data read by PlayGhosts.lua
                                 ghosts_transparent.toString(),
+                                ghost_sync_animation,
                                 ghost_colours.map(c => c.ok ? c.r + " " + c.g + " " + c.b : "").join(" "),
                                 ...ghost_paths
                             ].join('\n')
@@ -1055,7 +1061,7 @@ module.exports = {
                     bot.createMessage(msg.channel.id, "Uploading...").catch(() => {})
 
                     try {
-                        const filesize_limit = msg.channel.guild !== undefined ? [25e6, 25e6, 50e6, 100e6][msg.channel.guild.premiumTier] : 25e6 // in bytes
+                        const filesize_limit = msg.channel.guild !== undefined ? [20e6, 20e6, 50e6, 100e6][msg.channel.guild.premiumTier] : 20e6 // in bytes
                         let cmd = `ffmpeg -y -i ${out_filename} -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
 
                         if (!ffmpeg_args.clamp) {
@@ -1159,10 +1165,11 @@ module.exports = {
             }
 
             const LUAPATH = process.cwd() + "\\TimingLua\\"
+
             const mupen_args = [
                 "-m64", `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`,
                 "--close-on-movie-end",
-                ["lua", ...LUA_SCRIPTS, LUAPATH + "ghost.lua"]
+                ["lua", ...LUA_TIMEOUT_PATH, LUAPATH + "RecordGhost.lua"]
             ]
             
             let queue_position = QueueAdd(
@@ -1242,8 +1249,10 @@ module.exports = {
         if (data.InputLuaPath && data.InputLuaPath.length > 0) {
             LUA_SCRIPTS.push(data.InputLuaPath);
         }
+        LUA_TIMEOUT_PATH = []
         if (data.TimeoutLuaPath && data.TimeoutLuaPath.length > 0) {
             LUA_SCRIPTS.push(data.TimeoutLuaPath);
+            LUA_TIMEOUT_PATH = [data.TimeoutLuaPath]
         }
         if (data.LuaPaths && data.LuaPaths.length > 0) {
             LUA_SCRIPTS.push(data.LuaPaths);
@@ -1254,6 +1263,7 @@ module.exports = {
     },
 
     lua_scripts: () => LUA_SCRIPTS,
+    lua_timeout_scripts: () => LUA_TIMEOUT_PATH,
 
     Process: QueueAdd
 }

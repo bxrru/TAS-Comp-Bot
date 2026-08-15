@@ -2514,7 +2514,7 @@ module.exports = {
 				let filepath = Save.getSavePath() + "/Submissions/" + Submissions[submission_id].id
 				let st_ext = fs.existsSync(filepath+".st") ? ".st" : ".savestate"
 
-				const lua_args = ["lua", ...Mupen.lua_scripts(), LUAPATH + "ghost.lua"]
+				const lua_args = ["lua", ...Mupen.lua_timeout_scripts(), LUAPATH + "RecordGhost.lua"]
 				const args = ["-m64", filepath + ".m64", "--close-on-movie-end", lua_args]
 				
 				let queue_position = Mupen.Process(
