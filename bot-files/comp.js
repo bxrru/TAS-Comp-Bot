@@ -12,7 +12,7 @@ const Users = require('./users.js')
 const miscfuncs = require('./miscfuncs.js')
 const chat = require('./chatcommands.js')
 const Save = require('./save.js')
-const fs = require('fs')
+const fs = require('node:fs')
 const request = require('request')
 const chrono = require('chrono-node')
 const Announcement = require('./announcement.js')
@@ -292,8 +292,8 @@ async function SubmissionsToMessage(bot, showInfo) {
             : 'Not accepting submissions at this time.'
     }
     const MAXMSGLEN = 1900 //2000 - 6 - 1 // 6 allows for ```x``` and 1 extra char of leeway bc i dont trust it xd
-    for (var i = 0; i < Submissions.length; i++) {
-        var player = Submissions[i]
+    for (let i = 0; i < Submissions.length; i++) {
+        let player = Submissions[i]
         // only lists ID of most recent player to submit (when in a team)
         let line = `${i + 1}. ${await submissionName(bot, player.id)}${showInfo ? ` (${player.id})` : ``}\n`
         //let line = `${i + 1}. ${[player.name]}${showInfo ? ` (${player.id})` : ``}\n` // [AF] use name on submission
@@ -332,7 +332,7 @@ function notifyHosts(bot, message, prefix) {
         )
             return
         try {
-            var dm = await bot.getDMChannel(id)
+            let dm = await bot.getDMChannel(id)
             dm.createMessage(`**[${prefix}]** ${message}`)
         } catch (e) {
             console.log('Failed to DM Host', id, message)
@@ -453,7 +453,7 @@ function AutoTimeEntry(
             if (TLE) {
                 admin_msg += `time limit exceeded (their run must be timed manually)`
                 try {
-                    var dm = await bot.getDMChannel(Submissions[getSubNum()].id)
+                    let dm = await bot.getDMChannel(Submissions[getSubNum()].id)
                     dm.createMessage(
                         `Your submission exceeds the process time limit. It will be manually timed by a host at a later time.`
                     )
@@ -478,7 +478,7 @@ function AutoTimeEntry(
             var user_msg = ``
             var unchanged = false
             if (result.startsWith('DQ')) {
-                var reason = result.split(' ').slice(1).join(' ')
+                let reason = result.split(' ').slice(1).join(' ')
                 admin_msg += `DQ [${reason}]. `
                 unchanged =
                     Submissions[getSubNum()].dq &&
@@ -493,8 +493,8 @@ function AutoTimeEntry(
                 }
                 LOG(Submissions[getSubNum()].id, `Time: DQ [${reason}]`)
             } else {
-                var frames = Number(result.split(' ')[1])
-                var info = result.split(' ').slice(2).join(' ') // normally an empty string
+                let frames = Number(result.split(' ')[1])
+                let info = result.split(' ').slice(2).join(' ') // normally an empty string
                 admin_msg += `||${getTimeString(frames * 2)} (${frames}f) ${info}||. `
                 unchanged =
                     Submissions[getSubNum()].time == frames * 2 &&
@@ -520,7 +520,7 @@ function AutoTimeEntry(
             // either the time has changed, or it hasnt changed but it was a submission (not an admin timing the run)
             if (!unchanged || (unchanged && !err_channel_id)) {
                 try {
-                    var dm = await bot.getDMChannel(Submissions[getSubNum()].id)
+                    let dm = await bot.getDMChannel(Submissions[getSubNum()].id)
                     dm.createMessage(user_msg.trim()).catch((e) => {
                         admin_msg += `**Warning:** Failed to notify user of their time update. ` // since this isn't awaited, I don't think this error actually shows up...
                     })
@@ -583,7 +583,7 @@ function CheckAutoTiming(bot, msg) {
 // check if a file has been fully downloaded
 function hasDownloaded(filename, filesize) {
     try {
-        var file = fs.readFileSync(save.getSavePath() + '/' + filename)
+        let file = fs.readFileSync(save.getSavePath() + '/' + filename)
         return file.byteLength == filesize
     } catch (e) {
         return false
@@ -660,12 +660,12 @@ async function submissionName(bot, user_id, only_team_name = false) {
         return name.substring(0, MAXNAMELEN)
     }
     try {
-        var user = await Users.getUser(bot, user_id)
-        var partner = await Users.getUser(bot, Teams[user_id])
+        let user = await Users.getUser(bot, user_id)
+        let partner = await Users.getUser(bot, Teams[user_id])
         if (user && partner) {
-            var name1 =
+            let name1 =
                 user_id in Nicknames ? Nicknames[user_id] : user.username // player nicknames
-            var name2 =
+            let name2 =
                 Teams[user_id] in Nicknames
                     ? Nicknames[Teams[user_id]]
                     : partner.username
@@ -748,11 +748,11 @@ async function forwardSubmission(bot, user, filename, url) {
     if (completedTeam(user.id)) {
         // notify partner
         try {
-            var partner_dm = await bot.getDMChannel(Teams[user.id])
+            let partner_dm = await bot.getDMChannel(Teams[user.id])
             partner_dm.createMessage(user.username + result)
         } catch (error) {
             try {
-                var submitter_dm = await user.getDMChannel()
+                let submitter_dm = await user.getDMChannel()
                 submitter_dm.createMessage(
                     'Failed to notify your teammate of the newly submitted file'
                 )
@@ -798,7 +798,7 @@ async function storeFile(bot, msg, attachment_url, extension, allow_autotime) {
                 submitter_notif,
                 file
             )
-            var attachment = message.attachments[0]
+            let attachment = message.attachments[0]
             update_submission_file(
                 msg.author.id,
                 attachment.url,
@@ -828,7 +828,7 @@ async function deleteSubmissionMessage(bot) {
     let err = false
     for (const mid of Message_IDs) {
         try {
-            var message = await bot.getMessage(Channel_ID, mid)
+            let message = await bot.getMessage(Channel_ID, mid)
             message.delete()
         } catch (e) {
             err = true
@@ -1083,7 +1083,7 @@ module.exports = {
         full_descrip:
             "Usage: \`$stoptask [send_message?]\`\nThis will DM everyone who's timer is still counting down for timed tasks, cancel the scheduled release of timed tasks, and stop accepting any submissions via DMs. If any argument is given, this will send a message to the Task Channel saying that the task is over. This command works regarless of whether submissions are currently being accepted or not. ",
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
 
             TimedTask = false
@@ -1156,9 +1156,9 @@ module.exports = {
             )
             Announcement.KillDelayedFunction(`COMP-END ${args[0]}`, true)
             try {
-                var dm = await bot.getDMChannel(args[0])
+                let dm = await bot.getDMChannel(args[0])
                 Announcement.KillDelayedFunction(`COMP-WARN ${dm.id}`, true)
-                var user = await Users.getUser(bot, args[0])
+                let user = await Users.getUser(bot, args[0])
                 return `Timer Successfully stopped for ${user.username} \`(${user.id})\``
             } catch (e) {
                 return `Timer stopped for user \`${args[0]}\`. \`\`\`${e}\`\`\``
@@ -1216,14 +1216,14 @@ module.exports = {
 
             // check if they've already submitted
             if (module.exports.hasSubmitted(user_id)) {
-                var user = module.exports.getSubmission(user_id).submission
+                let user = module.exports.getSubmission(user_id).submission
                 return `${user.name} has already submitted`
             }
 
             // get the user
             try {
-                var dm = await bot.getDMChannel(user_id)
-                var name = dm.recipient.username
+                let dm = await bot.getDMChannel(user_id)
+                let name = dm.recipient.username
                 dm.createMessage(
                     'A submission in your name has been added by Moderators'
                 )
@@ -1275,7 +1275,7 @@ module.exports = {
             // notify the user that their submission was deleted
             var result = 'Deleted Submission'
             try {
-                var dm = await bot.getDMChannel(deleted.id)
+                let dm = await bot.getDMChannel(deleted.id)
                 dm.createMessage(
                     'Your submission has been removed by a Moderator'
                 )
@@ -1309,7 +1309,7 @@ module.exports = {
         full_descrip:
             'Usage: `$submitfile <submission_number> <url>`\nSets the stored file (m64 or st) to the url provided. The user will be notified that their files are changed. To upload files for someone new, use `$addSubmission` first.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
             if (Submissions.length == 0)
                 return 'There are no submissions to edit'
@@ -1335,7 +1335,7 @@ module.exports = {
                     '] ' +
                     args[0]
                 try {
-                    var dm = await bot.getDMChannel(user.id)
+                    let dm = await bot.getDMChannel(user.id)
                     dm.createMessage(
                         filetype +
                             ' submitted on your behalf by Moderators ' +
@@ -1435,7 +1435,7 @@ module.exports = {
         full_descrip:
             'Usage: `$setserver [guild_id]`\nSets the server that has the roles to give out. If no ID is specified it will use the ID of the channel the command was called from. This assumes that it is given a valid server ID.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
 
             if (args.length == 0) args = [msg.channel.guild.id]
@@ -1475,7 +1475,7 @@ module.exports = {
             var result = ''
 
             try {
-                var self = await bot.getSelf()
+                let self = await bot.getSelf()
                 await msg.channel.guild.addMemberRole(self.id, role, reason)
                 await msg.channel.guild.removeMemberRole(self.id, role, reason)
                 result += 'Role set to `' + role + '`'
@@ -1515,7 +1515,7 @@ module.exports = {
             var result = ''
 
             try {
-                var self = await bot.getSelf()
+                let self = await bot.getSelf()
                 await msg.channel.guild.addMemberRole(self.id, role, reason)
                 await msg.channel.guild.removeMemberRole(self.id, role, reason)
                 result += 'Role set to `' + role + '`'
@@ -1545,7 +1545,7 @@ module.exports = {
         full_descrip:
             'Usage: `$setfeed <channel>`\nSets the default channel to send the submission message to. This does not ensure that the channel is a valid text channel that the bot can send messages to',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
 
             if (args.length == 0) args = ['']
@@ -1592,8 +1592,8 @@ module.exports = {
             var message_id = args[1]
 
             try {
-                var self = await bot.getSelf()
-                var message = await bot.getMessage(channel_id, message_id)
+                let self = await bot.getSelf()
+                let message = await bot.getMessage(channel_id, message_id)
 
                 if (message.author.id != self.id)
                     return 'Invalid user. Message must be sent by me'
@@ -1632,8 +1632,8 @@ module.exports = {
                 return 'ID already registered as a host'
 
             try {
-                var dm = await bot.getDMChannel(user_id)
-                var warning =
+                let dm = await bot.getDMChannel(user_id)
+                let warning =
                     'You have been set as the recipient of submission updates for the SM64 TAS Competition. '
                 warning +=
                     "If you believe this to be an error please contact the bot's owner"
@@ -1661,15 +1661,15 @@ module.exports = {
             if (args.length == 0) return 'Not enough arguments: `<user_id>`'
             var user_id = args[0]
 
-            for (var i = 0; i < Host_IDs.length; i++) {
+            for (let i = 0; i < Host_IDs.length; i++) {
                 if (Host_IDs[i] == user_id) {
-                    var id = Host_IDs.splice(i, 1)[0]
+                    let id = Host_IDs.splice(i, 1)[0]
                     delete IgnoreUpdates[id]
                     module.exports.save()
 
                     try {
-                        var dm = await bot.getDMChannel(id)
-                        var warning =
+                        let dm = await bot.getDMChannel(id)
+                        let warning =
                             'You are no longer set as the recipient of submission updates for the SM64 TAS Competition. '
                         warning +=
                             "If you believe this to be an error please contact the bot's owner"
@@ -1794,8 +1794,8 @@ module.exports = {
                     modupdate + ` [disqualified by ${msg.author.username}]`,
                     `DQ`
                 )
-                return modupdate
             }
+            return modupdate
         },
     },
 
@@ -1837,8 +1837,8 @@ module.exports = {
                     result + ` [undisqualified by ${msg.author.username}]`,
                     `DQ`
                 )
-                return result
             }
+            return result
         },
     },
 
@@ -1860,7 +1860,7 @@ module.exports = {
                 if (args.length == 0)
                     return "Not Enough Arguments: `$get <Submission_Number or 'all' or 'entry name'>`"
 
-                var dm = await bot.getDMChannel(msg.author.id)
+                let dm = await bot.getDMChannel(msg.author.id)
                 if (args[0].toLowerCase() == 'all') {
                     if (!miscfuncs.isDM(msg))
                         bot.createMessage(
@@ -1934,7 +1934,7 @@ module.exports = {
                     return "Invalid Argument: `$get <Submission_Number or 'all' or 'entry name'>`"
                 }
 
-                var num = getSubmissionNumber(args[0])
+                let num = getSubmissionNumber(args[0])
                 if (num.message.length) return num.message
                 num = num.number - 1 // old system: submission = num.dq ? DQs[num.number-1] : Submissions[num.number - 1]
                 let result = await get_submission_text_and_files(
@@ -2002,7 +2002,7 @@ module.exports = {
             text += 'cd ".."\n'
         }
 
-        for (var i = 0; i < Submissions.length; i++) {
+        for (let i = 0; i < Submissions.length; i++) {
             await addSubmission(Submissions[i], false)
         }
         DQs.forEach((s) => addSubmission(s, true))
@@ -2036,7 +2036,7 @@ module.exports = {
         })
         archives[0].pipe(outputs[0])
 
-        for (var i = 0; i < Submissions.length; i++) {
+        for (let i = 0; i < Submissions.length; i++) {
             // create a new zip
             if (submissions_in_zip == submissions_per_zip) {
                 zips.push(`${FilePrefix}${Task}_${zips.length}.zip`)
@@ -2158,7 +2158,7 @@ module.exports = {
             info += `Auto-timing: ${AllowAutoTime ? `enabled` : `disabled`}\n`
             info += `Teams: ${TeamTask ? `enabled` : `disabled`}\n`
             try {
-                var message = await bot.getMessage(Channel_ID, Message_IDs[0])
+                let message = await bot.getMessage(Channel_ID, Message_IDs[0])
                 info += `Submissions Message URL: https://discordapp.com/channels/${message.channel.guild.id}/${message.channel.id}/${message.id}\n`
             } catch (e) {
                 info += `Invalid Current Submissions Message: Could not retrieve URL\n`
@@ -2169,9 +2169,9 @@ module.exports = {
             info += Host_IDs.length
                 ? `\n**Update Recipients**\n`
                 : `\nNo users are set to receive submission updates\n`
-            for (var i = 0; i < Host_IDs.length; i++) {
+            for (let i = 0; i < Host_IDs.length; i++) {
                 try {
-                    var dm = await bot.getDMChannel(Host_IDs[i])
+                    let dm = await bot.getDMChannel(Host_IDs[i])
                     info += `• ${dm.recipient.username} \`(${Host_IDs[i]})\`\n`
                 } catch (e) {
                     console.log(
@@ -2205,7 +2205,7 @@ module.exports = {
         full_descrip:
             'Usage: `$setname <new name here>`\nChange your name in the submissions/filenames. Spaces and special characters are allowed. Moderators are able to remove access if this command is abused. Passing no arguments will reset it to your discord id.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             var user_id = msg.author.id
 
             if (
@@ -2234,7 +2234,7 @@ module.exports = {
         hidden: true,
         function: async function (bot, msg, args) {
             try {
-                var dm = await bot.getDMChannel(msg.author.id)
+                let dm = await bot.getDMChannel(msg.author.id)
                 let result = await module.exports.getSubmisssionStatus(
                     bot,
                     msg.author.id
@@ -2329,7 +2329,7 @@ module.exports = {
             if (notAllowed(msg)) return
 
             try {
-                var dm = await bot.getDMChannel(msg.author.id)
+                let dm = await bot.getDMChannel(msg.author.id)
                 dm.createMessage(TaskMessage)
             } catch (e) {
                 return `Could not DM preview\`\`\`${e}\`\`\``
@@ -2344,12 +2344,12 @@ module.exports = {
         full_descrip:
             "See the IDs of people who have started and completed the timed task. This command has been left in after testing so it isn't fancy. If the object exceedes 2000 characters it will send multiple messages.",
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
             var result = `${JSON.stringify(TimedTaskStatus)}` // + 3 \` on either side = 2000 - 6 = 1994 chars
             if (result.length + 6 < 2000) return `\`\`\`${result}\`\`\``
             var msgs = result.match(/.{1,1994}/g)
-            for (var i = 0; i < msgs.length; i++) {
+            for (let i = 0; i < msgs.length; i++) {
                 msg.channel.createMessage(`\`\`\`${msgs[i]}\`\`\``)
             }
         },
@@ -2464,7 +2464,7 @@ module.exports = {
         module.exports.save()
 
         try {
-            var dm = await bot.getDMChannel(id)
+            let dm = await bot.getDMChannel(id)
             dm.createMessage(
                 `Your Time is up! Thank you for participating in Task ${Task}. To see your final files use \`$status\`. `
             )
@@ -2538,7 +2538,7 @@ module.exports = {
     // changes the m64 of a submission
     update_m64: function (user_id, new_m64, filesize) {
         var partner_id = completedTeam(user_id) ? Teams[user_id] : ''
-        for (var i = 0; i < Submissions.length; i++) {
+        for (let i = 0; i < Submissions.length; i++) {
             if (
                 Submissions[i].id == user_id ||
                 Submissions[i].id == partner_id
@@ -2553,7 +2553,7 @@ module.exports = {
     // changes the st of a submission
     update_st: function (user_id, new_st, filesize) {
         var partner_id = completedTeam(user_id) ? Teams[user_id] : ''
-        for (var i = 0; i < Submissions.length; i++) {
+        for (let i = 0; i < Submissions.length; i++) {
             if (
                 Submissions[i].id == user_id ||
                 Submissions[i].id == partner_id
@@ -2567,7 +2567,7 @@ module.exports = {
 
     // changes the name of a submission
     update_name: function (user_id, new_name) {
-        for (var i = 0; i < Submissions.length; i++) {
+        for (let i = 0; i < Submissions.length; i++) {
             if (Submissions[i].id == user_id) {
                 Submissions[i].name = new_name
             }
@@ -2577,13 +2577,16 @@ module.exports = {
 
     // returns whether an m64 and/or st have been submitted by a user
     getSubmisssionStatus: async function (bot, user_id) {
+        let m64 = false
+        let st = false
+        let submission = {}
         if (!module.exports.hasSubmitted(user_id)) {
-            var m64 = false
-            var st = false
+            m64 = false
+            st = false
         } else {
-            var submission = module.exports.getSubmission(user_id).submission
-            var m64 = submission.m64.length != 0
-            var st = submission.st.length != 0
+            submission = module.exports.getSubmission(user_id).submission
+            m64 = submission.m64.length != 0
+            st = submission.st.length != 0
         }
         var msg = 'Submission Status: '
         // TODO: loop through REQUIRED_FILES correctly
@@ -2649,7 +2652,7 @@ module.exports = {
     // returns the submission object and it's ID given an id
     getSubmission: function (user_id) {
         var partner_id = completedTeam(user_id) ? Teams[user_id] : ''
-        for (var i = 0; i < Submissions.length; i++) {
+        for (let i = 0; i < Submissions.length; i++) {
             if (
                 Submissions[i].id == user_id ||
                 Submissions[i].id == partner_id
@@ -2657,7 +2660,7 @@ module.exports = {
                 return { submission: Submissions[i], id: i + 1 }
             }
         }
-        for (var i = 0; i < DQs.length; i++) {
+        for (let i = 0; i < DQs.length; i++) {
             if (DQs[i].id == user_id || DQs[i].id == partner_id) {
                 return { submission: DQs[i], id: `DQ${i + 1}` }
             }
@@ -2737,7 +2740,7 @@ module.exports = {
             )
         TimedTaskStatus.startTimes = []
         while (data.timedtaskstatus.startTimes.length > 0) {
-            var info = data.timedtaskstatus.startTimes.shift()
+            let info = data.timedtaskstatus.startTimes.shift()
             TimedTaskStatus.startTimes.push([info[0], parseDate(info[1])])
         }
         while (data.submissions.length > 0)
@@ -2807,10 +2810,10 @@ module.exports = {
     },
 
     // removes the roles from everyone that submitted
-    clearRoles: async function (bot) {
+    clearRoles: function (bot) {
         if (SubmittedRole == '' || RoleStyle == `DISABLED`)
             return 'Roles Disabled (no roles removed). '
-        var clear = async function (user) {
+        async function clear(user) {
             try {
                 await bot.removeGuildMemberRole(
                     Guild,
@@ -2848,7 +2851,7 @@ module.exports = {
     },
 
     // this is meant to parse every message and sort submissions
-    filterSubmissions: async function (bot, msg) {
+    filterSubmissions: function (bot, msg) {
         if (!miscfuncs.isDM(msg)) return
         if (msg.content.startsWith('$')) return // ignore commands
 
@@ -3028,7 +3031,7 @@ module.exports = {
     },
 
     addTimeRemainingWarnings: function (bot, channel) {
-        for (var i = 0; i < TimeRemainingWarnings.length; i++) {
+        for (let i = 0; i < TimeRemainingWarnings.length; i++) {
             Announcement.DelayFunction(
                 bot,
                 `COMP-WARN ${channel} ${i}`,
@@ -3067,7 +3070,7 @@ module.exports = {
 
             TimeRemainingWarnings = []
 
-            for (var i = 0; i < args.length; i++) {
+            for (let i = 0; i < args.length; i++) {
                 if (!isNaN(args[i])) {
                     TimeRemainingWarnings.push(Math.floor(Number(args[i])))
                 }
@@ -3088,7 +3091,7 @@ module.exports = {
         full_descrip:
             'Usage: \`$timeremaining\`\nSee how much time is left for the current timed task. This only works if you started the task with \`$requesttask\`. Although it provides a seconds count, it is likely only accurate up to the minute give or take 1. If no task is currently taking place, the command call is ignored',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (!AllowSubmissions)
                 return `There is no task running right now (0 minutes remaining)`
             if (TimedTaskStatus.completed.includes(msg.author.id))
@@ -3150,14 +3153,15 @@ module.exports = {
             if (num.message.length) return num.message
             if (isNaN(VIs)) return `Invalid Argument: VIs must be a number`
 
+            let submission = {}
             if (num.dq) {
                 DQs[num.number - 1].time = VIs
                 DQs[num.number - 1].info = info
-                var submission = DQs[num.number - 1]
+                submission = DQs[num.number - 1]
             } else {
                 Submissions[num.number - 1].time = VIs
                 Submissions[num.number - 1].info = info
-                var submission = Submissions[num.number - 1]
+                submission = Submissions[num.number - 1]
             }
             module.exports.save()
 
@@ -3166,7 +3170,7 @@ module.exports = {
             result += `Updated by ${msg.author.username}`
 
             try {
-                var dm = await bot.getDMChannel(submission.id)
+                let dm = await bot.getDMChannel(submission.id)
                 dm.createMessage(
                     `Your time has been updated: ${getTimeString(VIs)} ${info}`
                 )
@@ -3184,12 +3188,12 @@ module.exports = {
         short_descrip: `Time a submission via Mupen-lua`,
         full_descrip: `Usage: \`$autotime <submission_number or 'all' or 'entry name'>\`\nAttempts to time the specified submission by playing the tas in Mupen through a timing lua script. If only 1 run is autotimed, this will disable the default time limit (runs longer than 3min can still be timed with the script through this command). This will DM participants if their time changes.\n\n**WARNING** this will respond with the time of the submission (do NOT use this in a public channel)`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return `Missing permissions`
             if (args.length < 1)
                 return `Missing Argument: \`$autotime <submission_number or 'all' or 'entry name'>\``
             if (args[0] == 'all') {
-                for (var i = 0; i < Submissions.length; ++i) {
+                for (let i = 0; i < Submissions.length; ++i) {
                     if (
                         Submissions[i].id.substr(
                             Submissions[i].id.length - 1,
@@ -3215,7 +3219,7 @@ module.exports = {
                     return `Invalid Argument: \`$autotime <submission_number or 'all' or 'entry name'>\``
                 }
             } else {
-                var submission_number = getSubmissionNumber(args[0])
+                let submission_number = getSubmissionNumber(args[0])
                 submission_number = submission_number.number - 1 // assuming non DQ since I need to rework that anyways
             }
             var pos = AutoTimeEntry(
@@ -3235,7 +3239,7 @@ module.exports = {
         short_descrip: `enable timing on submission`,
         full_descrip: `Usage: \`$toggleautotime\`\nThis toggles (turns on/off) auto timing as soon as competitors submit m64s. Use this command to stop the bot from timing runs with an outdated script (while still allowing people to submit). This does not disable \`$AutoTime\``,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
             AllowAutoTime = !AllowAutoTime
             module.exports.save()
@@ -3263,7 +3267,7 @@ module.exports = {
             ) {
                 if (get_ghost_name == null) get_ghost_name = true
                 try {
-                    var dm = await bot.getDMChannel(msg.author.id)
+                    let dm = await bot.getDMChannel(msg.author.id)
                 } catch (e) {
                     return `Cannot send DM. No ghost data will be generated: ${e}`
                 }
@@ -3470,8 +3474,8 @@ module.exports = {
                 }
             })
 
-            for (var i = 0; i < timed.length; i++) {
-                var line = `${placements[i]}${ordinal_suffix(placements[i])}. `
+            for (let i = 0; i < timed.length; i++) {
+                let line = `${placements[i]}${ordinal_suffix(placements[i])}. `
                 line +=
                     `${await submissionName(bot, timed[i].id)} ${getTimeString(timed[i].time)} ${timed[i].info}`.trim()
                 if (placements[i] <= num_bold) line = `**${line}**`
@@ -3536,8 +3540,8 @@ module.exports = {
             'Usage: `$broadcast <msg...>`\nSend a message to everyone who currently has a submission in the ongoing TAS competition. Even if submissions are not being accepted, this will send a message to any recorded submissions.',
         hidden: true,
         function: function (bot, msg, args) {
-            return // untested
-            if (notAllowed(msg)) return
+            return // untested, needs to respect rate limits
+            /*if (notAllowed(msg)) return
             if (args.length == 0) return `Error: No message provided.`
             if (Submissions.length == 0)
                 return `Error: there are no entrants to send the message to`
@@ -3557,7 +3561,7 @@ module.exports = {
                 'The following message is being sent to all entrants: ```' +
                 ' '.join(args) +
                 '```'
-            )
+            )*/
         },
     },
     // I should move some functions from m64_editor.js to save.js because they are applicable here too for saving the file
@@ -3653,7 +3657,7 @@ module.exports = {
                             fs.renameSync(paths[2], LUAPATH + 'Conditions.lua')
                         }
                     },
-                    async (TLE, MISMATCH_SETTINGS) => {
+                    (TLE, MISMATCH_SETTINGS) => {
                         let result = ''
                         if (TLE) {
                             result =
@@ -3755,7 +3759,7 @@ module.exports = {
                 delete Teams[[msg.author.id, Teams[msg.author.id]]] // remove old team name if it exists
                 delete Teams[[Teams[msg.author.id], msg.author.id]]
                 try {
-                    var old_partner_dm = await bot.getDMChannel(
+                    let old_partner_dm = await bot.getDMChannel(
                         Teams[msg.author.id]
                     )
                     old_partner_dm.createMessage(
@@ -3776,7 +3780,7 @@ module.exports = {
             ) {
                 // just completed the team
                 try {
-                    var partner_dm = await bot.getDMChannel(partner.id)
+                    let partner_dm = await bot.getDMChannel(partner.id)
                     partner_dm.createMessage(
                         msg.author.username + ` has confirmed your team`
                     )
@@ -3834,7 +3838,7 @@ module.exports = {
             updateSubmissionMessage(bot)
             module.exports.save()
             try {
-                var partner_dm = await bot.getDMChannel(Teams[msg.author.id])
+                let partner_dm = await bot.getDMChannel(Teams[msg.author.id])
                 await partner_dm.createMessage(
                     `Your partner has updated your team name to \`${args.join(' ')}\``
                 )
@@ -3856,7 +3860,7 @@ module.exports = {
         full_descrip:
             'Usage: \`$getcomplog\`\nReturns a text file containing a log of various competition-related actions. Each line will have a timestamp, user_id, and an action description.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (notAllowed(msg)) return
             let result = ''
             COMPLOG.map((data) => {

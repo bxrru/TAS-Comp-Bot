@@ -1,4 +1,4 @@
-const fs = require('fs')
+const fs = require('node:fs')
 const request = require('request')
 const LOG_LOADS = false
 var SAVE_PATH = './saves'
@@ -53,8 +53,8 @@ module.exports = {
     readObject: function (filename) {
         try {
             if (!filename.toUpperCase().endsWith('.JSON')) filename += '.json'
-            var data = fs.readFileSync(SAVE_PATH + '/' + filename)
-            var obj = JSON.parse(data)
+            let data = fs.readFileSync(SAVE_PATH + '/' + filename)
+            let obj = JSON.parse(data)
             if (LOG_LOADS) console.log(`${filename} loaded`)
             return obj
         } catch (err) {

@@ -4,12 +4,12 @@ const chrono = require('chrono-node')
 const save = require('./save.js')
 const chat = require('./chatcommands.js')
 
-var Announcements = [] // {id, channel, interval, time, message, user}
-var Timers = [] // {id, timer}
+let Announcements = [] // {id, channel, interval, time, message, user}
+let Timers = [] // {id, timer}
 
 // delays for repeated announcements
-var Delays = {}
-var DefaultDelays = {
+let Delays = {}
+const DefaultDelays = {
     once: 0,
     daily: 86400000,
     weekly: 604800000,
@@ -18,7 +18,7 @@ var DefaultDelays = {
 
 // gets a new unique ID
 function NewID() {
-    var id = Announcements.length // arbitrary start point
+    let id = Announcements.length // arbitrary start point
     while (Announcements.filter((a) => a.id == id).length) id++ // slow
     return id
 }
@@ -34,7 +34,7 @@ module.exports = {
         full_descrip:
             'Sets a message that will automatically be sent to the specified channel at the given time and date. Usage: `$acadd <channel> <interval> "message" date and time`. To use quotations within the announcement type \`\\"\`. Otherwise, everything between the first two quotations will be used. Everything after the last quotation will be interpreted as a time and date. To see a list of intervals use `$acinterval`. To send it as a DM, put `DM` before the user id without a space. Ex: `$acadd DM532974459267710987 once "Hi there!" at 4:20pm est tomorrow`',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (msg.InternalCall == undefined && !users.hasCmdAccess(msg))
                 return
 
@@ -44,16 +44,16 @@ module.exports = {
             if (Delays[args[1]] === undefined)
                 return 'Unknown interval. For a list of supported intervals use `$acinterval`'
 
-            var text = args.slice(2, args.length).join(' ')
-            var text = module.exports.getMessage(text)
+            let text = args.slice(2, args.length).join(' ')
+            text = module.exports.getMessage(text)
             if (text[0].length == 0 && msg.InternalCall == undefined)
                 return `Invalid Argument: Message cannot be empty`
 
             if (text[1].length == 0)
                 return `No time or date specified: \`$addac <channel> <interval> "message" date and time\``
-            var date = chrono.parseDate(text[1])
+            let date = chrono.parseDate(text[1])
 
-            var announcement = {
+            let announcement = {
                 id: NewID(),
                 channel: chat.chooseChannel(args[0]),
                 interval: Delays[args[1]],
@@ -62,8 +62,8 @@ module.exports = {
                 user: msg.author,
             }
 
-            var now = new Date()
-            var delay = date - now
+            let now = new Date()
+            let delay = date - now
 
             if (delay < 0) {
                 return `Specified time \`${date.toString()}\` has already passed (\`${now.toString()}\`). Try a more specific date and time.`
@@ -82,11 +82,11 @@ module.exports = {
     // getMessage(`test "Please say \\\"Hello\\\"" everything else`)
     // = [`Please say "Hello"`, ` everything else`]
     getMessage: function (text) {
-        var result = [``, ``]
-        var counter = 0
+        let result = [``, ``]
+        let counter = 0
         text = text.split('')
 
-        for (var i = 0; i < text.length; i++) {
+        for (let i = 0; i < text.length; i++) {
             if (counter == 0 && text[i] == `"`) {
                 counter++
             } else if (counter == 1) {
@@ -138,7 +138,7 @@ module.exports = {
             // try to send the announcement
             // determine if it's a DM or not
             if (announcement.channel.substr(0, 2).toUpperCase() == 'DM') {
-                var dm_ac = await bot.getDMChannel(
+                let dm_ac = await bot.getDMChannel(
                     announcement.channel.substr(2)
                 )
                 await dm_ac.createMessage(announcement.message)
@@ -158,7 +158,7 @@ module.exports = {
             announcement.interval = 0 // remove it
             try {
                 // try to notify the user that it failed
-                var dm = await bot.getDMChannel(announcement.user.id)
+                let dm = await bot.getDMChannel(announcement.user.id)
                 dm.createMessage(
                     `Failed Announcement #${announcement.id}\n\`\`\`${e}\`\`\``
                 )
@@ -177,7 +177,7 @@ module.exports = {
             module.exports.RemoveAnnouncement(announcement.id)
         } else {
             // adjust timer
-            for (var i = 0; i < Timers.length; i++) {
+            for (let i = 0; i < Timers.length; i++) {
                 if (Timers[i].id == announcement.id) {
                     // clear the current one
                     clearTimeout(Timers[i].timer)
@@ -190,9 +190,9 @@ module.exports = {
             }
 
             // adjust time listed in announcement
-            for (var i = 0; i < Announcements.length; i++) {
+            for (let i = 0; i < Announcements.length; i++) {
                 if (Announcements[i].id == announcement.id) {
-                    var new_time = new Date(Announcements[i].time).getTime()
+                    let new_time = new Date(Announcements[i].time).getTime()
                     Announcements[i].time = new Date(new_time).toUTCString()
                 }
             }
@@ -204,7 +204,7 @@ module.exports = {
     // returns the removed announcement given it's ID
     RemoveAnnouncement: function (id) {
         // remove the Timer
-        for (var i = 0; i < Timers.length; i++) {
+        for (let i = 0; i < Timers.length; i++) {
             if (Timers[i].id == id) {
                 clearTimeout(Timers[i].timer)
                 Timers.splice(i, 1)
@@ -213,7 +213,7 @@ module.exports = {
 
         // remove the Announcement
         var a = false
-        for (var i = 0; i < Announcements.length; i++) {
+        for (let i = 0; i < Announcements.length; i++) {
             if (Announcements[i].id == id) a = Announcements.splice(i, 1)[0]
         }
 
@@ -255,7 +255,7 @@ module.exports = {
                 )
                 await users.getOwners().forEach(async (id) => {
                     try {
-                        var dm = await bot.getDMChannel(id)
+                        let dm = await bot.getDMChannel(id)
                         dm.createMessage(
                             `**[ERROR]** Internal announcement call missed: \`\`\`key = \"${announcement.InternalCall}\"\ntime: ${announcement.time}\`\`\``
                         )
@@ -267,7 +267,7 @@ module.exports = {
                 console.log('Announcement Missed', announcement)
                 try {
                     // message the user to tell them that the announcement was missed
-                    var dm = await bot.getDMChannel(announcement.user.id)
+                    let dm = await bot.getDMChannel(announcement.user.id)
                     dm.createMessage(
                         `Announcement Missed \`\`\`Channel: #${bot.getChannel(announcement.channel).name} (${announcement.channel})\nTime: ${announcement.time}\nMessage: ${announcement.message}\`\`\``
                     )
@@ -369,7 +369,7 @@ module.exports = {
                 if (a.InternalCall != undefined) {
                     entry = `${a.id} | Key = ${a.InternalCall}\n`
                 } else {
-                    var entry = `${a.id} | `
+                    let entry = `${a.id} | `
                     entry += `${a.message.substr(0, PreviewLength) + (a.message.length < PreviewLength ? '' : '...')} | `
 
                     if (a.channel.substr(0, 2).toUpperCase() == 'DM') {
@@ -455,7 +455,7 @@ module.exports = {
             if (msg.author.id == a.user.id) return result
 
             try {
-                var dm = await bot.getDMChannel(a.user.id)
+                let dm = await bot.getDMChannel(a.user.id)
                 dm.createMessage(result)
             } catch (e) {
                 console.log(
@@ -571,16 +571,16 @@ module.exports = {
             return // these keys will not be used
         } else if (key == 'COMP-END') {
             // end the whole thing
-            var comp = require('./comp.js')
+            let comp = require('./comp.js')
             await comp.stopSubmissions.function(bot, { author: 'BOT' }, [true])
         } else if (key.split(' ')[0] == 'COMP-END') {
-            var comp = require('./comp.js')
+            let comp = require('./comp.js')
             await comp.endTimedTask(bot, key.split(' ')[1], true)
         } else if (key == 'COMP-RELEASE') {
-            var comp = require('./comp.js')
+            let comp = require('./comp.js')
             await comp.releaseTask(bot)
         } else if (key.split(' ')[0] == 'COMP-WARN') {
-            var comp = require('./comp.js')
+            let comp = require('./comp.js')
             await comp.timerWarning(bot, key.split(' ')[1], key.split(' ')[2]) // pass channel id, warning id
         }
     },
@@ -601,7 +601,7 @@ module.exports = {
     // search for a specific key to end that announcement
     KillDelayedFunction: function (key, deleteAll) {
         if (deleteAll == undefined) deleteAll = false
-        for (var i = 0; i < Announcements.length; i++) {
+        for (let i = 0; i < Announcements.length; i++) {
             if (deleteAll && Announcements[i].InternalCall.startsWith(key)) {
                 // startsWith instead of precisely equal
                 module.exports.RemoveAnnouncement(Announcements[i].id)

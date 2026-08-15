@@ -3,7 +3,7 @@ console.log('Starting main.js...')
 var NAME = 'BOT'
 
 // other js files
-var fs = require('fs')
+var fs = require('node:fs')
 const Eris = require('eris-additions')(require('eris'))
 
 const miscfuncs = require('./miscfuncs.js')
@@ -51,7 +51,7 @@ bot.on('ready', async () => {
     connected_msg = (resuming == -1 ? 'C' : 'Rec') + connected_msg
     if (fs.existsSync(`./crash.log`)) {
         try {
-            var err = fs.readFileSync(`./crash.log`)
+            let err = fs.readFileSync(`./crash.log`)
             bot.createMessage(chat.chooseChannel('bot_dms'), connected_msg, {
                 file: err,
                 name: 'crash.log',
@@ -142,7 +142,7 @@ function createHelpCommand(mod) {
         // split up to prevent passing the discord limit and having walls of text
         if (msg.length > 1000) {
             footer2 = `Use \`$${mod.short_name}${cmd_number + 1}\` for more commands. `
-            var message = header + msg + footer + footer2
+            let message = header + msg + footer + footer2
             if (cmd_number == 1) {
                 addCommand(
                     mod.short_name,
@@ -198,7 +198,7 @@ function loadAllModules() {
 }
 
 // message handle
-bot.on('messageCreate', async (msg) => {
+bot.on('messageCreate', (msg) => {
     if (msg.content.indexOf('😃') != -1)
         bot.addMessageReaction(msg.channel.id, msg.id, '✈') // it's a meme
 
@@ -220,7 +220,7 @@ bot.on('messageCreate', async (msg) => {
 
     // Redirect Direct Messages that are sent to the bot
     if (miscfuncs.isDM(msg)) {
-        var message = `[${msg.author.username} (${msg.author.id})]: ${msg.content}`
+        let message = `[${msg.author.username} (${msg.author.id})]: ${msg.content}`
         bot.createMessage(chat.chooseChannel('bot_dms'), message).catch(
             () => {}
         ) // error = cannot access this channel (ignore)
@@ -264,8 +264,8 @@ bot.on('messageReactionAdd', async (msg, emoji, userID) => {
         flagcodes.includes(emoji.name.substr(0, 2)) &&
         flagcodes.includes(emoji.name.substr(2, 4))
     ) {
-        var user = await users.getUser(bot, userID)
-        var url = `https://discordapp.com/channels/${msg.channel.guild.id}/${msg.channel.id}/${msg.id}`
+        let user = await users.getUser(bot, userID)
+        let url = `https://discordapp.com/channels/${msg.channel.guild.id}/${msg.channel.id}/${msg.id}`
         if (chat.chooseChannel(`flaglog`) != `flaglog`)
             bot.createMessage(
                 chat.chooseChannel(`flaglog`),

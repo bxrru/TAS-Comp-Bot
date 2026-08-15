@@ -25,7 +25,7 @@ function Init(msg) {
     Output = ''
     Cell = 0
     Mem = []
-    for (var i = 0; i < MEM_LENGTH; i++) Mem.push(0)
+    for (let i = 0; i < MEM_LENGTH; i++) Mem.push(0)
 }
 
 async function Apply_Command(bot, msg, c, silent) {

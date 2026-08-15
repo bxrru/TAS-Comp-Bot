@@ -19,14 +19,14 @@ module.exports = {
         ]
         return k >= 33 ? 75 : points[k]
         // old scoring system
-        x = (n - k + 1) / n
+        /*x = (n - k + 1) / n
         points =
             15 * x * x * x * x * x * x +
             10 * x * x * x * x +
             5 * x * x +
             14 * x +
             6
-        return parseFloat(points.toFixed(1))
+        return parseFloat(points.toFixed(1))*/
     },
 
     // a = ["1. Name time miscinfo"]
@@ -36,7 +36,7 @@ module.exports = {
         var name, place, points, coop, participants
 
         // remove DQs, empty lines, and *s
-        for (var i = a.length - 1; i >= 0; i--) {
+        for (let i = a.length - 1; i >= 0; i--) {
             while (a[i].split('').includes('*')) a[i] = a[i].replace('*', '')
             if (
                 a[i] == '' ||
@@ -49,7 +49,7 @@ module.exports = {
 
         participants = a.length
 
-        for (var i = 0; i < participants; i++) {
+        for (let i = 0; i < participants; i++) {
             // assumes there is a space between place and name
             name = a[i].split(' ')[1]
 
@@ -118,12 +118,12 @@ module.exports = {
         var name = ''
         var points = 0.0
 
-        for (var i = 0; i < a.length; i++) {
+        for (let i = 0; i < a.length; i++) {
             name = a[i][1]
             points = parseFloat(a[i][2])
 
             // check if the player appears in both
-            for (var j = 0; j < b.length; j++) {
+            for (let j = 0; j < b.length; j++) {
                 if (name.toUpperCase() == b[j][1].toUpperCase()) {
                     // remove the duplicate from b as to not check them again
                     points += parseFloat(b.splice(j, 1)[0][2])
@@ -136,7 +136,7 @@ module.exports = {
         }
 
         // any remaining players only in b
-        for (var i = 0; i < b.length; i++) {
+        for (let i = 0; i < b.length; i++) {
             NewScore.push([0, b[i][1], parseFloat(b[i][2].toFixed(1))])
         }
 
@@ -157,7 +157,7 @@ module.exports = {
 
         a[0][0] = 1
 
-        for (var i = 1; i < a.length; i++) {
+        for (let i = 1; i < a.length; i++) {
             // same points as previous => same place as previous
             if (a[i][2] == a[i - 1][2]) {
                 a[i][0] = a[i - 1][0]
@@ -197,7 +197,7 @@ module.exports = {
         var name = ''
         var points = 0.0
 
-        for (var i = 0; i < a.length; i++) {
+        for (let i = 0; i < a.length; i++) {
             place = a[i][0]
             name = a[i][1]
             points = a[i][2]
@@ -209,8 +209,8 @@ module.exports = {
 
             // Checks last character of place => 1st, 2nd, 3rd, 4th...
             // Checks 2nd last character for 11th, 12th, 13th, 111th...
-            var last = place.toString().split('')[place.toString().length - 1]
-            var secondLast = place.toString().split('')[
+            let last = place.toString().split('')[place.toString().length - 1]
+            let secondLast = place.toString().split('')[
                 place.toString().length - 2
             ]
             switch (last) {
@@ -257,14 +257,14 @@ module.exports = {
             }
             this.setTask(this.getTask() + 1)
 
-            var pastScore = this.getScore()
+            let pastScore = this.getScore()
 
-            var results_s = resultsMessage.split('\n')
+            let results_s = resultsMessage.split('\n')
             results_s.splice(0, 2) // remove title and empty line
 
-            var results = this.resultsToScore(results_s)
+            let results = this.resultsToScore(results_s)
 
-            var newScore = this.addScores(pastScore, results)
+            let newScore = this.addScores(pastScore, results)
             newScore = this.sortScore(newScore)
 
             this.setScore(newScore)
@@ -272,9 +272,8 @@ module.exports = {
             msg = this.scoreToMessage(this.getScore(), this.getTask())
         } catch (e) {
             msg = 'Could not process results```' + e.toString() + '```'
-        } finally {
-            return msg
         }
+        return msg
     },
 
     changeName: function (oldName, newName) {
@@ -283,7 +282,7 @@ module.exports = {
             return 'No score found.'
         }
 
-        for (var i = 0; i < score.length; i++) {
+        for (let i = 0; i < score.length; i++) {
             if (score[i][1].toUpperCase() == oldName.toUpperCase()) {
                 score[i][1] = newName
                 return 'Changed ``' + oldName + '`` to ``' + newName + '``'
@@ -306,7 +305,7 @@ module.exports = {
             return '``<points>`` must be a float.'
         }
 
-        for (var i = 0; i < score.length; i++) {
+        for (let i = 0; i < score.length; i++) {
             if (score[i][1].toUpperCase() == name.toUpperCase()) {
                 oldpts = score[i][2].toFixed(1)
                 score[i][2] = parseFloat(num.toFixed(1))
@@ -334,7 +333,7 @@ module.exports = {
         var name = ''
         var points = 0.0
 
-        for (var i = 0; i < a.length; i++) {
+        for (let i = 0; i < a.length; i++) {
             place = parseInt(a[i].split(' ')[0])
             name = a[i].split(' ')[1]
             points = parseFloat(a[i].split(' ')[2])
@@ -356,9 +355,9 @@ module.exports = {
             return 'No score found.'
         }
 
-        for (var i = 0; i < score.length; i++) {
+        for (let i = 0; i < score.length; i++) {
             if (name.toUpperCase() == score[i][1].toUpperCase()) {
-                var line = score.splice(i, 1)
+                let line = score.splice(i, 1)
                 score = this.sortScore(score)
                 this.setScore(score)
 
@@ -390,9 +389,9 @@ module.exports = {
             return 'No score found.'
         }
 
-        for (var i = 0; i < score.length; i++) {
+        for (let i = 0; i < score.length; i++) {
             if (score[i][1].toUpperCase() == name1) {
-                for (var j = 0; j < score.length; j++) {
+                for (let j = 0; j < score.length; j++) {
                     if (score[j][1].toUpperCase() == name2) {
                         score[i][2] = (
                             parseFloat(score[i][2]) +
@@ -417,23 +416,23 @@ module.exports = {
         var msg = ''
 
         switch (action) {
-            case 'PRINT':
+            case 'PRINT': {
                 // optional task
-                var task = 0
+                let task = 0
                 if (args.length > 0) {
                     task = parseInt(args.shift())
                 }
 
                 // optional set
-                var set = ~~((task - 1) / this.setLength) + 1
+                let set = ~~((task - 1) / this.setLength) + 1
                 if (args.length > 0) {
                     set = parseInt(args.shift())
                 }
 
                 msg = this.scoreToMessage(this.getScore(), task, set, task != 0)
                 break
-
-            case 'FIND':
+            }
+            case 'FIND': {
                 if (args.length == 0) {
                     msg = 'Not enough arguments: ``<name>``'
                 } else {
@@ -442,13 +441,13 @@ module.exports = {
                         args[0] = user.username.replace(/ /g, '')
                     }
 
-                    var score = this.getScore()
-                    var found = false
-                    for (var i = 0; i < score.length; i++) {
+                    let score = this.getScore()
+                    let found = false
+                    for (let i = 0; i < score.length; i++) {
                         if (
                             score[i][1].toUpperCase() == args[0].toUpperCase()
                         ) {
-                            var a = [score[i][0], score[i][1], score[i][2]]
+                            let a = [score[i][0], score[i][1], score[i][2]]
                             msg =
                                 '``' +
                                 this.scoreToMessage([a], 0, 0, false) +
@@ -468,14 +467,14 @@ module.exports = {
                     }
                 }
                 break
-
-            case 'SET':
-                var results = this.scoreMessageToScore(args)
+            }
+            case 'SET': {
+                let results = this.scoreMessageToScore(args)
                 results = this.sortScore(results)
                 this.setScore(results)
                 msg = 'Score set.'
                 break
-
+            }
             case 'CLEAR':
                 this.setScore([])
                 msg = 'Score cleared.'
@@ -505,12 +504,12 @@ module.exports = {
                 }
                 break
 
-            case 'ADD':
+            case 'ADD': {
                 if (isNaN(parseFloat(args[1]))) {
                     args[1] = 0.0
                 } // default points to 0
 
-                var newScore = [[0, args[0], parseFloat(args[1])]]
+                let newScore = [[0, args[0], parseFloat(args[1])]]
                 newScore = this.addScores(this.getScore(), newScore)
 
                 newScore = this.sortScore(newScore)
@@ -518,7 +517,7 @@ module.exports = {
 
                 msg = 'Added ``' + args[0] + ': ' + args[1] + '``.'
                 break
-
+            }
             case 'REMOVE':
                 if (args.length == 0) {
                     msg = 'Not enough arguments: ``<name>``.'
@@ -573,22 +572,22 @@ module.exports = {
                     msg = 'Score length must be an integer.'
                 } else {
                     // get the score portion
-                    var score = []
-                    var scoreLength = args.shift()
-                    for (var i = 0; i < scoreLength; i++) {
+                    let score = []
+                    let scoreLength = args.shift()
+                    for (let i = 0; i < scoreLength; i++) {
                         score.push(args.shift())
                     }
                     score = this.scoreMessageToScore(score)
 
                     // any remaining results
-                    var results = []
-                    var remaining = args.length
-                    for (var i = 0; i < remaining; i++) {
+                    let results = []
+                    let remaining = args.length
+                    for (let i = 0; i < remaining; i++) {
                         results.push(args.shift())
                     }
                     results = this.resultsToScore(results)
 
-                    var newScore = this.addScores(score, results)
+                    let newScore = this.addScores(score, results)
                     newScore = this.sortScore(newScore)
                     msg = this.scoreToMessage(newScore, 0, 0, false)
                 }
@@ -606,7 +605,7 @@ module.exports = {
                 if (args.length == 0) {
                     msg = "Not enough arguments: `<'results' or 'score'>`"
                 } else {
-                    var option = args.shift().toUpperCase()
+                    let option = args.shift().toUpperCase()
 
                     if (args.length == 0) {
                         msg = 'Not enough arguments: `<channel_id>`'
@@ -681,7 +680,7 @@ module.exports = {
 
         // allow people to calculate scores and find themselves
         if (['FIND', 'CALCULATE'].includes(action) || users.hasCmdAccess(msg)) {
-            var params = []
+            let params = []
 
             if (action == 'SET' || action == 'CALCULATE') {
                 params = msg.content.split('\n')
@@ -738,7 +737,7 @@ module.exports = {
 
             if (action == 'INFO') {
                 try {
-                    var scoremsg = await bot.getMessage(
+                    let scoremsg = await bot.getMessage(
                         this.getScoreMsg()[0],
                         this.getScoreMsg()[1]
                     )
@@ -803,7 +802,7 @@ module.exports = {
             msg.channel.id == ResultsChannel &&
             msg.content.split('\n')[0].toUpperCase().indexOf('DQ') == -1
         ) {
-            var message = this.updateScore(msg.content)
+            let message = this.updateScore(msg.content)
             let score_message = await bot.createMessage(ScoreChannel, message)
             this.setScoreMsg(score_message.channel.id, score_message.id)
             this.save()

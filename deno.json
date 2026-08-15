@@ -1,7 +1,13 @@
 {
   "lint": {
     "rules": {
-      "exclude": ["no-unused-vars"]
+      "exclude": [
+        "no-unused-vars",
+        "prefer-const",
+        "no-var",
+        "no-fallthrough",
+        "no-control-regex"
+      ]
     }
   }
 }

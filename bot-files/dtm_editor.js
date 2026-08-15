@@ -1,6 +1,6 @@
 // dtm header information source: http://tasvideos.org/EmulatorResources/DTM.html
 
-var fs = require(`fs`)
+var fs = require(`node:fs`)
 var save = require(`./save.js`)
 
 const BitField = 0
@@ -263,7 +263,7 @@ function write(offset, file, input) {
 // check if a file has been fully downloaded
 function hasDownloaded(filename, filesize) {
     try {
-        var file = fs.readFileSync(save.getSavePath() + '/' + filename)
+        let file = fs.readFileSync(save.getSavePath() + '/' + filename)
         return file.byteLength == filesize
     } catch (e) {
         return false
@@ -279,7 +279,7 @@ async function onDownload(filename, filesize, callback) {
         }, 1000) // recursive call after 1s
     } else {
         try {
-            var file = fs.readFileSync(save.getSavePath() + `/` + filename)
+            let file = fs.readFileSync(save.getSavePath() + `/` + filename)
             await callback(file, filename)
         } catch (e) {
             console.log(e)
@@ -333,16 +333,16 @@ function changeControllerEncryption(dtm, decryption_key, encryption_key) {
 
     var i = 0x100 // controller data start point
     while (i + 1 < dtm.length) {
-        var isWiimote = dtm[i + 1] == 0xa1 // No false positives on 5.0
-        var poll_length = isWiimote ? dtm[i++] : 8 // assume gcc otherwise
+        let isWiimote = dtm[i + 1] == 0xa1 // No false positives on 5.0
+        let poll_length = isWiimote ? dtm[i++] : 8 // assume gcc otherwise
 
-        var poll = Buffer.alloc(poll_length)
+        let poll = Buffer.alloc(poll_length)
         dtm.copy(poll, 0, i, i + poll_length)
 
         if (isWiimote && poll_length == 0x17 && poll[1] == 0x37) {
             // nunchuk extension
-            var data_length = 6
-            var nunchuk_data = Buffer.alloc(data_length) // init buffer
+            let data_length = 6
+            let nunchuk_data = Buffer.alloc(data_length) // init buffer
             poll.copy(nunchuk_data, 0, poll_length - data_length) // copy encrypted data
             nunchuk_data = encrypt(
                 decrypt(nunchuk_data, decryption_key),
@@ -372,10 +372,10 @@ function removeGamecubeControllers(dtm) {
     var j = 0x100 // location in new file
 
     while (i + 1 < dtm.length) {
-        var isWiimote = dtm[i + 1] == 0xa1 // No false positives on 5.0
+        let isWiimote = dtm[i + 1] == 0xa1 // No false positives on 5.0
 
         if (isWiimote) {
-            var poll_length = dtm[i] + 1 // include the byte that has the length
+            let poll_length = dtm[i] + 1 // include the byte that has the length
             dtm.copy(new_dtm, j, i, i + poll_length)
             j += poll_length
             i += poll_length
@@ -437,7 +437,7 @@ function pollToControllerData(poll, extension_decryption_key) {
 
     if (obj.mode == 0x33) {
         // no nunchuk
-        for (var i = 0; i < 4; i++) {
+        for (let i = 0; i < 4; i++) {
             // 12 byte IR
             obj.ir[0] += poll[8 + i * 2] + ((poll[10 + i * 2] & 0x30) << 8)
             obj.ir[1] += poll[9 + i * 2] + ((poll[10 + i * 2] & 0xc0) << 8)
@@ -445,7 +445,7 @@ function pollToControllerData(poll, extension_decryption_key) {
         }
     } else if (obj.mode == 0x37) {
         // with nunchuk
-        for (var i = 0; i < 2; i++) {
+        for (let i = 0; i < 2; i++) {
             // 10 byte IR
             obj.ir[0] += poll[8 + i * 5] + ((poll[10 + i * 5] & 0x30) << 8)
             obj.ir[1] += poll[9 + i * 5] + ((poll[10 + i * 5] & 0xc0) << 8)
@@ -453,8 +453,8 @@ function pollToControllerData(poll, extension_decryption_key) {
             obj.ir[1] += poll[12 + i * 5] + ((poll[10 + i * 5] & 0x0c) << 8)
         }
 
-        var data_length = 6
-        var nunchuk = Buffer.alloc(data_length)
+        let data_length = 6
+        let nunchuk = Buffer.alloc(data_length)
         poll.copy(nunchuk, 0, obj.length - data_length + 1)
         nunchuk = decrypt(nunchuk, extension_decryption_key)
 
@@ -518,7 +518,7 @@ function controllerDataToPoll(obj, extension_encryption_key) {
 
     // set IR 4 points as (x-60,y), (x-50,y), (x+50,y), (x+60,y)
     if (obj.mode == 0x33) {
-        for (var i = 0; i < 4; i++) {
+        for (let i = 0; i < 4; i++) {
             poll[9 + i * 3] = obj.ir[1] & 0xff
             poll[10 + i * 3] += (obj.ir[1] & 0x300) >> 2
         }
@@ -537,7 +537,7 @@ function controllerDataToPoll(obj, extension_encryption_key) {
         poll[17] = (obj.ir[0] + 60) & 0xff // x4
         poll[19] += ((obj.ir[0] + 60) & 0x300) >> 8
     } else if (obj.mode == 0x37) {
-        for (var i = 0; i < 2; i++) {
+        for (let i = 0; i < 2; i++) {
             poll[9 + i * 5] = obj.ir[1] & 0xff
             poll[10 + i * 5] += (obj.ir[1] & 0x300) >> 2
             poll[12 + i * 5] = obj.ir[1] & 0xff
@@ -559,8 +559,8 @@ function controllerDataToPoll(obj, extension_encryption_key) {
         poll[15] += ((obj.ir[0] + 60) & 0x300) >> 8
 
         // nunchuk poll[18] = nunchul[0]
-        var data_length = 6
-        var nunchuk = Buffer.alloc(data_length)
+        let data_length = 6
+        let nunchuk = Buffer.alloc(data_length)
         nunchuk[0] = obj.extension.stick[0]
         nunchuk[1] = obj.extension.stick[1]
 
@@ -622,7 +622,7 @@ module.exports = {
         short_descrip: `List header table`,
         full_descrip: `Usage: \`$header\`\nLists the dtm header table`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             var result = ``
             Object.keys(Header).forEach((offset) => {
                 result += `0x${parseInt(offset).toString(16).toUpperCase().padStart(2, `0`)} ${Header[offset][2]}\n`
@@ -636,7 +636,7 @@ module.exports = {
         short_descrip: `Read specific header data`,
         full_descrip: `Usage: \`$read <offset> <dtm attachment>\`\nReads the specified offset in the header. The offset must be a valid start location of some data.`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (args.length == 0)
                 return `Missing Arguments: \`$read <offset> <dtm attachment>\``
 
@@ -668,7 +668,7 @@ module.exports = {
         short_descrip: `Reads all header data`,
         full_descrip: `Usage: \`$dtminfo <dtm attachment>\`\nReads all of the header data.`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             var attachment = parseFile(msg)
             if (attachment.error) return attachment.error
 
@@ -689,7 +689,7 @@ module.exports = {
         short_descrip: `Edit header data`,
         full_descrip: `Usage: \`$write <offset> <arguments...> <dtm attachment>\`\nWrites the arguments to the specified offset in the header. The offset must be a valid start location of some data.`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             // it's a known side effect that you cannot pass an empty string. Might change this later.
             if (args.length < 2)
                 return `Missing Arguments: \`$write <offset> <arguments...> <dtm attachment>\``
@@ -745,7 +745,7 @@ module.exports = {
         short_descrip: `Changes wiimote encryption`,
         full_descrip: `Usage: \`$recrypt <old_key> <new_key> <dtm attachment>\`\nChanges the nunchuk encryption of a .dtm file. The keys must be given without spaces Ex: \`$recrypt E36AFD0319A646ECA9188B6AE319C520 76AC6BC38A54EEFBB1087A3AC19776B5\`. It *should* handle any combination of controllers (untested).`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (args.length < 2)
                 return `Missing Arguments: \`$recrypt <old_key> <new_key> <dtm attachment>\``
 
@@ -776,7 +776,7 @@ module.exports = {
         short_descrip: `Removes gcc input data`,
         full_descrip: `Usage: \`removegcc <dtm attachment>\`\nRemoves all gamecube controller data from a dtm.`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             var attachment = parseFile(msg)
             if (attachment.error) return attachment.error
 
@@ -787,7 +787,7 @@ module.exports = {
                         `Invalid Argument: DTM does not contain any GCC data`
                     )
                 } else {
-                    var new_dtm = removeGamecubeControllers(dtm)
+                    let new_dtm = removeGamecubeControllers(dtm)
                     try {
                         await bot.createMessage(
                             msg.channel.id,
@@ -816,53 +816,53 @@ function editLocalDTM(a, b, c, d, e, f, g) {
     var args = [a, b, c, d, e, f, g]
     var SAVE_TO_NEW_FILE = true
     try {
-        var dtm = fs.readFileSync(`./${args[0]}.dtm`)
-        var save_filename = SAVE_TO_NEW_FILE
+        let dtm = fs.readFileSync(`./${args[0]}.dtm`)
+        let save_filename = SAVE_TO_NEW_FILE
             ? `./${args[0]}_edit.dtm`
             : `./${args[0]}.dtm`
         switch (args[1]) {
-            case `read`:
-                var offset = parseOffset(args[2])
+            case `read`: {
+                let offset = parseOffset(args[2])
                 console.log(`${Header[offset][2]}: ${read(offset, dtm)}`)
                 break
-
-            case `dtminfo`:
-                var offset = parseOffset(args[2])
+            }
+            case `dtminfo`: {
+                let offset = parseOffset(args[2])
                 Object.keys(Header).forEach((offset) => {
                     console.log(`${Header[offset][2]}: ${read(offset, dtm)}`)
                 })
                 break
-
-            case `write`:
-                var offset = parseOffset(args[2])
-                var old_data = read(offset, dtm)
-                var new_dtm = write(offset, dtm, args[3])
+            }
+            case `write`: {
+                let offset = parseOffset(args[2])
+                let old_data = read(offset, dtm)
+                let new_dtm = write(offset, dtm, args[3])
                 fs.writeFileSync(save_filename, new_dtm)
                 console.log(
                     `Value changed from \`${old_data}\` to \`${args[3]}\``
                 )
                 break
-
-            case `recrypt`:
-                var key1 = stringLiteralToBuffer(args[2], 32)
-                var key2 = stringLiteralToBuffer(args[3], 32)
-                var new_dtm = changeControllerEncryption(dtm, key1, key2)
+            }
+            case `recrypt`: {
+                let key1 = stringLiteralToBuffer(args[2], 32)
+                let key2 = stringLiteralToBuffer(args[3], 32)
+                let new_dtm = changeControllerEncryption(dtm, key1, key2)
                 fs.writeFileSync(save_filename, new_dtm)
                 console.log(
                     `Nunchuk encryption changed from \`${bufferToStringLiteral(key1)}\` to \`${bufferToStringLiteral(key2)}\``
                 )
                 break
-
-            case `removegcc`:
-                var new_dtm = removeGamecubeControllers(dtm)
+            }
+            case `removegcc`: {
+                let new_dtm = removeGamecubeControllers(dtm)
                 fs.writeFileSync(save_filename, new_dtm)
                 console.log(`Removed GameCube controllers`)
                 break
-
-            case `parsepolls`:
-                var key = stringLiteralToBuffer(args[2], 32)
-                function print_poll(obj) {
-                    var s = obj.buttons
+            }
+            case `parsepolls`: {
+                let key = stringLiteralToBuffer(args[2], 32)
+                let print_poll = function(obj) {
+                    let s = obj.buttons
                     s += ` ACC:${obj.accel.join(`,`)}`
                     s += ` IR:${obj.ir.join(`,`)}`
                     if (obj.mode == 0x37) {
@@ -873,25 +873,25 @@ function editLocalDTM(a, b, c, d, e, f, g) {
                     }
                     console.log(s.trim())
                 }
-                var i = 0x100 // controller data start point
+                let i = 0x100 // controller data start point
                 while (i + 1 < dtm.length) {
-                    var isWiimote = dtm[i + 1] == 0xa1 // No false positives on 5.0
-                    var poll_length = isWiimote ? dtm[i] + 1 : 8
-                    var poll = Buffer.alloc(poll_length)
+                    let isWiimote = dtm[i + 1] == 0xa1 // No false positives on 5.0
+                    let poll_length = isWiimote ? dtm[i] + 1 : 8
+                    let poll = Buffer.alloc(poll_length)
                     dtm.copy(poll, 0, i, i + poll_length)
                     if (isWiimote) {
-                        var obj = pollToControllerData(poll, key)
+                        let obj = pollToControllerData(poll, key)
                         print_poll(obj)
                     }
                     i += poll_length
                 }
                 break
-
-            case `convert2poll`:
-                var key = stringLiteralToBuffer(args[2], 32)
+            }
+            case `convert2poll`: {
+                let key = stringLiteralToBuffer(args[2], 32)
                 console.log(controllerDataToPoll(args[3], key))
                 break
-
+            }
             default:
                 console.log(`Command not recognized`)
         }
@@ -943,7 +943,7 @@ function changePolls(
     // keep track of what the polls are on the current frame
     var cpi = 0 // current poll index
     while (current_num_polls[cpi][0] != startFrame) {
-        for (var x = 0; x < current_num_polls[cpi][1]; x++) i += dtm[i] + 1
+        for (let x = 0; x < current_num_polls[cpi][1]; x++) i += dtm[i] + 1
         cpi++
     }
     console.log(cpi, i)
@@ -952,26 +952,26 @@ function changePolls(
     console.log(dpi)
 
     while (cpi < current_num_polls.length && dpi < desired_num_polls.length) {
-        var p1_poll_length = dtm[i] + 1 // include the byte that has the length
+        let p1_poll_length = dtm[i] + 1 // include the byte that has the length
         //console.log(`p1 len`, p1_poll_length)
-        var p1 = dtm.slice(i, i + p1_poll_length)
+        let p1 = dtm.slice(i, i + p1_poll_length)
         //console.log(p1)
 
-        var p2_poll_length = dtm[i] + 1
-        var p2 = dtm.slice(
+        let p2_poll_length = dtm[i] + 1
+        let p2 = dtm.slice(
             i + p1_poll_length,
             i + p1_poll_length + p2_poll_length
         )
         //console.log(p2)
 
         // copy the new poll amount to the new file
-        for (var x = 0; x < desired_num_polls[dpi][1] / 2; x++) {
+        for (let x = 0; x < desired_num_polls[dpi][1] / 2; x++) {
             j += p1.copy(new_dtm, j) // returns number of bytes copyies
             j += p2.copy(new_dtm, j)
         }
 
         // pass over the current number of polls
-        for (var x = 0; x < current_num_polls[cpi][1]; x++) {
+        for (let x = 0; x < current_num_polls[cpi][1]; x++) {
             i += dtm[i] + 1
         }
 

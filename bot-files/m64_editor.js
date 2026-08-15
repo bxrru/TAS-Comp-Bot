@@ -1,15 +1,14 @@
 // m64 header information source: http://tasvideos.org/EmulatorResources/Mupen/M64.html
 
-const fs = require('fs')
+const fs = require('node:fs')
 const users = require('./users.js')
 const save = require('./save.js')
 const roms = require('./roms.js')
-const cp = require('child_process')
-const process = require('process')
+const cp = require('node:child_process')
+const process = require('node:process')
 const request = require('request')
-const path = require('path')
+const path = require('node:path')
 const rgbcolor = require('rgb-color')
-const crypto = require("crypto");
 
 // The following are used for the encoding command
 // They will need to be manually set before running an instance of the bot
@@ -513,7 +512,7 @@ function QueueAdd(
     if (local_files && cmdline_args.indexOf('-m64') < 0) {
         cmdline_args = ['-m64', m64_url, ...cmdline_args]
     }
-    for (var i = 0; i < cmdline_args.length; ++i) {
+    for (let i = 0; i < cmdline_args.length; ++i) {
         // Lua scripts are included in an array formatted as follows:
         // [ "lua", "script1.lua", "script2.lua" ]
         if (Array.isArray(cmdline_args[i]) && cmdline_args[i][0] == 'lua') {
@@ -603,7 +602,7 @@ module.exports = {
         full_descrip:
             'Usage: `$rr <num_rerecords> <m64 attachment>`\nChanges the rerecords count in the attached m64. If the number provided is less than 0, it will edit it to be 0. If it exceeds the maximum 4-byte integer (4294967295) then it will edit it to be the max.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             // make sure there's enough arguments
             if (args.length == 0) {
                 return 'Missing Arguments: `$rr <num_rerecords> <m64 attachment>`'
@@ -645,11 +644,11 @@ module.exports = {
                                 `Something went wrong\`\`\`${err}\`\`\``
                             )
                         } else {
-                            var rr_hex = intToLittleEndian(rerecords, SIZE)
-                            var old_rr = littleEndianToInt(
+                            let rr_hex = intToLittleEndian(rerecords, SIZE)
+                            let old_rr = littleEndianToInt(
                                 m64.subarray(LOCATION, LOCATION + SIZE)
                             )
-                            var new_m64 = bufferInsert(
+                            let new_m64 = bufferInsert(
                                 m64,
                                 LOCATION,
                                 LOCATION + SIZE,
@@ -690,7 +689,7 @@ module.exports = {
         full_descrip:
             'Usage: `$descrip [new description] <m64 attachment>`\nChanges the description in the attached m64. Spaces are allowed in the new description.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (msg.attachments.length == 0) {
                 return 'Missing Arguments: No m64 specified `$descrip [new description] <m64 attachment>`'
             } else if (!msg.attachments[0].url.endsWith('.m64')) {
@@ -723,11 +722,11 @@ module.exports = {
                                 `Something went wrong\`\`\`${err}\`\`\``
                             )
                         } else {
-                            var old_descrip = m64.subarray(
+                            let old_descrip = m64.subarray(
                                 LOCATION,
                                 LOCATION + SIZE
                             )
-                            var new_m64 = bufferInsert(
+                            let new_m64 = bufferInsert(
                                 m64,
                                 LOCATION,
                                 LOCATION + SIZE,
@@ -768,7 +767,7 @@ module.exports = {
         full_descrip:
             'Usage: `$auth [new name] <m64 attachment>`\nChanges the author in the attached m64 file. You can uses spaces in the new name.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (msg.attachments.length == 0) {
                 return 'Missing Arguments: No m64 specified `$auth [new name] <m64 attachment>`'
             } else if (!msg.attachments[0].url.endsWith('.m64')) {
@@ -800,11 +799,11 @@ module.exports = {
                                 `Something went wrong\`\`\`${err}\`\`\``
                             )
                         } else {
-                            var old_author = m64.subarray(
+                            let old_author = m64.subarray(
                                 LOCATION,
                                 LOCATION + SIZE
                             )
-                            var new_m64 = bufferInsert(
+                            let new_m64 = bufferInsert(
                                 m64,
                                 LOCATION,
                                 LOCATION + SIZE,
@@ -843,7 +842,7 @@ module.exports = {
         short_descrip: 'List header table',
         full_descrip: 'Usage: `$header`\nLists the m64 header table',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             var result = ''
             Object.keys(HEADER).forEach((offset) => {
                 result += `0x${parseInt(offset).toString(16).toUpperCase().padStart(2, '0')} ${HEADER[offset][2]}\n`
@@ -933,7 +932,7 @@ module.exports = {
         full_descrip:
             'Usage: `$m64info <m64 attachment>`\nReads the authors, description, rerecords, and ROM CRC.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (msg.attachments.length == 0) {
                 return 'Missing Arguments: No m64 specified `$m64info <m64 attachment>`'
             } else if (!msg.attachments[0].url.endsWith('.m64')) {
@@ -950,21 +949,21 @@ module.exports = {
                                 `Something went wrong\`\`\`${err}\`\`\``
                             )
                         } else {
-                            var author = bufferToString(
+                            let author = bufferToString(
                                 m64.subarray(0x222, 0x222 + 222)
                             )
-                            var descrip = bufferToString(
+                            let descrip = bufferToString(
                                 m64.subarray(0x300, 0x300 + 256)
                             )
-                            var rr = littleEndianToInt(
+                            let rr = littleEndianToInt(
                                 m64.subarray(0x10, 0x10 + 4)
                             )
-                            var crc = m64.subarray(0xe4, 0xe4 + 4)
+                            let crc = m64.subarray(0xe4, 0xe4 + 4)
                             crc = bufferToStringLiteral(crc.reverse()) // reverse
-                            var rom = '?'
+                            let rom = '?'
                             if (crc in KNOWN_CRC) rom = KNOWN_CRC[crc]
 
-                            var result = `Author(s): ${author}\n`
+                            let result = `Author(s): ${author}\n`
                             result += `Description: ${descrip}\n`
                             result += `Rerecords: ${rr}\n`
                             result += `ROM: ${crc} (${rom})`
@@ -1438,7 +1437,7 @@ module.exports = {
         full_descrip:
             'Usage: \`$getghost <m64> <st/savestate>\`\nReturns a tas.ghost file that can be used with the Ghost hack while playing back TASes.',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             let m64s = parse_urls('.m64', msg, args)
             let sts = parse_urls(['.st', '.savestate'], msg, args)
 
@@ -1523,7 +1522,7 @@ module.exports = {
         full_descrip:
             'Usage: \`$listcrc <rom name>\`\nShows a list of ROMs supported by the `$encode` command similar to the specified one. If there is a game that you would like added to this list, please contact the owner of this bot',
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             if (args.length == 0) {
                 return 'Missing Argument: `$listcrc <rom name>`'
             }

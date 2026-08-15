@@ -71,7 +71,7 @@ module.exports = {
             var result = `**Owners:**\n`
             for (const id of OWNER_IDS) {
                 try {
-                    var user = await module.exports.getUser(bot, id)
+                    let user = await module.exports.getUser(bot, id)
                     result += `${user.username} \`(${id})\`\n`
                 } catch (e) {
                     result += `Unknown User \`(${id})\`\n`
@@ -81,7 +81,7 @@ module.exports = {
             result += `**Users:**\n`
             for (const id of Admin.users) {
                 try {
-                    var user = await module.exports.getUser(bot, id)
+                    let user = await module.exports.getUser(bot, id)
                     result += `${user.username} \`(${id})\`\n`
                 } catch (e) {
                     result += `Unknown User \`(${id})\`\n`
@@ -131,13 +131,13 @@ module.exports = {
                 }
             })
 
-            for (var i = 0; i < args.length; i++) {
-                var id = args[i]
+            for (let i = 0; i < args.length; i++) {
+                let id = args[i]
                 if (!id.startsWith('<')) {
                     // look at non-mentions
 
-                    var user = await module.exports.getUser(bot, id)
-                    var channel = await bot.getChannel(id)
+                    let user = await module.exports.getUser(bot, id)
+                    let channel = await bot.getChannel(id)
 
                     if (!Admin.users.includes(id) && user != null) {
                         module.exports.addCmdAccessUser(id)
@@ -191,8 +191,8 @@ module.exports = {
                 }
             })
 
-            for (var i = 0; i < args.length; i++) {
-                var id = args[i]
+            for (let i = 0; i < args.length; i++) {
+                let id = args[i]
                 if (Admin.users.includes(id)) {
                     module.exports.removeCmdAccessUser(id)
                     result += `<@${id}> `
@@ -209,9 +209,9 @@ module.exports = {
 
     getUser: async function (bot, user_id) {
         try {
-            var self = await bot.getSelf()
+            let self = await bot.getSelf()
             if (self.id == user_id) return self
-            var dm = await bot.getDMChannel(user_id)
+            let dm = await bot.getDMChannel(user_id)
             return dm.recipient
         } catch (error) {
             //console.log(error)
@@ -245,7 +245,7 @@ module.exports = {
             if (Bans.length == 0) return 'There are no banned users'
             var message = 'Banned Users:\n'
             for (const id of Bans) {
-                var user = await module.exports.getUser(bot, id)
+                let user = await module.exports.getUser(bot, id)
                 message +=
                     user == null
                         ? `NULL \`(${id})\`\n`
@@ -285,15 +285,14 @@ module.exports = {
 
             var result = `${user.username} \`(${id})\` has been banned. `
             try {
-                var dm = await bot.getDMChannel(id)
+                let dm = await bot.getDMChannel(id)
                 dm.createMessage(
                     `You have been banned from using this bot and can no longer use any of its commands. ${reason}`
                 )
             } catch (e) {
                 result += `Failed to notify user. `
-            } finally {
-                return result
             }
+            return result
         },
     },
 
@@ -322,15 +321,14 @@ module.exports = {
             result += `\`(${id})\` has been unbanned. `
 
             try {
-                var dm = await bot.getDMChannel(id)
+                let dm = await bot.getDMChannel(id)
                 dm.createMessage(
                     `You are no longer banned from using this bot and can now use its commands again.`
                 )
             } catch (e) {
                 result += `Failed to notify user. `
-            } finally {
-                return result
             }
+            return result
         },
     },
 }

@@ -107,7 +107,7 @@ module.exports = {
             }
 
             try {
-                var info = await YTDL.getInfo(args[0])
+                let info = await YTDL.getInfo(args[0])
                 console.log('returned', info.video_url)
                 /*YTDL.getInfo(args[0], (err, info) => {
 					if (err) throw err
@@ -120,7 +120,7 @@ module.exports = {
 					result += `${k}: ${info[k]}\n`
 				})
 				return result + "```"*/
-                for (var i = 0; i < info.formats.length; i++) {
+                for (let i = 0; i < info.formats.length; i++) {
                     //bot.createMessage(msg.channel.id, info.formats[i])
                     if (info.formats[i].codecs.includes('opus')) {
                         //bot.createMessage(msg.channel.id, `\`\`\`${JSON.stringify(info.formats[i])}\`\`\``)
@@ -146,7 +146,7 @@ module.exports = {
         short_descrip: ``,
         full_descrip: `Usage: \`$\`\n`,
         hidden: true,
-        function: async function (bot, msg, args) {
+        function: function (bot, msg, args) {
             return
         },
     },

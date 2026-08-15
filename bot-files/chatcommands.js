@@ -87,7 +87,7 @@ module.exports = {
             if (!users.hasCmdAccess(msg)) return
 
             var channels = '```'
-            for (var key in CHANNELS) {
+            for (let key in CHANNELS) {
                 channels += `${key}: ${CHANNELS[key]}\n`
             }
             return channels + '```'
