@@ -1,0 +1,18 @@
+{
+  "fmt": {
+    "options": {
+      "indentWidth": 4
+    }
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-unused-vars",
+        "prefer-const",
+        "no-var",
+        "no-fallthrough",
+        "no-control-regex"
+      ]
+    }
+  }
+}

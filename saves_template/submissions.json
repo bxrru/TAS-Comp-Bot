@@ -15,9 +15,7 @@
     "min": 5,
     "taskmsg": "Task 0: This message should not appear!",
     "timedtaskstatus": {
-        "started": [
-            "129045481387982848"
-        ],
+        "started": ["129045481387982848"],
         "completed": [],
         "startTimes": [
             [
@@ -28,9 +26,7 @@
     },
     "taskchannel": "196442189604192256",
     "releasedate": "Wed Mar 18 2020 20:04:00 GMT-0400 (Eastern Daylight Time)",
-    "warnings": [
-        4
-    ],
+    "warnings": [4],
     "roletype": "DISABLED",
     "ignoredupdates": {},
     "autotime": false,
@@ -41,5 +37,4 @@
     "namespool": [],
     "namesfree": [],
     "namesused": []
-    
 }
