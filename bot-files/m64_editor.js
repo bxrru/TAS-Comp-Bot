@@ -9,6 +9,7 @@ const process = require('node:process')
 const request = require('request')
 const path = require('node:path')
 const rgbcolor = require('rgb-color')
+const { default: Eris } = require('eris')
 
 // The following are used for the encoding command
 // They will need to be manually set before running an instance of the bot
@@ -420,7 +421,7 @@ function NextProcess(bot, retry = true) {
                 //console.log("runMupen ignored (queue empty)")
                 return
             }
-            await request.startup()
+            await request.startup(m64)
             const GAME = ` -g "${GAME_PATH}${KNOWN_CRC[crc]}.z64" `
             const CMD = `"${MUPEN_PATH}"${GAME}${request.cmdflags}`
             //console.log(CMD)
@@ -488,7 +489,7 @@ function NextProcess(bot, retry = true) {
 // adds a mupen request to the queue. Returns the 0-indexed position of the request
 // the m64/st are saved as tas.m64/st
 // if you want to run mupen with the -m64 argument that must be explicitly passed here
-// startup is called after the download is complete but before mupen is run
+// startup is called after the download is complete but before mupen is run and is passed the m64
 // callback is called once the mupen process closes, it is passed whether the time limit was exceeded or not (bool)
 //    callback(TLE?: bool, CANT_RUN?: bool, START_TIME: bigint, M64: Buffer<ArrayBufferLike>)
 // all processes are run with -lua ./timelimit.lua;
@@ -591,6 +592,540 @@ function getDiscordFilename(discord_url) {
     }
     return {offset: offset, error: false};
 }*/
+
+/**
+ * Converts an RGB color to HSL.
+ * @param {RGBcolor} color RGB values from 0-255.
+ * @returns {[number, number, number]} [hue in degrees (0-360), saturation
+ *  percentage (0-100), lightness percentage (0-100)]
+ */
+function toHSL(color) {
+    let R = color.r / 255
+    let G = color.g / 255
+    let B = color.b / 255
+
+    let M = Math.max(R, G, B)
+    let m = Math.min(R, G, B)
+    let C = M - m
+    let H = 0
+    if (C === 0) {
+        H = 0
+    } else if (M == R) {
+        H = (G - B) / C + (G < B ? 6 : 0)
+    } else if (M == G) {
+        H = (B - R) / C + 2
+    } else if (M == B) {
+        H = (R - G) / C + 4
+    }
+    H = 60 * H
+
+    let L = (M + m) / 2
+    //V = M
+
+    //SV = (V == 0) ? 0 : (C / V)
+    let SL = C === 0 ? 0 : C / (1 - Math.abs(2 * L - 1))
+
+    return [H, SL * 100, L * 100] // scale percentages
+}
+
+/**
+ * Converts a list of ghosts and corresponding colours to a message formatted:
+ * "emoji filename\n..." where the emoji is a standard colour that is closest
+ * to the given colour.
+ * @param {string[]} ghost_urls
+ * @param {RGBcolor[]} ghost_colours
+ * @returns {string} 
+ */
+function getGhostInfoText(ghost_urls, ghost_colours) {
+    let HSLdist = (a, b) => { // weighted distance
+        let hDiff = Math.abs(a[0] - b[0])
+        hDiff = Math.min(hDiff, 360 - hDiff) // hue distance mod 360 degrees
+        
+        // hue is meaningless for near-grayscale colors, so damp its
+        // contribution by how saturated the two colors actually are
+        let hueConfidence = Math.sqrt((a[1] / 100) * (b[1] / 100))
+
+        return Math.sqrt(
+            0.7 * hueConfidence * hDiff ** 2 +
+            0.2 * (a[1] - b[1]) ** 2 +
+            0.1 * (a[2] - b[2]) ** 2
+        )
+    }
+
+    const HSLs = [
+        [352,72,52],
+        [206,82,63],
+        [34,91,50],
+        [42,98,67],
+        [99,36,52],
+        [263,47,70],
+        [14,48,53],
+        [210,11,22],
+        [210,4,91],
+        [205,90,75],
+        [348,77,81],
+        [204,16,65],
+    ]
+
+    const HSL_EMOJI_MAP = {
+        '352,72,52':'🔴', // red
+        '206,82,63': '🔵', // blue
+        '34,91,50': '🟠', // orange
+        '42,98,67': '🟡', // yellow
+        '99,36,52': '🟢', // green
+        '263,47,70': '🟣', // purple
+        '14,48,53': '🟤', // brown
+        '210,11,22': '⚫', // black
+        '210,4,91': '⚪', // white
+        '205,90,75': '\u{1FA75}', // light blue heart
+        '348,77,81': '\u{1FA77}', // pink heart
+        '204,16,65': '\u{1FA76}' // grey heart
+    }
+
+    /*let toHexStr = (color) => (
+        '#' +
+        c.r.toString(16).padStart(2, '0') +
+        c.g.toString(16).padStart(2, '0') +
+        c.b.toString(16).padStart(2, '0')
+    ).toUpperCase()*/
+
+    let closest = function(c) {
+        let best = HSLs[0]
+        let bestDist = HSLdist(HSLs[0], c)
+        for (let i = 1; i < HSLs.length; i++) {
+            let d = HSLdist(HSLs[i], c)
+            if (d < bestDist) {
+                bestDist = d
+                best = HSLs[i]
+            }
+        }
+        return best
+    }
+
+    let result = ''
+    let ghost_HSLs = ghost_colours.map(toHSL)
+
+    for (let i = 0; i < ghost_urls.length; i++) {
+        const c = closest(ghost_HSLs[i])
+        result += HSL_EMOJI_MAP[c] + ' '
+        result += getDiscordFilename(ghost_urls[i]).replaceAll('_', '\\_')
+        result += '\n'
+    }
+
+    return result
+}
+
+/**
+ * Request a TAS to be encoded. Sends a message that's edited with progress.
+ * @param {Eris.Client} bot 
+ * @param {string} m64_url 
+ * @param {Eris.TextableChannel} channel 
+ * @param {Eris.User} author 
+ * @param {string} st_url if no st is provided it will play the m64 from power on
+ * @param {string[]} ghost_urls 
+ * @param {RGBcolor[]} ghost_colours 
+ * @param {boolean} transparent_ghosts 
+ * @param {number | ""} ghost_sync_animation the animation index that ghosts will sync up on
+ * @param {boolean} use_lua 
+ * @param {*} ffmpeg_args post processing re-encode arguments
+ * @returns {number} the position in the Mupen queue
+ */
+function EncodeTAS(
+    bot,
+    m64_url,
+    channel,
+    author,
+    st_url = '',
+    ghost_urls = [],
+    ghost_colours = [],
+    transparent_ghosts = false,
+    ghost_sync_animation = '',
+    use_lua = true,
+    ffmpeg_args = {
+        vcodec: 'libx264',
+        acodec: 'aac',
+        vrate: '',
+        crf: '',
+        arate: '128',
+        clamp: false,
+    }
+) {
+    ghost_urls = ghost_urls.slice(0, 4) // max limit just to be safe
+
+    const DEFAULTS = [ // CVD inspired
+        '#005AC8',
+        '#FA7850',
+        '#0AB45A',
+        '#8214A0',
+        '#F0F032',
+        '#333333',
+        '#FFFFFF',
+        '#14D2DC',
+        '#FF0000',
+    ]
+    
+    const N = ghost_colours.length
+    for (let i = 0; i < ghost_urls.length - N; i++) {
+        ghost_colours.push(rgbcolor(DEFAULTS[i % DEFAULTS.length]))                      
+    }
+    
+    const filename = getDiscordFilename(m64_url)
+    const safe_filename = getDiscordFilename(m64_url).replaceAll('_', '\\_') + '.m64'
+    const out_filename = MUPEN_USES_FFMPEG ? 'encode.mp4' : 'encode.avi'
+    const CWD = process.cwd()
+
+    let mupen_args = [
+        '-m64',
+        `${CWD + save.getSavePath().substring(1)}/tas.m64`,
+        '-avi',
+        out_filename,
+    ]
+
+    // lua args for the input visualizer, ghost playback, and the timelimit
+    if (use_lua) {
+        if (ghost_urls.length) {
+            mupen_args.push([
+                'lua',
+                ...LUA_SCRIPTS,
+                CWD + '\\TimingLua\\PlayGhosts.lua',
+            ])
+        } else {
+            mupen_args.push(['lua', ...LUA_SCRIPTS])
+        }
+    } else if (ghost_urls.length) {
+        mupen_args.push([
+            'lua',
+            LUA_TIMEOUT_PATH,
+            CWD + '\\TimingLua\\PlayGhosts.lua'
+        ])
+    } else { // always enforce timeout ?
+        //mupen_args.push(['lua', LUA_TIMEOUT_PATH])
+    }
+    //console.log(mupen_args)
+
+    // variables that must be captured in both startup and cleanup code
+    let ghost_paths = []
+    let progress_msg = null
+
+    return QueueAdd(
+        bot,
+        m64_url,
+        st_url,
+        mupen_args,
+        async (m64) => {
+            // startup
+            var err = null
+            if (fs.existsSync('./encode.avi')) {
+                fs.unlinkSync('./encode.avi')
+            }
+            if (fs.existsSync('./encode.mp4')) {
+                fs.unlinkSync('./encode.mp4')
+            }
+            if (ghost_urls.length) {
+                if (fs.existsSync('./TimingLua/ghostlist.txt')) {
+                    fs.unlinkSync('./TimingLua/ghostlist.txt')
+                }
+                ghost_paths = []
+                for (let i = 0; i < ghost_urls.length; i++) {
+                    let ghostpath = `${save.getFullSavePath()}/${i}.ghost`
+                    if (fs.existsSync(ghostpath)) {
+                        fs.unlinkSync(ghostpath)
+                    }
+                    ghost_paths.push(ghostpath)
+                }
+                fs.writeFileSync(
+                    './TimingLua/ghostlist.txt',
+                    [
+                        // data read by PlayGhosts.lua
+                        transparent_ghosts.toString(),
+                        ghost_sync_animation,
+                        ghost_colours
+                            .map((c) =>
+                                c.ok ? c.r + ' ' + c.g + ' ' + c.b : ''
+                            )
+                            .join(' '),
+                        ...ghost_paths,
+                    ].join('\n')
+                )
+                await save.downloadAllFromUrl(ghost_urls, ghost_paths)
+            }
+
+            progress_msg = await bot.createMessage(channel.id, {
+                embed: {
+                    title: "Encoding... ```[          ]``` 0%",
+                    footer: {
+                        text: `Requested by ${author.username}`,
+                        icon_url: author.avatarURL
+                    },
+                    color: 0xFF0000,
+                }
+            }).catch(
+                () => {}
+            )
+
+            // if version number at 0x004 is 1 or 2, then the input data starts at byte 0x200 instead of 0x400
+            // Just assume it starts at 0x200 for a worse estimate
+            // each input frame is made up of 4 bytes
+            let frame_count = Math.round((m64.length - 0x200) / 4)
+            const fps = 60 // approximation (under estimate to over deliver on average)
+            const ms_between_edits = 3000
+            let max_steps = Math.floor(frame_count / fps / (ms_between_edits / 1000))
+            const increment = Math.floor(100 / max_steps)
+
+            let update_msg = async function() {
+                const sleep = ms => new Promise(r => setTimeout(r, ms))
+                let last_percent = 0
+                for (let i = 1; i <= max_steps; i++) {
+                    await sleep(ms_between_edits)
+                    let jitter = (Math.random() * 10 - 5) // random value in [-5.00, 5.00]
+                    let percent = Math.min(Math.max(i * increment + jitter, last_percent + 0.01), 99.99)
+                    last_percent = percent
+
+                    let n = Math.min(Math.floor(percent / 10), 10)
+                    let progress = '```[' + '='.repeat(n) + ' '.repeat(10 - n) + ']```'
+                    if (progress_msg == null) {
+                        return
+                    }
+                    await progress_msg.edit({
+                        embed: {
+                            title: `Encoding... ${progress} ${percent.toFixed(2)}%`,
+                            footer: {
+                                text: `Requested by ${author.username}`,
+                                icon_url: author.avatarURL
+                            },
+                            fields: [
+                                {
+                                    name: "File",
+                                    value: safe_filename,
+                                }
+                            ],
+                            color: 0xFF0000,
+                        }
+                    }).catch(
+                        () => {}
+                    )
+                }
+            }
+
+            update_msg() // call asynchronously
+        },
+        async (tle, cant_run, start_time, m64) => {
+            // callback
+            let start_msg = progress_msg
+            if (cant_run) {
+                bot.createMessage(
+                    channel.id,
+                    `Error: m64 cannot be played back. Ensure your TAS has 1 controller and does not use rumblepak <@${author.id}>`
+                )
+                progress_msg = null
+                start_msg.delete().catch(() => {})
+                return
+            }
+
+            if (!fs.existsSync(`./${out_filename}`)) {
+                if (
+                    fs.existsSync(
+                        path.dirname(MUPEN_PATH) + `/${out_filename}`
+                    )
+                ) {
+                    fs.renameSync(
+                        path.dirname(MUPEN_PATH) + `/${out_filename}`,
+                        `./${out_filename}`
+                    )
+                } else {
+                    bot.createMessage(
+                        channel.id,
+                        `Error: ${out_filename} not found (Mupen crashed) <@${author.id}>`
+                    )
+                    console.trace()
+                    progress_msg = null
+                    start_msg.delete().catch(() => {})
+                    return
+                }
+            }
+
+            let stats = fs.statSync(`./${out_filename}`)
+
+            if (stats.size === 0) {
+                fs.unlinkSync(`./${out_filename}`)
+                bot.createMessage(
+                    channel.id,
+                    `Error: ${out_filename} is 0 bytes. There was likely a crash when attempting to encode <@${author.id}>. If this is a repeated error, request a bot owner to reset the codec by manually starting a capture.`
+                )
+                progress_msg = null
+                start_msg.delete().catch(() => {})
+                return
+            }
+
+            let length =
+                1000 *
+                Number(
+                    cp.execSync(
+                        `ffprobe ${out_filename} -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1`
+                    )
+                )
+
+            
+            start_msg = await progress_msg.edit({
+                embed: {
+                    title: `Encoded. Uploading...`,
+                    footer: {
+                        text: `Requested by ${author.username}`,
+                        icon_url: author.avatarURL
+                    },
+                    fields: [
+                        {
+                            name: "File",
+                            value: safe_filename,
+                        }
+                    ],
+                    color: 0xFF0000,
+                }
+            }).catch(
+                () => {}
+            )
+            progress_msg = null // don't let the startup code keep editing this
+
+            try {
+                const filesize_limit =
+                    channel.guild !== undefined
+                        ? [20e6, 20e6, 50e6, 100e6][
+                                channel.guild.premiumTier
+                            ]
+                        : 20e6 // in bytes
+                let cmd = `ffmpeg -y -i ${out_filename} -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
+
+                if (!ffmpeg_args.clamp) {
+                    cmd += ffmpeg_args.vrate
+                        ? `-maxrate ${ffmpeg_args.vrate}k -bufsize ${ffmpeg_args.vrate}k `
+                        : ''
+                    cmd += ffmpeg_args.crf
+                        ? `-crf ${ffmpeg_args.crf} `
+                        : ''
+                    cmd += ffmpeg_args.arate
+                        ? `-b:a ${ffmpeg_args.arate}k `
+                        : '-an '
+                } else {
+                    cmd += ffmpeg_args.crf
+                        ? `-crf ${Math.max(ffmpeg_args.crf, 1)} `
+                        : '' // crf 0 overrides vbv
+                    const trate = (8 * filesize_limit) / length // 8 * because bits/bytes
+
+                    if (trate < 128) {
+                        bot.createMessage(
+                            channel.id,
+                            'Your m64 is too long to be size constrained.'
+                        )
+                        progress_msg = null
+                        start_msg.delete().catch(() => {})
+                        return
+                    }
+
+                    const arate = Math.min(
+                        16 * Math.floor(trate / 128),
+                        128
+                    ) // Multiple of 16kb/s between 0 and 1024kb/s total rate
+                    const vrate = (trate - arate) * 0.9 // Make up for header and vbv bitrate overshoot
+
+                    //console.log(length);
+
+                    cmd += `-maxrate ${vrate}k -bufsize ${vrate}k -b:a ${arate}k `
+                }
+
+                cmd += `-pix_fmt yuv420p -fs ${filesize_limit * 0.9} encode-compressed.mp4` // 0.9 as a hacky workaround for ffmpeg overshoot + header
+                cp.execSync(cmd)
+                //console.log(cmd);
+
+                stats = fs.statSync('./encode-compressed.mp4')
+                length -=
+                    1000 *
+                    Number(
+                        cp.execSync(
+                            'ffprobe encode-compressed.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1'
+                        )
+                    )
+
+                const elapsed_seconds = Math.max(
+                    Number.EPSILON,
+                    Number(process.hrtime.bigint() - start_time) /
+                        1_000_000_000
+                )
+                const encode_frame_count = Number(
+                    cp.execSync(
+                        'ffprobe encode-compressed.mp4 -v quiet -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1'
+                    )
+                )
+                const effective_fps = encode_frame_count / elapsed_seconds
+                const video = fs.readFileSync('./encode-compressed.mp4')
+
+                let fields = [
+                    {
+                        name: "File",
+                        value: safe_filename,
+                        inline: true
+                    },
+                    { 
+                        name: "Game",
+                        value: String(roms.getRomNameFromM64Buffer(m64)),
+                        inline: true
+                    }
+                ]
+                if (ghost_urls.length) {
+                    fields.push({
+                        name: "Ghosts",
+                        value: getGhostInfoText(
+                            [m64_url, ...ghost_urls],
+                            [rgbcolor('#FF0000'), ...ghost_colours]
+                        ),
+                        inline: false
+                    })
+                }
+
+                await bot.createMessage(
+                    channel.id,
+                    {
+                        content: `<@${author.id}> Encode Complete:`,
+                        embed: {
+                            //title: "Encode Complete",
+                            //description:
+                            footer: {
+                                text: `Encoded in ${elapsed_seconds.toFixed(2)}s at ${effective_fps.toFixed(0)} FPS`
+                            },
+                            color: 0xFF0000,
+                            fields: fields,
+                            timestamp: new Date().toISOString()
+                        }
+                    },
+                    {
+                        file: video,
+                        name: `${filename}.mp4`
+                    }
+                )
+
+                start_msg.delete().catch(() => {})
+
+            } catch (err) {
+                bot.createMessage(
+                    channel.id,
+                    `Something went wrong <@${author.id}> \`\`\`${err}\`\`\``
+                )
+                console.log(err)
+            } finally {
+                fs.unlinkSync('./encode-compressed.mp4')
+                for (const ghostpath of ghost_paths) {
+                    if (fs.existsSync(ghostpath)) {
+                        // should exist but just to be safe...
+                        fs.unlinkSync(ghostpath)
+                    }
+                }
+            }
+        },
+        channel.id,
+        author.id,
+        2 * 60 * 30 + 30 * 30 // 2.5 min
+    )
+}
+
 
 module.exports = {
     name: 'm64 Editor',
@@ -1074,13 +1609,9 @@ module.exports = {
             m64_url = m64_url[0]
             st_url = st_url.length ? st_url[0] : ''
 
-            ghost_urls = ghost_urls.slice(0, 5) // max limit of 5 ghosts just to be safe
-            let ghost_paths = []
             let ghosts_transparent = false
             let ghost_sync_animation = ''
             let ghost_colours = []
-
-            let filename = getDiscordFilename(m64_url)
 
             const ffmpeg_args = {
                 vcodec: 'libx264',
@@ -1167,271 +1698,19 @@ module.exports = {
                 }
             }
 
-            const out_filename = MUPEN_USES_FFMPEG ? 'encode.mp4' : 'encode.avi'
-
-            let mupen_args = [
-                '-m64',
-                `${process.cwd() + save.getSavePath().substring(1)}/tas.m64`,
-                '-avi',
-                out_filename,
-            ]
-
-            if (use_lua) {
-                if (ghost_urls.length) {
-                    mupen_args.push([
-                        'lua',
-                        ...LUA_SCRIPTS,
-                        process.cwd() + '\\TimingLua\\PlayGhosts.lua',
-                    ])
-                } else {
-                    mupen_args.push(['lua', ...LUA_SCRIPTS])
-                }
-            }
-            //console.log(mupen_args)
-
-            const pos = QueueAdd(
-                bot,
-                m64_url,
-                st_url,
-                mupen_args,
-                async () => {
-                    // startup
-                    var err = null
-                    if (fs.existsSync('./encode.avi')) {
-                        fs.unlinkSync('./encode.avi') // ERROR HANDLE BC THIS ACTUALLY THREW AND CRASHED
-                    }
-                    if (fs.existsSync('./encode.mp4')) {
-                        fs.unlinkSync('./encode.mp4')
-                    }
-                    if (ghost_urls.length) {
-                        if (fs.existsSync('./TimingLua/ghostlist.txt')) {
-                            fs.unlinkSync('./TimingLua/ghostlist.txt')
-                        }
-                        ghost_paths = []
-                        for (let i = 0; i < ghost_urls.length; i++) {
-                            let ghostpath = `${save.getFullSavePath()}/${i}.ghost`
-                            if (fs.existsSync(ghostpath)) {
-                                fs.unlinkSync(ghostpath)
-                            }
-                            ghost_paths.push(ghostpath)
-                        }
-                        fs.writeFileSync(
-                            './TimingLua/ghostlist.txt',
-                            [
-                                // data read by PlayGhosts.lua
-                                ghosts_transparent.toString(),
-                                ghost_sync_animation,
-                                ghost_colours
-                                    .map((c) =>
-                                        c.ok ? c.r + ' ' + c.g + ' ' + c.b : ''
-                                    )
-                                    .join(' '),
-                                ...ghost_paths,
-                            ].join('\n')
-                        )
-                        await save.downloadAllFromUrl(ghost_urls, ghost_paths)
-                    }
-                },
-                async (tle, cant_run, start_time, m64) => {
-                    // callback
-                    if (cant_run) {
-                        bot.createMessage(
-                            msg.channel.id,
-                            `Error: m64 cannot be played back. Ensure your TAS has 1 controller and does not use rumblepak <@${msg.author.id}>`
-                        )
-                        return
-                    }
-
-                    if (!fs.existsSync(`./${out_filename}`)) {
-                        if (
-                            fs.existsSync(
-                                path.dirname(MUPEN_PATH) + `/${out_filename}`
-                            )
-                        ) {
-                            fs.renameSync(
-                                path.dirname(MUPEN_PATH) + `/${out_filename}`,
-                                `./${out_filename}`
-                            )
-                        } else {
-                            bot.createMessage(
-                                msg.channel.id,
-                                `Error: ${out_filename} not found (Mupen crashed) <@${msg.author.id}>`
-                            )
-                            console.trace()
-                            return
-                        }
-                    }
-
-                    let stats = fs.statSync(`./${out_filename}`)
-
-                    if (stats.size === 0) {
-                        fs.unlinkSync(`./${out_filename}`)
-                        bot.createMessage(
-                            msg.channel.id,
-                            `Error: ${out_filename} is 0 bytes. There was likely a crash when attempting to encode <@${msg.author.id}>. If this is a repeated error, request a bot owner to reset the codec by manually starting a capture.`
-                        )
-                        return
-                    }
-
-                    let length =
-                        1000 *
-                        Number(
-                            cp.execSync(
-                                `ffprobe ${out_filename} -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1`
-                            )
-                        )
-                    bot.createMessage(msg.channel.id, 'Uploading...').catch(
-                        () => {}
-                    )
-
-                    try {
-                        const filesize_limit =
-                            msg.channel.guild !== undefined
-                                ? [20e6, 20e6, 50e6, 100e6][
-                                      msg.channel.guild.premiumTier
-                                  ]
-                                : 20e6 // in bytes
-                        let cmd = `ffmpeg -y -i ${out_filename} -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
-
-                        if (!ffmpeg_args.clamp) {
-                            cmd += ffmpeg_args.vrate
-                                ? `-maxrate ${ffmpeg_args.vrate}k -bufsize ${ffmpeg_args.vrate}k `
-                                : ''
-                            cmd += ffmpeg_args.crf
-                                ? `-crf ${ffmpeg_args.crf} `
-                                : ''
-                            cmd += ffmpeg_args.arate
-                                ? `-b:a ${ffmpeg_args.arate}k `
-                                : '-an '
-                        } else {
-                            cmd += ffmpeg_args.crf
-                                ? `-crf ${Math.max(ffmpeg_args.crf, 1)} `
-                                : '' // crf 0 overrides vbv
-                            const trate = (8 * filesize_limit) / length // 8 * because bits/bytes
-
-                            if (trate < 128) {
-                                bot.createMessage(
-                                    msg.channel.id,
-                                    'Your m64 is too long to be size constrained.'
-                                )
-                                return
-                            }
-
-                            const arate = Math.min(
-                                16 * Math.floor(trate / 128),
-                                128
-                            ) // Multiple of 16kb/s between 0 and 1024kb/s total rate
-                            const vrate = (trate - arate) * 0.9 // Make up for header and vbv bitrate overshoot
-
-                            //console.log(length);
-
-                            cmd += `-maxrate ${vrate}k -bufsize ${vrate}k -b:a ${arate}k `
-                        }
-
-                        cmd += `-pix_fmt yuv420p -fs ${filesize_limit * 0.9} encode-compressed.mp4` // 0.9 as a hacky workaround for ffmpeg overshoot + header
-                        cp.execSync(cmd)
-                        //console.log(cmd);
-
-                        stats = fs.statSync('./encode-compressed.mp4')
-                        length -=
-                            1000 *
-                            Number(
-                                cp.execSync(
-                                    'ffprobe encode-compressed.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1'
-                                )
-                            )
-
-                        const elapsed_seconds = Math.max(
-                            Number.EPSILON,
-                            Number(process.hrtime.bigint() - start_time) /
-                                1_000_000_000
-                        )
-                        const encode_frame_count = Number(
-                            cp.execSync(
-                                'ffprobe encode-compressed.mp4 -v quiet -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1'
-                            )
-                        )
-                        const effective_fps = encode_frame_count / elapsed_seconds
-
-                        let reply = `Encode Complete `
-                        reply +=
-                            Math.abs(length) > 100
-                                ? '(File size limit exceeded) '
-                                : ''
-                        reply += tle ? '(Time limit exceeded) ' : ''
-                        reply += `(took ${elapsed_seconds.toFixed(2)}s at roughly ${effective_fps.toFixed(0)} FPS) `
-                        reply += `<@${msg.author.id}>`
-
-                        if (ghost_urls.length) {
-                            reply += `\nGhosts: ${filename}=#FF0000`
-                            // ghosts are assigned these colours in PlayGhosts.lua
-                            let DEFAULTS = [
-                                '#FF7F00',
-                                '#FFFF00',
-                                '#00FF00',
-                                '#00FFFF',
-                                '#0000FF',
-                                '#FFFFFF',
-                                '#333333',
-                                '#FF0000',
-                            ]
-                            for (let i = 0; i < ghost_urls.length; i++) {
-                                reply +=
-                                    ', ' +
-                                    getDiscordFilename(ghost_urls[i]) +
-                                    '='
-                                if (i >= ghost_colours.length) {
-                                    reply +=
-                                        DEFAULTS[
-                                            (i - ghost_colours.length) %
-                                                DEFAULTS.length
-                                        ]
-                                } else {
-                                    let c = ghost_colours[i]
-                                    reply += (
-                                        '#' +
-                                        c.r.toString(16).padStart(2, '0') +
-                                        c.g.toString(16).padStart(2, '0') +
-                                        c.b.toString(16).padStart(2, '0')
-                                    ).toUpperCase()
-                                }
-                            }
-                        }
-
-                        const video = fs.readFileSync('./encode-compressed.mp4')
-
-                        await bot.createMessage(msg.channel.id, reply, {
-                            file: video,
-                            name: `${filename}.mp4`,
-                        })
-                    } catch (err) {
-                        bot.createMessage(
-                            msg.channel.id,
-                            `Something went wrong <@${msg.author.id}> \`\`\`${err}\`\`\``
-                        )
-                        console.log(err)
-                    } finally {
-                        fs.unlinkSync('./encode-compressed.mp4')
-                        for (const ghostpath of ghost_paths) {
-                            if (fs.existsSync(ghostpath)) {
-                                // should exist but just to be safe...
-                                fs.unlinkSync(ghostpath)
-                            }
-                        }
-                    }
-                },
-                msg.channel.id,
-                msg.author.id,
-                2 * 60 * 30 + 30 * 30 // 2.5 min
+            let pos = EncodeTAS(
+                bot, m64_url, msg.channel, msg.author, st_url,
+                ghost_urls, ghost_colours, ghosts_transparent, ghost_sync_animation,
+                use_lua, ffmpeg_args
             )
 
             if (pos === 1) {
-                return 'Queue position 1: your encode is processing...'
+                return //'Queue position 1: your encode is processing...'
             } else if (EncodingQueue.length === 2) {
-                return 'Queue position 2: your encode will be processed next'
+                return 'Queue position 2. Your encode will be processed next.'
             }
 
-            return `Queue position ${pos}`
+            return `Queue position ${pos}. Your encode will be processed soon.`
         },
     },
 
@@ -1547,7 +1826,7 @@ module.exports = {
                 const formattedCRC = roms.formatCRC(Number(pair.crc))
                 const filename = pair.name
                 result += `${formattedCRC}: ${filename}\n`
-            });
+            })
             if(similarResult.count > similarResult.elements.length) {
                 result += `...and ${similarResult.count - similarResult.elements.length} more results\n`
             }
