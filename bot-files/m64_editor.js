@@ -348,9 +348,8 @@ function NextProcess(bot, retry = true) {
         let tasfile = request.local
             ? request.m64_url
             : save.getSavePath() + '/tas.m64'
-        var m64 = fs.readFileSync(tasfile)
-        var crc = Buffer.copyBytesFrom(m64.subarray(0xe4, 0xe4 + 4))
-        crc = crc.readUInt32BE(0).toString()
+        let m64 = fs.readFileSync(tasfile)
+        let crc = CRCfromM64(m64)
         //console.log(KNOWN_CRC)
         //console.log(crc)
         if (crc in KNOWN_CRC == false) {
@@ -715,6 +714,18 @@ function getGhostInfoText(ghost_urls, ghost_colours) {
     return result
 }
 
+function CRCfromM64(m64) {
+    return Buffer.copyBytesFrom(m64.subarray(0xe4, 0xe4 + 4)).readUInt32BE(0)
+}
+
+function GameName(m64) {
+    const crc = CRCfromM64(m64)
+    if (crc in KNOWN_CRC) {
+        return KNOWN_CRC[crc].replaceAll('_', ' ')
+    }
+    return '?'
+}
+
 /**
  * Request a TAS to be encoded. Sends a message that's edited with progress.
  * @param {Eris.Client} bot 
@@ -849,7 +860,19 @@ function EncodeTAS(
                 )
                 await save.downloadAllFromUrl(ghost_urls, ghost_paths)
             }
-
+            
+            const fields = [
+                {
+                    name: "File",
+                    value: safe_filename,
+                    inline: true
+                },
+                { 
+                    name: "Game",
+                    value: GameName(m64),
+                    inline: true
+                }
+            ]
             progress_msg = await bot.createMessage(channel.id, {
                 embed: {
                     title: "Encoding... ```[          ]``` 0%",
@@ -857,6 +880,7 @@ function EncodeTAS(
                         text: `Requested by ${author.username}`,
                         icon_url: author.avatarURL
                     },
+                    fields: fields,
                     color: 0xFF0000,
                 }
             }).catch(
@@ -893,12 +917,7 @@ function EncodeTAS(
                                 text: `Requested by ${author.username}`,
                                 icon_url: author.avatarURL
                             },
-                            fields: [
-                                {
-                                    name: "File",
-                                    value: safe_filename,
-                                }
-                            ],
+                            fields: fields,
                             color: 0xFF0000,
                         }
                     }).catch(
@@ -965,7 +984,18 @@ function EncodeTAS(
                     )
                 )
 
-            
+            let fields = [
+                {
+                    name: "File",
+                    value: safe_filename,
+                    inline: true
+                },
+                { 
+                    name: "Game",
+                    value: GameName(m64),
+                    inline: true
+                }
+            ]
             start_msg = await progress_msg.edit({
                 embed: {
                     title: `Encoded. Uploading...`,
@@ -973,12 +1003,7 @@ function EncodeTAS(
                         text: `Requested by ${author.username}`,
                         icon_url: author.avatarURL
                     },
-                    fields: [
-                        {
-                            name: "File",
-                            value: safe_filename,
-                        }
-                    ],
+                    fields: fields,
                     color: 0xFF0000,
                 }
             }).catch(
@@ -1058,18 +1083,6 @@ function EncodeTAS(
                 const effective_fps = encode_frame_count / elapsed_seconds
                 const video = fs.readFileSync('./encode-compressed.mp4')
 
-                let fields = [
-                    {
-                        name: "File",
-                        value: safe_filename,
-                        inline: true
-                    },
-                    { 
-                        name: "Game",
-                        value: String(roms.getRomNameFromM64Buffer(m64)),
-                        inline: true
-                    }
-                ]
                 if (ghost_urls.length) {
                     fields.push({
                         name: "Ghosts",
@@ -1142,13 +1155,15 @@ module.exports = {
             // make sure there's enough arguments
             if (args.length == 0) {
                 return 'Missing Arguments: `$rr <num_rerecords> <m64 attachment>`'
-            } else if (msg.attachments.length == 0) {
-                return 'Missing Arguments: No m64 specified `$rr <num_rerecords> <m64 attachment>`'
             } else if (isNaN(args[0])) {
                 return 'Invalid Argument: rerecords must be a number'
-            } else if (!msg.attachments[0].url.endsWith('.m64')) {
-                return 'Invalid Argument: file is not an m64'
             }
+
+            let m64_url = parse_urls('.m64', msg, args)
+            if (m64_url.length == 0) {
+                return 'Missing Arguments: No m64 specified `$rr <num_rerecords> <m64 attachment>`'
+            }
+            m64_url = m64_url[0]
 
             // force rerecords in range of [0, 4 byte max]
             const MAX_RR = parseInt(0xffffffff)
@@ -1214,7 +1229,7 @@ module.exports = {
                 )
             }
 
-            downloadAndRun(msg.attachments[0], updateRerecords)
+            downloadAndRun(m64_url, updateRerecords)
         },
     },
 
@@ -1226,11 +1241,11 @@ module.exports = {
             'Usage: `$descrip [new description] <m64 attachment>`\nChanges the description in the attached m64. Spaces are allowed in the new description.',
         hidden: true,
         function: function (bot, msg, args) {
-            if (msg.attachments.length == 0) {
+            let m64_url = parse_urls('.m64', msg, args)
+            if (m64_url.length == 0) {
                 return 'Missing Arguments: No m64 specified `$descrip [new description] <m64 attachment>`'
-            } else if (!msg.attachments[0].url.endsWith('.m64')) {
-                return 'Invalid Argument: file is not an m64'
             }
+            m64_url = m64_url[0]
 
             const LOCATION = parseInt(0x300)
             const SIZE = 256
@@ -1292,7 +1307,7 @@ module.exports = {
                 )
             }
 
-            downloadAndRun(msg.attachments[0], updateDescrip)
+            downloadAndRun(m64_url, updateDescrip)
         },
     },
 
@@ -1304,11 +1319,11 @@ module.exports = {
             'Usage: `$auth [new name] <m64 attachment>`\nChanges the author in the attached m64 file. You can uses spaces in the new name.',
         hidden: true,
         function: function (bot, msg, args) {
-            if (msg.attachments.length == 0) {
+            let m64_url = parse_urls('.m64', msg, args)
+            if (m64_url.length == 0) {
                 return 'Missing Arguments: No m64 specified `$auth [new name] <m64 attachment>`'
-            } else if (!msg.attachments[0].url.endsWith('.m64')) {
-                return 'Invalid Argument: file is not an m64'
             }
+            m64_url = m64_url[0]
 
             const LOCATION = parseInt(0x222)
             const SIZE = 222
@@ -1369,7 +1384,7 @@ module.exports = {
                 )
             }
 
-            downloadAndRun(msg.attachments[0], updateAuthor)
+            downloadAndRun(m64_url, updateAuthor)
         },
     },
 
@@ -1469,11 +1484,11 @@ module.exports = {
             'Usage: `$m64info <m64 attachment>`\nReads the authors, description, rerecords, and ROM CRC.',
         hidden: true,
         function: function (bot, msg, args) {
-            if (msg.attachments.length == 0) {
+            let m64_url = parse_urls('.m64', msg, args)
+            if (m64_url.length == 0 ) {
                 return 'Missing Arguments: No m64 specified `$m64info <m64 attachment>`'
-            } else if (!msg.attachments[0].url.endsWith('.m64')) {
-                return 'Invalid Argument: file is not an m64'
             }
+            m64_url = m64_url[0]
 
             function info(filename) {
                 fs.readFile(
@@ -1494,18 +1509,38 @@ module.exports = {
                             let rr = littleEndianToInt(
                                 m64.subarray(0x10, 0x10 + 4)
                             )
-                            let crc = m64.subarray(0xe4, 0xe4 + 4)
+                            let crc = Buffer.copyBytesFrom(m64.subarray(0xe4, 0xe4 + 4))
                             crc = bufferToStringLiteral(crc.reverse()) // reverse
-                            let rom = '?'
-                            if (crc in KNOWN_CRC) rom = KNOWN_CRC[crc]
-
-                            let result = `Author(s): ${author}\n`
-                            result += `Description: ${descrip}\n`
-                            result += `Rerecords: ${rr}\n`
-                            result += `ROM: ${crc} (${rom})`
+                            let rom = GameName(m64)
 
                             try {
-                                await bot.createMessage(msg.channel.id, result)
+                                await bot.createMessage(msg.channel.id, {
+                                    embed: {
+                                        fields: [
+                                            {
+                                                name: "Author(s)",
+                                                value: author,
+                                                inline: true
+                                            },
+                                            {
+                                                name: "Rerecords",
+                                                value: rr,
+                                                inline: true
+                                            },
+                                            {
+                                                name: "ROM",
+                                                value: `${rom} \`(${crc})\``,
+                                                inline: false
+                                            },
+                                            {
+                                                name: "Description",
+                                                value: descrip,
+                                                inline: false
+                                            },
+                                        ],
+                                        color: 0xFF0000,
+                                    }
+                                })
                                 fs.unlinkSync(
                                     `${save.getSavePath()}/${filename}`
                                 )
