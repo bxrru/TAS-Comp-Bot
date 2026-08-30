@@ -707,7 +707,7 @@ function getGhostInfoText(ghost_urls, ghost_colours) {
     for (let i = 0; i < ghost_urls.length; i++) {
         const c = closest(ghost_HSLs[i])
         result += HSL_EMOJI_MAP[c] + ' '
-        result += getDiscordFilename(ghost_urls[i]).replaceAll('_', '\\_')
+        result += ghost_urls[i]//getDiscordFilename(ghost_urls[i]).replaceAll('_', '\\_')
         result += '\n'
     }
 
@@ -781,9 +781,17 @@ function EncodeTAS(
     }
     
     const filename = getDiscordFilename(m64_url)
-    const safe_filename = getDiscordFilename(m64_url).replaceAll('_', '\\_') + '.m64'
     const out_filename = MUPEN_USES_FFMPEG ? 'encode.mp4' : 'encode.avi'
     const CWD = process.cwd()
+
+    const escaped_filename = getDiscordFilename(m64_url).replaceAll('_', '\\_')
+    const has_st = st_url.length > 0
+    const FILE_FIELD = {
+        name: 'File' + (has_st ? 's' : ''),
+        //value: escaped_filename + ` ([m64](${m64_url}))` + (has_st ? ` ([savestate](${st_url}))` : ''),
+        value: m64_url + (has_st ? `\n${st_url}` : ''),
+        inline: true
+    }
 
     let mupen_args = [
         '-m64',
@@ -862,11 +870,7 @@ function EncodeTAS(
             }
             
             const fields = [
-                {
-                    name: "File",
-                    value: safe_filename,
-                    inline: true
-                },
+                FILE_FIELD,
                 { 
                     name: "Game",
                     value: GameName(m64),
@@ -985,11 +989,7 @@ function EncodeTAS(
                 )
 
             let fields = [
-                {
-                    name: "File",
-                    value: safe_filename,
-                    inline: true
-                },
+                FILE_FIELD,
                 { 
                     name: "Game",
                     value: GameName(m64),
