@@ -1018,19 +1018,15 @@ function EncodeTAS(
                                 channel.guild.premiumTier
                             ]
                         : 20e6 // in bytes
-                let cmd = `ffmpeg -y -i ${out_filename} -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
+                const original_stats = fs.statSync(out_filename)
+                const needs_compression = original_stats.size > filesize_limit
+                const should_compress = needs_compression || ffmpeg_args.clamp
+                const output_filename = should_compress
+                    ? './encode-compressed.mp4'
+                    : out_filename
 
-                if (!ffmpeg_args.clamp) {
-                    cmd += ffmpeg_args.vrate
-                        ? `-maxrate ${ffmpeg_args.vrate}k -bufsize ${ffmpeg_args.vrate}k `
-                        : ''
-                    cmd += ffmpeg_args.crf
-                        ? `-crf ${ffmpeg_args.crf} `
-                        : ''
-                    cmd += ffmpeg_args.arate
-                        ? `-b:a ${ffmpeg_args.arate}k `
-                        : '-an '
-                } else {
+                if (should_compress) {
+                    let cmd = `ffmpeg -y -i ${out_filename} -c:v ${ffmpeg_args.vcodec} -c:a ${ffmpeg_args.acodec} -vf fps=30 `
                     cmd += ffmpeg_args.crf
                         ? `-crf ${Math.max(ffmpeg_args.crf, 1)} `
                         : '' // crf 0 overrides vbv
@@ -1051,22 +1047,17 @@ function EncodeTAS(
                         128
                     ) // Multiple of 16kb/s between 0 and 1024kb/s total rate
                     const vrate = (trate - arate) * 0.9 // Make up for header and vbv bitrate overshoot
-
-                    //console.log(length);
-
                     cmd += `-maxrate ${vrate}k -bufsize ${vrate}k -b:a ${arate}k `
+                    cmd += `-pix_fmt yuv420p -fs ${filesize_limit * 0.9} encode-compressed.mp4` // 0.9 as a hacky workaround for ffmpeg overshoot + header
+                    cp.execSync(cmd)
+                    stats = fs.statSync('./encode-compressed.mp4')
                 }
-
-                cmd += `-pix_fmt yuv420p -fs ${filesize_limit * 0.9} encode-compressed.mp4` // 0.9 as a hacky workaround for ffmpeg overshoot + header
-                cp.execSync(cmd)
-                //console.log(cmd);
-
-                stats = fs.statSync('./encode-compressed.mp4')
+                const video_filename = output_filename
                 length -=
                     1000 *
                     Number(
                         cp.execSync(
-                            'ffprobe encode-compressed.mp4 -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1'
+                            `ffprobe ${video_filename} -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1`
                         )
                     )
 
@@ -1077,11 +1068,11 @@ function EncodeTAS(
                 )
                 const encode_frame_count = Number(
                     cp.execSync(
-                        'ffprobe encode-compressed.mp4 -v quiet -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1'
+                        `ffprobe ${video_filename} -v quiet -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1`
                     )
                 )
                 const effective_fps = encode_frame_count / elapsed_seconds
-                const video = fs.readFileSync('./encode-compressed.mp4')
+                const video = fs.readFileSync(video_filename)
 
                 if (ghost_urls.length) {
                     fields.push({
@@ -1124,7 +1115,9 @@ function EncodeTAS(
                 )
                 console.log(err)
             } finally {
-                fs.unlinkSync('./encode-compressed.mp4')
+                if (fs.existsSync('./encode-compressed.mp4')) {
+                    fs.unlinkSync('./encode-compressed.mp4')
+                }
                 for (const ghostpath of ghost_paths) {
                     if (fs.existsSync(ghostpath)) {
                         // should exist but just to be safe...
