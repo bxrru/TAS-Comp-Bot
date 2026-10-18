@@ -21,7 +21,6 @@ let LUA_SCRIPTS = []
 let LUA_TIMEOUT_PATH = []
 var GAME_PATH = 'C:\\...' // all games will be run with GAME_PATH + game + .z64 (hardcoded J to run with .n64)
 var KNOWN_CRC = {}
-var MUPEN_USES_FFMPEG = false
 
 var EncodingQueue = [] // {st url, m64 url, filename, discord channel id, user id}
 
@@ -495,7 +494,7 @@ function NextProcess(bot, retry = true) {
 // channel_id is used to send a message if no game matches the tas being loaded
 // user_id will be pinged if no game matches the tas being loaded (and a valid channel_id is provided)
 // local_files = true means that m64_url is a filepath to an existing local tas file which will be run with -m64
-// Ex. QueueAdd(bot, "...m64", "...st", ["-avi", "encode.avi", "-lua", "C:\\file.lua"], ()=>{}, ()=>{}, 0, 0, false)
+// Ex. QueueAdd(bot, "...m64", "...st", ["-avi", "encode.mp4", "-lua", "C:\\file.lua"], ()=>{}, ()=>{}, 0, 0, false)
 function QueueAdd(
     bot,
     m64_url,
@@ -781,7 +780,7 @@ function EncodeTAS(
     }
     
     const filename = getDiscordFilename(m64_url)
-    const out_filename = MUPEN_USES_FFMPEG ? 'encode.mp4' : 'encode.avi'
+    const out_filename = 'encode.mp4'
     const CWD = process.cwd()
 
     const escaped_filename = getDiscordFilename(m64_url).replaceAll('_', '\\_')
@@ -834,9 +833,6 @@ function EncodeTAS(
         async (m64) => {
             // startup
             var err = null
-            if (fs.existsSync('./encode.avi')) {
-                fs.unlinkSync('./encode.avi')
-            }
             if (fs.existsSync('./encode.mp4')) {
                 fs.unlinkSync('./encode.mp4')
             }
@@ -1875,7 +1871,7 @@ module.exports = {
         var data = save.readObject('m64.json')
         MUPEN_PATH = data.MupenPath
         GAME_PATH = data.GamePath
-        MUPEN_USES_FFMPEG = data.MupenUsesFFmpeg
+
         // We construct the lua script array from the (optional) hardcoded InputLuaPath and TimeoutLuaPath, and append the optional LuaPaths array from json to it
         LUA_SCRIPTS = []
         if (data.InputLuaPath && data.InputLuaPath.length > 0) {
